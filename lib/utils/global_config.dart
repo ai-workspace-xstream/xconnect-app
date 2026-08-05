@@ -664,6 +664,7 @@ class DnsConfig {
 class XhttpAdvancedConfig {
   static const _modeKey = 'xhttpMode';
   static const _alpnKey = 'xhttpAlpn';
+  static const _xmuxMaxConcurrencyKey = 'xhttpXmuxMaxConcurrency';
 
   static const String modeStreamUp = 'stream-up';
   static const String modeAuto = 'auto';
@@ -674,22 +675,34 @@ class XhttpAdvancedConfig {
   static const String alpnHttp11 = 'http/1.1';
   static const List<String> allowedAlpn = <String>[alpnH3, alpnH2, alpnHttp11];
   static const List<String> defaultAlpn = <String>[alpnH3, alpnH2, alpnHttp11];
+  static const String defaultXmuxMaxConcurrency = '4-8';
 
   static final ValueNotifier<String> mode = ValueNotifier<String>(modeAuto);
   static final ValueNotifier<List<String>> alpn = ValueNotifier<List<String>>(
     List<String>.from(defaultAlpn),
   );
+  static final ValueNotifier<String> xmuxMaxConcurrency =
+      ValueNotifier<String>(defaultXmuxMaxConcurrency);
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     mode.value = _normalizeMode(prefs.getString(_modeKey));
     alpn.value = _normalizeAlpn(prefs.getStringList(_alpnKey));
+    xmuxMaxConcurrency.value = _normalizeXmuxMaxConcurrency(
+      prefs.getString(_xmuxMaxConcurrencyKey),
+    );
 
     mode.addListener(() {
       prefs.setString(_modeKey, _normalizeMode(mode.value));
     });
     alpn.addListener(() {
       prefs.setStringList(_alpnKey, _normalizeAlpn(alpn.value));
+    });
+    xmuxMaxConcurrency.addListener(() {
+      prefs.setString(
+        _xmuxMaxConcurrencyKey,
+        _normalizeXmuxMaxConcurrency(xmuxMaxConcurrency.value),
+      );
     });
   }
 
@@ -699,6 +712,10 @@ class XhttpAdvancedConfig {
 
   static void setAlpn(List<String> values) {
     alpn.value = _normalizeAlpn(values);
+  }
+
+  static void setXmuxMaxConcurrency(String value) {
+    xmuxMaxConcurrency.value = _normalizeXmuxMaxConcurrency(value);
   }
 
   static void toggleAlpn(String value, bool enabled) {
@@ -741,6 +758,24 @@ class XhttpAdvancedConfig {
       }
     }
     return ordered;
+  }
+
+  static String _normalizeXmuxMaxConcurrency(String? raw) {
+    final value = (raw ?? '').trim();
+    final match = RegExp(r'^(\d+)(?:-(\d+))?$').firstMatch(value);
+    if (match == null) return defaultXmuxMaxConcurrency;
+
+    final from = int.tryParse(match.group(1)!);
+    final to = int.tryParse(match.group(2) ?? match.group(1)!);
+    if (from == null || to == null || from < 1 || to < 1) {
+      return defaultXmuxMaxConcurrency;
+    }
+    // Keep this app-level knob bounded so a typo cannot create unbounded
+    // physical connections on a lossy network.
+    if (from > 128 || to > 128) return defaultXmuxMaxConcurrency;
+    final lower = from < to ? from : to;
+    final upper = from < to ? to : from;
+    return lower == upper ? '$lower' : '$lower-$upper';
   }
 }
 

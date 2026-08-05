@@ -1,5 +1,8 @@
 # XStream v1.1.0
 
+## ✨ Features
+- Added an XHTTP advanced `XMUX maxConcurrency` setting, persisted by the app and emitted as `xhttpSettings.extra.xmux.maxConcurrency` for controlled connection reuse.
+
 _Release Date: 2026-03-27_
 
 ## 🐛 Fixes

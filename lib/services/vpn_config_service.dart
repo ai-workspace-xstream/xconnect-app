@@ -687,6 +687,11 @@ class VpnConfig {
         final xhttpSettings = <String, dynamic>{
           'path': _firstNonEmpty(_normalizePath(path), '/'),
           'host': _firstNonEmpty(host, domain),
+          'extra': <String, dynamic>{
+            'xmux': <String, dynamic>{
+              'maxConcurrency': XhttpAdvancedConfig.xmuxMaxConcurrency.value,
+            },
+          },
         };
         if (_hasValue(effectiveXhttpMode)) {
           xhttpSettings['mode'] = effectiveXhttpMode!.trim();

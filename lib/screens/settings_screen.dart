@@ -38,8 +38,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _mfaCodeController = TextEditingController();
+  final TextEditingController _xhttpXmuxMaxConcurrencyController =
+      TextEditingController();
   String _draftXhttpMode = XhttpAdvancedConfig.mode.value;
   Set<String> _draftXhttpAlpn = <String>{...XhttpAdvancedConfig.alpn.value};
+  String _draftXhttpXmuxMaxConcurrency =
+      XhttpAdvancedConfig.xmuxMaxConcurrency.value;
   bool _xhttpAdvancedDirty = false;
 
   static const TextStyle _menuTextStyle = TextStyle(fontSize: 14);
@@ -450,7 +454,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _loadXhttpAdvancedDraft() {
     _draftXhttpMode = XhttpAdvancedConfig.mode.value;
     _draftXhttpAlpn = <String>{...XhttpAdvancedConfig.alpn.value};
+    _draftXhttpXmuxMaxConcurrency =
+        XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+    _xhttpXmuxMaxConcurrencyController.text = _draftXhttpXmuxMaxConcurrency;
     _xhttpAdvancedDirty = false;
+  }
+
+  void _setDraftXhttpXmuxMaxConcurrency(String value) {
+    if (_draftXhttpXmuxMaxConcurrency == value) return;
+    setState(() {
+      _draftXhttpXmuxMaxConcurrency = value;
+      _xhttpAdvancedDirty = true;
+    });
   }
 
   void _setDraftXhttpMode(String value) {
@@ -490,13 +505,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
     XhttpAdvancedConfig.setMode(_draftXhttpMode);
     XhttpAdvancedConfig.setAlpn(orderedAlpn);
+    XhttpAdvancedConfig.setXmuxMaxConcurrency(
+      _draftXhttpXmuxMaxConcurrency,
+    );
+    _draftXhttpXmuxMaxConcurrency =
+        XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+    _xhttpXmuxMaxConcurrencyController.text = _draftXhttpXmuxMaxConcurrency;
     setState(() {
       _xhttpAdvancedDirty = false;
     });
     addAppLog(
       'XHTTP advanced config saved: '
       'mode=${XhttpAdvancedConfig.mode.value}, '
-      'alpn=${XhttpAdvancedConfig.alpn.value.join(",")}',
+      'alpn=${XhttpAdvancedConfig.alpn.value.join(",")}, '
+      'xmux.maxConcurrency=${XhttpAdvancedConfig.xmuxMaxConcurrency.value}',
     );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.l10n.get('xhttpSavedApplied'))),
@@ -587,6 +609,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _xhttpXmuxMaxConcurrencyController,
+            keyboardType: TextInputType.text,
+            onChanged: _setDraftXhttpXmuxMaxConcurrency,
+            decoration: InputDecoration(
+              labelText: context.l10n.get('xhttpXmuxMaxConcurrencyLabel'),
+              hintText: context.l10n.get('xhttpXmuxMaxConcurrencyHint'),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -1330,6 +1364,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _usernameController.dispose();
     _passwordController.dispose();
     _mfaCodeController.dispose();
+    _xhttpXmuxMaxConcurrencyController.dispose();
     super.dispose();
   }
 

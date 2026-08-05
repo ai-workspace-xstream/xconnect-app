@@ -24,6 +24,7 @@ void main() {
         XhttpAdvancedConfig.alpnH2,
         XhttpAdvancedConfig.alpnHttp11,
       ]);
+      XhttpAdvancedConfig.setXmuxMaxConcurrency('4-8');
 
       final jsonText = await VpnConfig.tryGenerateXrayJsonFromVlessUri(
         'vless://11111111-1111-1111-1111-111111111111@example.com:443'
@@ -42,6 +43,10 @@ void main() {
 
       expect(xhttpSettings['mode'], XhttpAdvancedConfig.modeAuto);
       expect(alpn, <String>['h3', 'h2', 'http/1.1']);
+      expect(
+        (xhttpSettings['extra'] as Map)['xmux']['maxConcurrency'],
+        '4-8',
+      );
     });
 
     test('allows stream-up and removing h3 from advanced config', () async {
@@ -50,6 +55,7 @@ void main() {
         XhttpAdvancedConfig.alpnH2,
         XhttpAdvancedConfig.alpnHttp11,
       ]);
+      XhttpAdvancedConfig.setXmuxMaxConcurrency('6');
 
       final jsonText = await VpnConfig.tryGenerateXrayJsonFromVlessUri(
         'vless://22222222-2222-2222-2222-222222222222@example.com:443'
@@ -68,6 +74,21 @@ void main() {
 
       expect(xhttpSettings['mode'], XhttpAdvancedConfig.modeStreamUp);
       expect(alpn, <String>['h2', 'http/1.1']);
+      expect(
+        (xhttpSettings['extra'] as Map)['xmux']['maxConcurrency'],
+        '6',
+      );
+    });
+
+    test('normalizes invalid or reversed xmux ranges', () {
+      XhttpAdvancedConfig.setXmuxMaxConcurrency('8-4');
+      expect(XhttpAdvancedConfig.xmuxMaxConcurrency.value, '4-8');
+
+      XhttpAdvancedConfig.setXmuxMaxConcurrency('not-a-range');
+      expect(
+        XhttpAdvancedConfig.xmuxMaxConcurrency.value,
+        XhttpAdvancedConfig.defaultXmuxMaxConcurrency,
+      );
     });
   });
 }
