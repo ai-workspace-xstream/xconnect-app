@@ -498,7 +498,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  void _saveAndApplyXhttpAdvanced() {
+  Future<void> _saveAndApplyXhttpAdvanced() async {
     final orderedAlpn = <String>[
       for (final candidate in XhttpAdvancedConfig.allowedAlpn)
         if (_draftXhttpAlpn.contains(candidate)) candidate,
@@ -511,6 +511,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _draftXhttpXmuxMaxConcurrency =
         XhttpAdvancedConfig.xmuxMaxConcurrency.value;
     _xhttpXmuxMaxConcurrencyController.text = _draftXhttpXmuxMaxConcurrency;
+
+    final activeNodeName = GlobalState.activeNodeName.value.trim();
+    var reconnectRequired = false;
+    String? applyError;
+    if (activeNodeName.isNotEmpty) {
+      try {
+        final result = await VpnConfig.applyXhttpAdvancedSettingsToNode(
+          activeNodeName,
+        );
+        reconnectRequired = result.foundXhttp && result.changed;
+      } catch (error) {
+        applyError = error.toString();
+        addAppLog(
+          'Failed to update active XHTTP node config: $error',
+          level: LogLevel.error,
+        );
+      }
+    }
+    if (!mounted) return;
     setState(() {
       _xhttpAdvancedDirty = false;
     });
@@ -521,8 +540,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'xmux.maxConcurrency=${XhttpAdvancedConfig.xmuxMaxConcurrency.value}',
     );
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.get('xhttpSavedApplied'))),
+      SnackBar(
+        content: Text(
+          applyError == null
+              ? context.l10n.get('xhttpSavedApplied')
+              : '${context.l10n.get('xhttpApplyFailed')}: $applyError',
+        ),
+      ),
     );
+    if (reconnectRequired) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(context.l10n.get('xhttpReconnectTitle')),
+          content: Text(
+            context.l10n
+                .get('xhttpReconnectHint')
+                .replaceAll('{node}', activeNodeName),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(context.l10n.get('confirm')),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildXhttpAdvancedConfig(BuildContext context) {

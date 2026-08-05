@@ -47,6 +47,16 @@ class VlessUriProfile {
   });
 }
 
+class XhttpAdvancedConfigApplyResult {
+  final bool foundXhttp;
+  final bool changed;
+
+  const XhttpAdvancedConfigApplyResult({
+    required this.foundXhttp,
+    required this.changed,
+  });
+}
+
 class VpnNode {
   String name;
   String countryCode;
@@ -865,6 +875,106 @@ class VpnConfig {
     final normalized = value.trim();
     if (normalized.startsWith('/')) return normalized;
     return '/$normalized';
+  }
+
+  static XhttpAdvancedConfigApplyResult applyXhttpAdvancedSettings(
+    Map<String, dynamic> config,
+  ) {
+    final rawOutbounds = config['outbounds'];
+    if (rawOutbounds is! List) {
+      return const XhttpAdvancedConfigApplyResult(
+        foundXhttp: false,
+        changed: false,
+      );
+    }
+
+    var foundXhttp = false;
+    var changed = false;
+    final outbounds = List<dynamic>.from(rawOutbounds);
+    for (var index = 0; index < outbounds.length; index++) {
+      final rawOutbound = outbounds[index];
+      if (rawOutbound is! Map || rawOutbound['tag'] != 'proxy') continue;
+
+      final outbound = Map<String, dynamic>.from(rawOutbound);
+      final streamSettings = Map<String, dynamic>.from(
+        outbound['streamSettings'] as Map? ?? const {},
+      );
+      if ((streamSettings['network'] as String? ?? '').toLowerCase() !=
+          'xhttp') {
+        continue;
+      }
+
+      foundXhttp = true;
+      final before = jsonEncode(outbound);
+      final xhttpSettings = Map<String, dynamic>.from(
+        streamSettings['xhttpSettings'] as Map? ?? const {},
+      );
+      xhttpSettings['mode'] = XhttpAdvancedConfig.mode.value;
+
+      final extra = Map<String, dynamic>.from(
+        xhttpSettings['extra'] as Map? ?? const {},
+      );
+      final xmux = Map<String, dynamic>.from(
+        extra['xmux'] as Map? ?? const {},
+      );
+      xmux['maxConcurrency'] =
+          XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+      extra['xmux'] = xmux;
+      xhttpSettings['extra'] = extra;
+      streamSettings['xhttpSettings'] = xhttpSettings;
+
+      if ((streamSettings['security'] as String? ?? '').toLowerCase() ==
+          'tls') {
+        final tlsSettings = Map<String, dynamic>.from(
+          streamSettings['tlsSettings'] as Map? ?? const {},
+        );
+        final alpn = List<String>.from(XhttpAdvancedConfig.alpn.value);
+        if (alpn.isEmpty) {
+          tlsSettings.remove('alpn');
+        } else {
+          tlsSettings['alpn'] = alpn;
+        }
+        streamSettings['tlsSettings'] = tlsSettings;
+      }
+
+      outbound['streamSettings'] = streamSettings;
+      outbounds[index] = outbound;
+      if (jsonEncode(outbound) != before) changed = true;
+    }
+    config['outbounds'] = outbounds;
+    return XhttpAdvancedConfigApplyResult(
+      foundXhttp: foundXhttp,
+      changed: changed,
+    );
+  }
+
+  static Future<XhttpAdvancedConfigApplyResult>
+      applyXhttpAdvancedSettingsToFile(String configPath) async {
+    checkNotEmpty(configPath, 'configPath');
+    final file = File(configPath);
+    if (!await file.exists()) {
+      throw FileSystemException('Xray config file does not exist', configPath);
+    }
+
+    final raw = await file.readAsString();
+    final config = jsonDecode(raw) as Map<String, dynamic>;
+    final result = applyXhttpAdvancedSettings(config);
+    if (result.changed) {
+      await file.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(config),
+      );
+    }
+    return result;
+  }
+
+  static Future<XhttpAdvancedConfigApplyResult>
+      applyXhttpAdvancedSettingsToNode(String nodeName) async {
+    checkNotEmpty(nodeName, 'nodeName');
+    final node = getNodeByName(nodeName);
+    if (node == null) {
+      throw StateError('Unknown node: $nodeName');
+    }
+    return applyXhttpAdvancedSettingsToFile(node.configPath);
   }
 
   static Map<String, dynamic> buildSecureDnsConfig() {

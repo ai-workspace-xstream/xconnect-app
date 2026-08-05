@@ -1012,6 +1012,10 @@ class NativeBridge {
         }
       }
 
+      // Apply current advanced settings to legacy XHTTP configs before the
+      // Packet Tunnel or local engine reads the file.
+      VpnConfig.applyXhttpAdvancedSettings(sourceJson);
+
       final effectiveBlockQuic =
           !GlobalState.http3Passthrough.value || !proxySupportsUdp443;
 

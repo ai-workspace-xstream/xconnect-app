@@ -3,6 +3,9 @@
 ## ✨ Features
 - Added an XHTTP advanced `XMUX maxConcurrency` setting, persisted by the app and emitted as `xhttpSettings.extra.xmux.maxConcurrency` for controlled connection reuse.
 
+## 🐛 Fixes
+- Applied XHTTP advanced settings to legacy node files before Packet Tunnel startup and rewrote the active node configuration on save, with a reconnect prompt when runtime settings changed.
+
 _Release Date: 2026-03-27_
 
 ## 🐛 Fixes
