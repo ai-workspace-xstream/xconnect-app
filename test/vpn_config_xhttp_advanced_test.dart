@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xstream/services/vpn_config_service.dart';
@@ -88,6 +89,102 @@ void main() {
       expect(
         XhttpAdvancedConfig.xmuxMaxConcurrency.value,
         XhttpAdvancedConfig.defaultXmuxMaxConcurrency,
+      );
+    });
+
+    test('migrates a legacy xhttp node config before tunnel startup', () {
+      XhttpAdvancedConfig.setMode(XhttpAdvancedConfig.modeAuto);
+      XhttpAdvancedConfig.setAlpn(<String>[
+        XhttpAdvancedConfig.alpnH3,
+        XhttpAdvancedConfig.alpnH2,
+        XhttpAdvancedConfig.alpnHttp11,
+      ]);
+      XhttpAdvancedConfig.setXmuxMaxConcurrency('4-8');
+      final config = <String, dynamic>{
+        'outbounds': <dynamic>[
+          <String, dynamic>{
+            'tag': 'proxy',
+            'protocol': 'vless',
+            'streamSettings': <String, dynamic>{
+              'network': 'xhttp',
+              'security': 'tls',
+              'tlsSettings': <String, dynamic>{
+                'serverName': 'example.com',
+                'alpn': <String>['h2'],
+              },
+              'xhttpSettings': <String, dynamic>{
+                'path': '/split',
+                'host': 'example.com',
+              },
+            },
+          },
+        ],
+      };
+
+      final result = VpnConfig.applyXhttpAdvancedSettings(config);
+      final streamSettings = _proxyStreamSettingsFromConfig(
+        jsonEncode(config),
+      );
+      final xhttpSettings = Map<String, dynamic>.from(
+        streamSettings['xhttpSettings'] as Map<dynamic, dynamic>,
+      );
+
+      expect(result.foundXhttp, isTrue);
+      expect(result.changed, isTrue);
+      expect(xhttpSettings['path'], '/split');
+      expect(xhttpSettings['host'], 'example.com');
+      expect(xhttpSettings['mode'], XhttpAdvancedConfig.modeAuto);
+      expect(
+        (xhttpSettings['extra'] as Map)['xmux']['maxConcurrency'],
+        XhttpAdvancedConfig.defaultXmuxMaxConcurrency,
+      );
+      expect(
+        (streamSettings['tlsSettings'] as Map)['alpn'],
+        <String>['h3', 'h2', 'http/1.1'],
+      );
+
+      final secondResult = VpnConfig.applyXhttpAdvancedSettings(config);
+      expect(secondResult.foundXhttp, isTrue);
+      expect(secondResult.changed, isFalse);
+    });
+
+    test('rewrites a legacy xhttp node file', () async {
+      XhttpAdvancedConfig.setXmuxMaxConcurrency('4-8');
+      final tempDir = await Directory.systemTemp.createTemp(
+        'xstream-xhttp-migration-',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+      final configFile = File('${tempDir.path}/node-legacy-config.json');
+      await configFile.writeAsString(
+        jsonEncode(<String, dynamic>{
+          'outbounds': <dynamic>[
+            <String, dynamic>{
+              'tag': 'proxy',
+              'streamSettings': <String, dynamic>{
+                'network': 'xhttp',
+                'security': 'tls',
+                'xhttpSettings': <String, dynamic>{'path': '/split'},
+              },
+            },
+          ],
+        }),
+      );
+
+      final result = await VpnConfig.applyXhttpAdvancedSettingsToFile(
+        configFile.path,
+      );
+      final rewritten = jsonDecode(await configFile.readAsString())
+          as Map<String, dynamic>;
+      final streamSettings = _proxyStreamSettingsFromConfig(
+        jsonEncode(rewritten),
+      );
+
+      expect(result.foundXhttp, isTrue);
+      expect(result.changed, isTrue);
+      expect(
+        ((streamSettings['xhttpSettings'] as Map)['extra'] as Map)['xmux']
+            ['maxConcurrency'],
+        '4-8',
       );
     });
   });
