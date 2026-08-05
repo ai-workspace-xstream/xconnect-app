@@ -676,6 +676,8 @@ class XhttpAdvancedConfig {
   static const List<String> allowedAlpn = <String>[alpnH3, alpnH2, alpnHttp11];
   static const List<String> defaultAlpn = <String>[alpnH3, alpnH2, alpnHttp11];
   static const String defaultXmuxMaxConcurrency = '4-8';
+  static const String defaultXmuxHMaxRequestTimes = '600-900';
+  static const String defaultXmuxHMaxReusableSecs = '1800-3000';
 
   static final ValueNotifier<String> mode = ValueNotifier<String>(modeAuto);
   static final ValueNotifier<List<String>> alpn = ValueNotifier<List<String>>(

@@ -700,6 +700,10 @@ class VpnConfig {
           'extra': <String, dynamic>{
             'xmux': <String, dynamic>{
               'maxConcurrency': XhttpAdvancedConfig.xmuxMaxConcurrency.value,
+              'hMaxRequestTimes':
+                  XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes,
+              'hMaxReusableSecs':
+                  XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs,
             },
           },
         };
@@ -919,6 +923,18 @@ class VpnConfig {
       );
       xmux['maxConcurrency'] =
           XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+      final hMaxRequestTimes = xmux['hMaxRequestTimes'];
+      if (hMaxRequestTimes == null ||
+          (hMaxRequestTimes is String && hMaxRequestTimes.trim().isEmpty)) {
+        xmux['hMaxRequestTimes'] =
+            XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes;
+      }
+      final hMaxReusableSecs = xmux['hMaxReusableSecs'];
+      if (hMaxReusableSecs == null ||
+          (hMaxReusableSecs is String && hMaxReusableSecs.trim().isEmpty)) {
+        xmux['hMaxReusableSecs'] =
+            XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs;
+      }
       extra['xmux'] = xmux;
       xhttpSettings['extra'] = extra;
       streamSettings['xhttpSettings'] = xhttpSettings;

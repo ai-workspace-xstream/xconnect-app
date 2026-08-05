@@ -48,6 +48,14 @@ void main() {
         (xhttpSettings['extra'] as Map)['xmux']['maxConcurrency'],
         '4-8',
       );
+      expect(
+        (xhttpSettings['extra'] as Map)['xmux']['hMaxRequestTimes'],
+        XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes,
+      );
+      expect(
+        (xhttpSettings['extra'] as Map)['xmux']['hMaxReusableSecs'],
+        XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs,
+      );
     });
 
     test('allows stream-up and removing h3 from advanced config', () async {
@@ -139,6 +147,14 @@ void main() {
         XhttpAdvancedConfig.defaultXmuxMaxConcurrency,
       );
       expect(
+        (xhttpSettings['extra'] as Map)['xmux']['hMaxRequestTimes'],
+        XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes,
+      );
+      expect(
+        (xhttpSettings['extra'] as Map)['xmux']['hMaxReusableSecs'],
+        XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs,
+      );
+      expect(
         (streamSettings['tlsSettings'] as Map)['alpn'],
         <String>['h3', 'h2', 'http/1.1'],
       );
@@ -186,6 +202,51 @@ void main() {
             ['maxConcurrency'],
         '4-8',
       );
+      expect(
+        ((streamSettings['xhttpSettings'] as Map)['extra']
+            as Map)['xmux']['hMaxRequestTimes'],
+        XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes,
+      );
+      expect(
+        ((streamSettings['xhttpSettings'] as Map)['extra']
+            as Map)['xmux']['hMaxReusableSecs'],
+        XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs,
+      );
+    });
+
+    test('preserves explicit xmux lifecycle limits during migration', () {
+      XhttpAdvancedConfig.setXmuxMaxConcurrency('4-8');
+      final config = <String, dynamic>{
+        'outbounds': <dynamic>[
+          <String, dynamic>{
+            'tag': 'proxy',
+            'streamSettings': <String, dynamic>{
+              'network': 'xhttp',
+              'xhttpSettings': <String, dynamic>{
+                'extra': <String, dynamic>{
+                  'xmux': <String, dynamic>{
+                    'maxConcurrency': '16-32',
+                    'hMaxRequestTimes': 1200,
+                    'hMaxReusableSecs': '300-600',
+                  },
+                },
+              },
+            },
+          },
+        ],
+      };
+
+      final result = VpnConfig.applyXhttpAdvancedSettings(config);
+      final streamSettings = _proxyStreamSettingsFromConfig(jsonEncode(config));
+      final xmux =
+          ((streamSettings['xhttpSettings'] as Map)['extra'] as Map)['xmux']
+              as Map;
+
+      expect(result.foundXhttp, isTrue);
+      expect(result.changed, isTrue);
+      expect(xmux['maxConcurrency'], '4-8');
+      expect(xmux['hMaxRequestTimes'], 1200);
+      expect(xmux['hMaxReusableSecs'], '300-600');
     });
   });
 }
