@@ -168,8 +168,9 @@ build_one() {
     fi
     "$GO_BIN" mod download
     "$GO_BIN" build -trimpath -buildmode=c-shared \
+      -ldflags="-checklinkname=0" \
       -o "$outdir/libgo_native_bridge.so" \
-      ./bridge_android.go
+      .
   )
 }
 

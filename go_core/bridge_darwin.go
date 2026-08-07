@@ -1,4 +1,4 @@
-//go:build ios || darwin
+//go:build darwin && !ios
 
 package main
 
