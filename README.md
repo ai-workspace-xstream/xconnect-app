@@ -21,13 +21,19 @@ make build-macos-arm64
 
 ## Downloads
 
-| Platform | Download |
-| --- | --- |
-| macOS | [Latest Release](https://github.com/cloud-neutral-toolkit/xstream-vpn/releases/latest) |
-| Windows | [Latest Release](https://github.com/cloud-neutral-toolkit/xstream-vpn/releases/latest) |
-| Linux | [Latest Release](https://github.com/cloud-neutral-toolkit/xstream-vpn/releases/latest) |
-| iOS | [Latest Release](https://github.com/cloud-neutral-toolkit/xstream-vpn/releases/latest) |
-| Android | [Latest Release](https://github.com/cloud-neutral-toolkit/xstream-vpn/releases/latest) |
+<!-- SUPPORT_MATRIX:START -->
+| 平台 | 架构 | 测试状态 | 下载 |
+|------|------|----------|------|
+| macOS | arm64 | ✅ 已测试 | [DMG](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/xstream-dev-2cc6da2.dmg) |
+| macOS | x64 | ⚠️ 未测试 | — |
+| Linux | x64 | ⚠️ 未测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/xstream-linux.zip) / [AppImage](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/xstream-linux.AppImage) / [DEB](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/xstream-linux-amd64.deb) / [RPM](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/xstream-linux-x86_64.rpm) |
+| Linux | arm64 | ⚠️ 未测试 | — |
+| Windows | x64 | ✅ 已测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/xstream-windows.zip) / [MSI](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/xstream-windows.msi) |
+| Android | arm64 | ⚠️ 未测试 | [APK](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/app-release.apk) |
+| iOS | arm64 | ✅ 已测试 | [IPA](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-108/XStream.ipa) |
+
+> 自动更新：当前下载链接指向 GitHub Release [`main-108`](https://github.com/ai-workspace-xstream/xconnect-app/releases/tag/main-108).
+<!-- SUPPORT_MATRIX:END -->
 
 All download buttons currently point to the latest GitHub release page.
 
