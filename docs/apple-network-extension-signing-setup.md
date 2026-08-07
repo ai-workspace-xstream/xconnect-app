@@ -26,11 +26,13 @@ XSTREAM_APPLE_TEAM_ID=YOUR_TEAM_ID
 XSTREAM_APP_GROUP_ID=group.com.example.xstream
 
 XSTREAM_MACOS_BUNDLE_ID=xstream.svc.plus
-XSTREAM_IOS_BUNDLE_ID=plus.svc.xstream
+XSTREAM_IOS_BUNDLE_ID=plus.svc.xconnect
 
 XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID=xstream.svc.plus.PacketTunnel
-XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xstream.PacketTunnel
+XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
 ```
+
+当前 iOS App Store Connect 记录：Apple ID `6794950499`，SKU `svc_xconnect_app_v1`，对应主 App Bundle ID `plus.svc.xconnect`。
 
 必须满足：
 
@@ -44,8 +46,8 @@ XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xstream.PacketTunnel
 
 分别为 macOS / iOS 创建以下显式 App ID（不要使用通配符）：
 
-1. 主 App Bundle ID（如 `xstream.svc.plus`、`plus.svc.xstream`）。
-2. Packet Tunnel Extension Bundle ID（如 `xstream.svc.plus.PacketTunnel`、`plus.svc.xstream.PacketTunnel`）。
+1. 主 App Bundle ID（macOS 为 `xstream.svc.plus`，iOS 为 `plus.svc.xconnect`）。
+2. Packet Tunnel Extension Bundle ID（macOS 为 `xstream.svc.plus.PacketTunnel`，iOS 为 `plus.svc.xconnect.PacketTunnel`）。
 
 ### 3.2 为 App IDs 开启 Capability
 
@@ -102,4 +104,3 @@ Xstream 运行时会通过 `NETunnelProviderManager` 注册并启动 Packet Tunn
 3. 两者 App Group 一致。
 4. `PacketTunnelProviderBundleId` 指向正确扩展 Bundle ID。
 5. 首次启动能拉起系统 VPN 授权流程，授权后可稳定建立 System VPN。
-
