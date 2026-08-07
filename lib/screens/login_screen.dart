@@ -237,8 +237,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   '${summary.configVersion}'),
               if (metadata != null && metadata.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                _infoRow(context,
-                    context.l10n.get('subscriptionMetadata'), metadata),
+                _infoRow(context, context.l10n.get('subscriptionMetadata'),
+                    metadata),
               ],
               if (summary.lastError != null) ...[
                 const SizedBox(height: 8),
@@ -289,18 +289,18 @@ class _LoginScreenState extends State<LoginScreen> {
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.cloud_outlined,
-                          size: 64, color: xc.brand),
+                      Icon(Icons.cloud_outlined, size: 64, color: xc.brand),
                       const SizedBox(height: 16),
                       Text(
-                        context.l10n.get('accountLogin'),
+                        context.l10n.get('connectors'),
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -310,9 +310,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        context.l10n.get('syncNotLoggedIn'),
-                        style: TextStyle(
-                            fontSize: 14, color: xc.mutedText),
+                        context.l10n.get('connectorIntro'),
+                        style: TextStyle(fontSize: 14, color: xc.mutedText),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 32),
@@ -401,8 +400,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: xc.brand,
                               foregroundColor: cs.onPrimary,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 16),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),

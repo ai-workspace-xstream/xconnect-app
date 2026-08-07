@@ -60,8 +60,7 @@ void main(List<String> args) async {
   await TunSettingsService.init();
   await DesktopSyncService.instance.init();
   await NativeBridge.initializeLinuxDesktopIntegration();
-  final debug =
-      args.contains('--debug') ||
+  final debug = args.contains('--debug') ||
       Platform.executableArguments.contains('--debug');
   GlobalState.debugMode.value = debug;
   if (debug) {
@@ -219,14 +218,14 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   Future<void> _showQrScanner() async {
-    final barcode = await Navigator.of(context, rootNavigator: true)
-        .push<Barcode?>(
-          MaterialPageRoute(
-            builder: (ctx) {
-              return const ScanQrCode();
-            },
-          ),
-        );
+    final barcode =
+        await Navigator.of(context, rootNavigator: true).push<Barcode?>(
+      MaterialPageRoute(
+        builder: (ctx) {
+          return const ScanQrCode();
+        },
+      ),
+    );
     if (barcode == null || barcode.displayValue == null) {
       return;
     }
@@ -288,9 +287,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
   void _toggleLanguage() {
     final current = GlobalState.locale.value;
-    GlobalState.locale.value = current.languageCode == 'zh'
-        ? const Locale('en')
-        : const Locale('zh');
+    GlobalState.locale.value =
+        current.languageCode == 'zh' ? const Locale('en') : const Locale('zh');
   }
 
   Future<void> _onConnectionModeChanged() async {
@@ -327,10 +325,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       if (running) {
         GlobalState.activeNodeName.value = activeNode;
       } else if (tunnelEnabled) {
-        final shouldShow =
-            await PermissionGuideService.shouldPromptForPacketTunnelAuthorization(
-              failureMessage: startMsg,
-            );
+        final shouldShow = await PermissionGuideService
+            .shouldPromptForPacketTunnelAuthorization(
+          failureMessage: startMsg,
+        );
         if (mounted && shouldShow) {
           await showPermissionGuideDialog(context, failureMessage: startMsg);
         }
@@ -407,8 +405,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     if (useTunMode && !running) {
       final shouldShow =
           await PermissionGuideService.shouldPromptForPacketTunnelAuthorization(
-            failureMessage: message,
-          );
+        failureMessage: message,
+      );
       if (mounted && shouldShow) {
         await showPermissionGuideDialog(context, failureMessage: message);
       }
@@ -451,12 +449,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         label: Text(context.l10n.get('home')),
       ),
       NavigationRailDestination(
-        icon: const Icon(Icons.link),
-        label: Text(context.l10n.get('proxy')),
-      ),
-      NavigationRailDestination(
-        icon: const Icon(Icons.account_circle),
-        label: Text(context.l10n.get('accountLogin')),
+        icon: const Icon(Icons.extension_outlined),
+        label: Text(context.l10n.get('connectors')),
       ),
       NavigationRailDestination(
         icon: const Icon(Icons.settings),
@@ -480,12 +474,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         label: Text(context.l10n.get('home')),
       ),
       _NavigationDestination(
-        icon: const Icon(Icons.link),
-        label: Text(context.l10n.get('proxy')),
-      ),
-      _NavigationDestination(
-        icon: const Icon(Icons.account_circle),
-        label: Text(context.l10n.get('accountLogin')),
+        icon: const Icon(Icons.extension_outlined),
+        label: Text(context.l10n.get('connectors')),
       ),
       _NavigationDestination(
         icon: const Icon(Icons.settings),
@@ -498,14 +488,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final labels = _isMobileLayout(context)
         ? [
             context.l10n.get('home'),
-            context.l10n.get('proxy'),
-            context.l10n.get('accountLogin'),
+            context.l10n.get('connectors'),
             context.l10n.get('settings'),
           ]
         : [
             context.l10n.get('home'),
-            context.l10n.get('proxy'),
-            context.l10n.get('accountLogin'),
+            context.l10n.get('connectors'),
             context.l10n.get('settings'),
             context.l10n.get('help'),
             context.l10n.get('about'),
@@ -540,10 +528,14 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+              child: Icon(icon,
+                  size: 20, color: Theme.of(context).colorScheme.primary),
             ),
             const SizedBox(width: 14),
             Text(
@@ -564,7 +556,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final desktopPages = <Widget>[
       const HomeScreen(),
-      const SubscriptionScreen(),
       const LoginScreen(),
       const SettingsScreen(),
       const HelpScreen(),
@@ -573,7 +564,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
     final mobilePages = <Widget>[
       const HomeScreen(),
-      const SubscriptionScreen(),
       const LoginScreen(),
       const SettingsScreen(),
     ];
@@ -620,7 +610,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   elevation: 8,
-                   color: Theme.of(context).colorScheme.surface,
+                  color: Theme.of(context).colorScheme.surface,
                   onSelected: _showAddNodeMenuAction,
                   itemBuilder: (context) => [
                     _buildAddNodeItem(
@@ -636,7 +626,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                         icon: Icons.qr_code_scanner,
                         text: context.l10n.get('addNodeScanQr'),
                       ),
-
                     _buildAddNodeItem(
                       context,
                       action: _AddNodeMenuAction.readClipboard,
@@ -669,9 +658,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 20),
+                        Icon(Icons.add_rounded,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            size: 20),
                         const SizedBox(width: 4),
-                        Icon(Icons.dns_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 16),
+                        Icon(Icons.dns_rounded,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            size: 16),
                       ],
                     ),
                   ),

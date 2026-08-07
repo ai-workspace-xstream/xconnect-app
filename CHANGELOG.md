@@ -1,5 +1,11 @@
 # XStream v1.1.0
 
+## Unreleased
+
+- Reframed the primary connection flow around self-managed connections and optional workspace connectors.
+- Removed the standalone node configuration navigation tab; connection import remains available from the global connector action.
+- Updated user-facing copy toward neutral Secure Tunnel and connection terminology for international store distribution.
+
 ## ✨ Features
 - Added an XHTTP advanced `XMUX maxConcurrency` setting, persisted by the app and emitted as `xhttpSettings.extra.xmux.maxConcurrency` for controlled connection reuse.
 
