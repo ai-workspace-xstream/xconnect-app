@@ -224,7 +224,7 @@ run_ios_install() {
     echo "Installing release build to iOS device: ${device_id}"
     "$flutter_bin" build ios --release "${common_dart_defines[@]}"
     xcrun devicectl device install app --device "$device_id" build/ios/iphoneos/Runner.app
-    xcrun devicectl device process launch --device "$device_id" --terminate-existing plus.svc.xstream >/dev/null || true
+    xcrun devicectl device process launch --device "$device_id" --terminate-existing plus.svc.xconnect >/dev/null || true
   fi
 }
 
