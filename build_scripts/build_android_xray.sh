@@ -166,6 +166,7 @@ build_one() {
     else
       unset GOARM || true
     fi
+    "$GO_BIN" mod download
     "$GO_BIN" build -trimpath -buildmode=c-shared \
       -o "$outdir/libgo_native_bridge.so" \
       ./bridge_android.go
