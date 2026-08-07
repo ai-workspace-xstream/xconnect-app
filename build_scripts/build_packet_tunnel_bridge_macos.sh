@@ -55,7 +55,7 @@ echo "[xray-bridge] building for darwin/${ARCH} -> ${TMP_LIB}"
 (
   cd "${GO_CORE_DIR}"
   export CGO_ENABLED=1
-  export GOPROXY=https://goproxy.cn,direct
+  export GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"
   export GOOS=darwin
   export GOARCH="${ARCH}"
   export CC="$(xcrun --sdk macosx --find clang)"
