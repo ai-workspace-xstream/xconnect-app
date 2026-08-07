@@ -26,6 +26,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>XConnect needs camera access to scan QR codes for server configuration.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>XConnect uses your location to support secure network connectivity features while you use the app.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>XConnect needs photo library access to scan QR codes from your gallery.</string>
 	<key>LSRequiresIPhoneOS</key>
