@@ -295,4 +295,3 @@ func PerformAction(action, password *C.char) *C.char {
 //export IsXrayDownloading
 func IsXrayDownloading() C.int { return 0 }
 
-func main() {}

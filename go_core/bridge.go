@@ -1,5 +1,3 @@
-//go:build !ios && !darwin
-
 package main
 
 /*

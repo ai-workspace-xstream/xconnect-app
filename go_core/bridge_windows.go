@@ -411,4 +411,3 @@ func InitTray() {
 	})
 }
 
-func main() {}
