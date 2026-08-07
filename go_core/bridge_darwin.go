@@ -14,3 +14,6 @@ import "unsafe"
 func FreeCString(str *C.char) {
 	C.free(unsafe.Pointer(str))
 }
+
+func main() {}
+
