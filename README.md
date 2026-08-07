@@ -24,15 +24,15 @@ make build-macos-arm64
 <!-- SUPPORT_MATRIX:START -->
 | 平台 | 架构 | 测试状态 | 下载 |
 |------|------|----------|------|
-| macOS | arm64 | ✅ 已测试 | [DMG](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/xstream-release-uat-daily-build-2026.08.07-r4.dmg) |
+| macOS | arm64 | ✅ 已测试 | [DMG](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/xstream-dev-a65ce71.dmg) |
 | macOS | x64 | ⚠️ 未测试 | — |
-| Linux | x64 | ⚠️ 未测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/xstream-linux.zip) / [AppImage](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/xstream-linux.AppImage) / [DEB](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/xstream-linux-amd64.deb) / [RPM](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/xstream-linux-x86_64.rpm) |
+| Linux | x64 | ⚠️ 未测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/xstream-linux.zip) / [AppImage](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/xstream-linux.AppImage) / [DEB](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/xstream-linux-amd64.deb) / [RPM](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/xstream-linux-x86_64.rpm) |
 | Linux | arm64 | ⚠️ 未测试 | — |
-| Windows | x64 | ✅ 已测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/xstream-windows.zip) / [MSI](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/xstream-windows.msi) |
-| Android | arm64 | ⚠️ 未测试 | [APK](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/app-release.apk) |
-| iOS | arm64 | ✅ 已测试 | [IPA](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-113/XStream.ipa) |
+| Windows | x64 | ✅ 已测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/xstream-windows.zip) / [MSI](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/xstream-windows.msi) |
+| Android | arm64 | ⚠️ 未测试 | [APK](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/app-release.apk) |
+| iOS | arm64 | ✅ 已测试 | [IPA](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-118/XStream.ipa) |
 
-> 自动更新：当前下载链接指向 GitHub Release [`main-113`](https://github.com/ai-workspace-xstream/xconnect-app/releases/tag/main-113).
+> 自动更新：当前下载链接指向 GitHub Release [`main-118`](https://github.com/ai-workspace-xstream/xconnect-app/releases/tag/main-118).
 <!-- SUPPORT_MATRIX:END -->
 
 All download buttons currently point to the latest GitHub release page.
