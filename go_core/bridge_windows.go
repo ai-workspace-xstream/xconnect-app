@@ -31,7 +31,7 @@ func startXrayInternal(cfgData []byte) error {
 	if xray.GetXrayState() {
 		return errors.New("already running")
 	}
-	return xray.RunXrayFromJSON("", "", string(cfgData))
+	return xray.RunXrayFromJSON(string(cfgData))
 }
 
 func stopXrayInternal() error {
@@ -411,4 +411,3 @@ func InitTray() {
 	})
 }
 
-func main() {}

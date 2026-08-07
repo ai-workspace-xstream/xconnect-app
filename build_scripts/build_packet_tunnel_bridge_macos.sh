@@ -55,13 +55,14 @@ echo "[xray-bridge] building for darwin/${ARCH} -> ${TMP_LIB}"
 (
   cd "${GO_CORE_DIR}"
   export CGO_ENABLED=1
-  export GOPROXY=https://goproxy.cn,direct
+  export GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"
   export GOOS=darwin
   export GOARCH="${ARCH}"
   export CC="$(xcrun --sdk macosx --find clang)"
   export CGO_CFLAGS="-isysroot $(xcrun --sdk macosx --show-sdk-path)"
   export CGO_LDFLAGS="-isysroot $(xcrun --sdk macosx --show-sdk-path)"
-  "$GO_BIN" build -trimpath -buildmode=c-shared -o "${TMP_LIB}" ./bridge_darwin.go ./bridge_ios.go
+  "$GO_BIN" mod download
+  "$GO_BIN" build -trimpath -buildmode=c-shared -o "${TMP_LIB}" .
 )
 
 if [[ ! -f "${TMP_LIB}" ]]; then

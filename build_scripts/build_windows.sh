@@ -56,7 +56,9 @@ fi
 
 export CC
 
+go mod download
+
 GOOS=windows GOARCH=amd64 go build -buildmode=c-shared \
   -ldflags="-linkmode external -extldflags '-static'" \
   -o ../bindings/libgo_native_bridge.dll \
-  ./bridge_windows.go
+  .

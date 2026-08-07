@@ -27,7 +27,7 @@ func androidStartXrayInternal(cfgData []byte) error {
 	if xray.GetXrayState() {
 		return errors.New("already running")
 	}
-	return xray.RunXrayFromJSON("", "", string(cfgData))
+	return xray.RunXrayFromJSON(string(cfgData))
 }
 
 func androidStopXrayInternal() error {
@@ -290,4 +290,3 @@ func PerformAction(action, password *C.char) *C.char {
 //export IsXrayDownloading
 func IsXrayDownloading() C.int { return 0 }
 
-func main() {}
