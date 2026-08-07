@@ -1,6 +1,6 @@
 # Xcode 在线调试（macOS / iOS）
 
-本文档用于在 Xcode 中稳定进行 `xstream.svc.plus` 的在线调试（断点、变量、日志、Flutter 热重载协同）。
+本文档用于在 Xcode 中稳定进行 `plus.svc.xconnect` 的在线调试（断点、变量、日志、Flutter 热重载协同）。
 
 ## 1. 一次性准备
 
@@ -22,7 +22,7 @@ make xcode-mcp-doctor
 
 ## 1.1 Xcode MCP Server 对接
 
-`xstream.svc.plus` 统一使用以下 workspace 路径（推荐）：
+`plus.svc.xconnect` 统一使用以下 workspace 路径（推荐）：
 
 - iOS: `ios/Runner.xcworkspace`
 - macOS: `macos/Runner.xcworkspace`

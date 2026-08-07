@@ -10,7 +10,7 @@ scutil --nc status "Xstream"
 route -n get default
 ps -axo pid,ppid,etime,command | rg 'PacketTunnel|xray'
 curl -I --max-time 12 https://example.com
-/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "plus.svc.xstream" OR process CONTAINS "PacketTunnel" OR process == "nesessionmanager"'
+/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "plus.svc.xconnect" OR process CONTAINS "PacketTunnel" OR process == "nesessionmanager"'
 ```
 
 Expected pass signals:

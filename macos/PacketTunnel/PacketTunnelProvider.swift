@@ -5,7 +5,7 @@ import NetworkExtension
 import ObjectiveC.runtime
 import os.log
 
-let tunnelLog = OSLog(subsystem: "plus.svc.xstream", category: "PacketTunnel")
+let tunnelLog = OSLog(subsystem: "plus.svc.xconnect", category: "PacketTunnel")
 #if os(iOS)
   // iPhoneOS SDK does not expose these kernel control macros to Swift, but the
   // Packet Tunnel getsockopt call still uses the standard XNU values.
@@ -119,7 +119,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     throw NSError(
-      domain: "Xstream.PacketTunnel",
+      domain: "XConnect.PacketTunnel",
       code: -1,
       userInfo: [NSLocalizedDescriptionKey: "Missing Packet Tunnel options"]
     )
@@ -366,7 +366,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     let ipv4Masks = (options["ipv4SubnetMasks"] as? [String]) ?? ["255.255.255.0"]
     guard ipv4Addresses.count == ipv4Masks.count else {
       throw NSError(
-        domain: "Xstream.PacketTunnel",
+        domain: "XConnect.PacketTunnel",
         code: -2,
         userInfo: [NSLocalizedDescriptionKey: "Invalid IPv4 subnet mask mapping"]
       )
@@ -692,7 +692,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
 private final class PacketTunnelMetricsSampler {
   private static let resourceSampleInterval: TimeInterval = 10
-  private let queue = DispatchQueue(label: "plus.svc.xstream.PacketTunnel.metrics")
+  private let queue = DispatchQueue(label: "plus.svc.xconnect.PacketTunnel.metrics")
   private let store = PacketTunnelMetricsSnapshotStore()
   private var timer: DispatchSourceTimer?
   private var lastSample: InterfaceCounters?
@@ -906,7 +906,7 @@ private final class PacketTunnelMetricsSampler {
 }
 
 private final class PacketTunnelMetricsSnapshotStore {
-  private let defaults = UserDefaults(suiteName: "group.plus.svc.xstream") ?? .standard
+  private let defaults = UserDefaults(suiteName: "group.plus.svc.xconnect") ?? .standard
   private let snapshotKey = "packet_tunnel_metrics_snapshot"
 
   func write(
@@ -951,7 +951,7 @@ private final class XrayTunnelEngine: SecureTunnelEngine {
     stop()
     guard !config.isEmpty else {
       throw NSError(
-        domain: "Xstream.PacketTunnel",
+        domain: "XConnect.PacketTunnel",
         code: -10,
         userInfo: [NSLocalizedDescriptionKey: "Missing Xray config for Packet Tunnel"]
       )
@@ -1008,7 +1008,7 @@ private final class XrayTunnelBridge {
     guard let startFn else {
       let message = loadError ?? "failed to load bridge symbols"
       throw NSError(
-        domain: "Xstream.PacketTunnel",
+        domain: "XConnect.PacketTunnel",
         code: -11,
         userInfo: [
           NSLocalizedDescriptionKey: "StartXrayTunnelWithFd symbol unavailable (\(message))"
@@ -1018,7 +1018,7 @@ private final class XrayTunnelBridge {
     guard fd >= 0 else {
       let summary = summarizeConfig(configData)
       throw NSError(
-        domain: "Xstream.PacketTunnel",
+        domain: "XConnect.PacketTunnel",
         code: -12,
         userInfo: [
           NSLocalizedDescriptionKey:
@@ -1034,7 +1034,7 @@ private final class XrayTunnelBridge {
           let bridgeError = readBridgeError()
           let summary = summarizeConfig(configData)
           throw NSError(
-            domain: "Xstream.PacketTunnel",
+            domain: "XConnect.PacketTunnel",
             code: -12,
             userInfo: [
               NSLocalizedDescriptionKey:
@@ -1145,7 +1145,7 @@ private final class XrayTunnelBridge {
 }
 
 private final class PacketTunnelStatusStore {
-  private let defaults = UserDefaults(suiteName: "group.plus.svc.xstream") ?? .standard
+  private let defaults = UserDefaults(suiteName: "group.plus.svc.xconnect") ?? .standard
   private let errorKey = "packet_tunnel_last_error"
   private let startedAtKey = "packet_tunnel_started_at"
 

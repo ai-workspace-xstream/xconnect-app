@@ -11,7 +11,7 @@ import NetworkExtension
 #endif
 
 class DarwinHostApiImpl: DarwinHostApi {
-  private let groupId = "group.plus.svc.xstream"
+  private let groupId = "group.plus.svc.xconnect"
   private let profileOptionsKey = "packet_tunnel_profile_options"
   private let statusErrorKey = "packet_tunnel_last_error"
   private let statusStartedAtKey = "packet_tunnel_started_at"
@@ -537,7 +537,7 @@ class DarwinHostApiImpl: DarwinHostApi {
         completion(
           nil,
           NSError(
-            domain: "Xstream.PacketTunnel", code: -1,
+            domain: "XConnect.PacketTunnel", code: -1,
             userInfo: [
               NSLocalizedDescriptionKey: "Missing PacketTunnel provider bundle id"
             ]))
@@ -800,7 +800,7 @@ class DarwinHostApiImpl: DarwinHostApi {
       completion(
         nil,
         NSError(
-          domain: "Xstream.PacketTunnel", code: -1,
+          domain: "XConnect.PacketTunnel", code: -1,
           userInfo: [
             NSLocalizedDescriptionKey: "Missing PacketTunnel provider bundle id"
           ]))

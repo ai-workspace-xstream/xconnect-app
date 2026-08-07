@@ -270,7 +270,7 @@ class AppLocalizations {
       'helpCommandsIntro':
           'Run these commands in Terminal to compare system path, local proxy path, DNS, TLS, and runtime files.',
       'helpCommandsBlock':
-          r'''BASE="$HOME/Library/Application Support/plus.svc.xstream"
+          r'''BASE="$HOME/Library/Application Support/plus.svc.xconnect"
 
 cat "$BASE/vpn_nodes.json"
 cat "$BASE/configs/config.json"
@@ -530,7 +530,7 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'helpCommandsTitle': '参考命令',
       'helpCommandsIntro': '可在终端执行这些命令，对比系统路径、本地代理路径、DNS、TLS 与运行时文件。',
       'helpCommandsBlock':
-          r'''BASE="$HOME/Library/Application Support/plus.svc.xstream"
+          r'''BASE="$HOME/Library/Application Support/plus.svc.xconnect"
 
 cat "$BASE/vpn_nodes.json"
 cat "$BASE/configs/config.json"

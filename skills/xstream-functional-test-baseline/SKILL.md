@@ -28,7 +28,7 @@ Prefer proving the current runtime state with system commands over inferring beh
 
 4. Validate Tunnel Mode data plane.
 - Run `curl -I --max-time 12 https://example.com`.
-- If needed, run `/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "plus.svc.xstream" OR process CONTAINS "PacketTunnel" OR process == "nesessionmanager"'`.
+- If needed, run `/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "plus.svc.xconnect" OR process CONTAINS "PacketTunnel" OR process == "nesessionmanager"'`.
 - Treat a successful HTTP response plus a connected `utunN` default route as the minimum pass condition for Tunnel Mode.
 
 5. Validate Proxy Mode only when the user asks for it or when Tunnel Mode is disabled.

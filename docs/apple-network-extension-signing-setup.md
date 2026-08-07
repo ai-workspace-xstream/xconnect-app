@@ -23,16 +23,16 @@
 
 ```dotenv
 XSTREAM_APPLE_TEAM_ID=YOUR_TEAM_ID
-XSTREAM_APP_GROUP_ID=group.com.example.xstream
+XSTREAM_APP_GROUP_ID=group.plus.svc.xconnect
 
-XSTREAM_MACOS_BUNDLE_ID=xstream.svc.plus
+XSTREAM_MACOS_BUNDLE_ID=plus.svc.xconnect
 XSTREAM_IOS_BUNDLE_ID=plus.svc.xconnect
 
-XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID=xstream.svc.plus.PacketTunnel
+XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
 XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
 ```
 
-当前 iOS App Store Connect 记录：Apple ID `6794950499`，SKU `svc_xconnect_app_v1`，对应主 App Bundle ID `plus.svc.xconnect`。
+当前 iOS/macOS App Store Connect 记录：Apple ID `6794950499`，SKU `svc_xconnect_app_v1`，对应主 App Bundle ID `plus.svc.xconnect`。
 
 必须满足：
 
@@ -46,8 +46,8 @@ XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
 
 分别为 macOS / iOS 创建以下显式 App ID（不要使用通配符）：
 
-1. 主 App Bundle ID（macOS 为 `xstream.svc.plus`，iOS 为 `plus.svc.xconnect`）。
-2. Packet Tunnel Extension Bundle ID（macOS 为 `xstream.svc.plus.PacketTunnel`，iOS 为 `plus.svc.xconnect.PacketTunnel`）。
+1. 主 App Bundle ID：`plus.svc.xconnect`。
+2. Packet Tunnel Extension Bundle ID：`plus.svc.xconnect.PacketTunnel`。
 
 ### 3.2 为 App IDs 开启 Capability
 
