@@ -704,7 +704,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Settings read as a list, not a form, so the column is capped rather than
   /// stretched to the window width.
-  static const double _maxContentWidth = 720;
+  ///
+  /// Wider than a prose measure would allow: these rows are label/value pairs,
+  /// not running text, and 720 left a maximised window looking mostly empty.
+  static const double _maxContentWidth = 900;
 
   /// Spacing between groups inside one tab.
   static const double _groupGap = 24;
@@ -798,7 +801,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Container(
       color: cs.surfaceContainerLow,
-      child: Center(
+      // Anchored left rather than centred: the breadcrumb and the navigation
+      // rail are both hard against the left edge, so centring the column left
+      // the title floating in the middle of a maximised window with nothing
+      // lining up with it.
+      child: Align(
+        alignment: Alignment.topLeft,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: _maxContentWidth),
           child: Column(
