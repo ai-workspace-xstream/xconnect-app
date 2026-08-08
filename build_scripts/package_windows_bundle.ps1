@@ -3,15 +3,15 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "windows_bundle_utils.ps1")
 
-$releaseDir = Get-XstreamWindowsReleaseDir
+$releaseDir = Get-XConnectWindowsReleaseDir
 New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
 
-Copy-XstreamBridgeDll -ReleaseDir $releaseDir
-Copy-XstreamVcRuntime -ReleaseDir $releaseDir
-Copy-XstreamWintunDll -ReleaseDir $releaseDir
+Copy-XConnectBridgeDll -ReleaseDir $releaseDir
+Copy-XConnectVcRuntime -ReleaseDir $releaseDir
+Copy-XConnectWintunDll -ReleaseDir $releaseDir
 
 # Package the release bundle.
-$zipPath = Join-Path $releaseDir "xstream-windows.zip"
+$zipPath = Join-Path $releaseDir "xconnect-windows.zip"
 if (Test-Path $zipPath) {
     Remove-Item -Force $zipPath
 }

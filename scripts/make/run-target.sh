@@ -16,10 +16,10 @@ uname_m="${UNAME_M:-$(uname -m)}"
 branch="${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
 build_id="${BUILD_ID:-$(git rev-parse --short HEAD)}"
 build_date="${BUILD_DATE:-$(date '+%Y-%m-%d')}"
-macos_app_bundle="${MACOS_APP_BUNDLE:-build/macos/Build/Products/Release/xstream.app}"
+macos_app_bundle="${MACOS_APP_BUNDLE:-build/macos/Build/Products/Release/XConnect.app}"
 macos_build_lock_dir="${MACOS_BUILD_LOCK_DIR:-build/.macos-build.lock}"
 macos_build_lock_pid_file="${MACOS_BUILD_LOCK_PID_FILE:-${macos_build_lock_dir}/pid}"
-dmg_name="${DMG_NAME:-xstream-dev-${build_id}.dmg}"
+dmg_name="${DMG_NAME:-xconnect-dev-${build_id}.dmg}"
 common_dart_defines=(
   --dart-define=BRANCH_NAME="$branch"
   --dart-define=BUILD_ID="$build_id"
@@ -189,7 +189,7 @@ run_macos_build() {
     --no-internet-enable \
     --skip-jenkins \
     --hdiutil-retries 10 \
-    --volname "XStream Installer" \
+    --volname "XConnect Installer" \
     --window-pos 200 120 \
     --window-size 800 400 \
     --icon-size 100 \
@@ -243,13 +243,13 @@ run_mcp() {
       echo "Note: building .xcodeproj directly may miss CocoaPods plugin modules."
       ;;
     install)
-      (cd tools/xstream-mcp-server && go mod tidy)
+      (cd tools/xconnect-mcp-server && go mod tidy)
       ;;
     start-runtime)
-      ./scripts/start-xstream-runtime-mcp-server.sh
+      ./scripts/start-xconnect-runtime-mcp-server.sh
       ;;
     start-dev|start|dev)
-      ./scripts/start-xstream-dev-mcp-server.sh
+      ./scripts/start-xconnect-dev-mcp-server.sh
       ;;
     all)
       ./scripts/xcode-debug-bootstrap.sh
@@ -257,8 +257,8 @@ run_mcp() {
       echo "  iOS:   ${ROOT_DIR}/ios/Runner.xcworkspace"
       echo "  macOS: ${ROOT_DIR}/macos/Runner.xcworkspace"
       echo "Note: building .xcodeproj directly may miss CocoaPods plugin modules."
-      (cd tools/xstream-mcp-server && go mod tidy)
-      ./scripts/start-xstream-dev-mcp-server.sh
+      (cd tools/xconnect-mcp-server && go mod tidy)
+      ./scripts/start-xconnect-dev-mcp-server.sh
       ;;
     *)
       echo "Unknown MCP_MODE=${mode}. Use one of: bootstrap, doctor, install, start-dev, start-runtime, all"
@@ -291,7 +291,7 @@ case "$TARGET" in
     ;;
   macos-debug-run)
     if [[ "$uname_s" == "Darwin" ]]; then
-      echo "Run XStream on macOS (debug, no resident)..."
+      echo "Run XConnect on macOS (debug, no resident)..."
       "$flutter_bin" run -d macos --debug --no-resident "${common_dart_defines[@]}"
     else
       echo "macOS debug run is only supported on macOS"
@@ -326,7 +326,7 @@ case "$TARGET" in
       echo "Building for Linux x64..."
       ./build_scripts/build_linux.sh
       "$flutter_bin" build linux --release --target-platform=linux-x64 "${common_dart_defines[@]}"
-      mv build/linux/x64/release/bundle/xstream build/linux/x64/release/bundle/xstream-x64
+      mv build/linux/x64/release/bundle/xconnect build/linux/x64/release/bundle/xconnect-x64
     else
       echo "Linux x64 build only supported on Linux systems"
     fi
@@ -352,7 +352,7 @@ case "$TARGET" in
       if [[ "$uname_m" == "aarch64" || "$uname_m" == "arm64" ]]; then
         echo "Building for Linux arm64..."
         "$flutter_bin" build linux --release --target-platform=linux-arm64 "${common_dart_defines[@]}"
-        mv build/linux/arm64/release/bundle/xstream build/linux/arm64/release/bundle/xstream-arm64
+        mv build/linux/arm64/release/bundle/xconnect build/linux/arm64/release/bundle/xconnect-arm64
       else
         echo "❌ Cross-build from x64 to arm64 is not supported. Please run this on an arm64 host."
       fi
@@ -379,7 +379,7 @@ case "$TARGET" in
     if [[ "$uname_s" == "Darwin" ]]; then
       echo "Building for iOS arm64..."
       "$flutter_bin" build ios --release --no-codesign "${common_dart_defines[@]}"
-      (cd build/ios/iphoneos && zip -r xstream.app.zip Runner.app)
+      (cd build/ios/iphoneos && zip -r XConnect.app.zip Runner.app)
     else
       echo "iOS build only supported on macOS"
     fi
@@ -402,13 +402,13 @@ case "$TARGET" in
   xcode-mcp-doctor)
     MCP_MODE=doctor run_mcp
     ;;
-  xstream-mcp-install)
+  xconnect-mcp-install)
     MCP_MODE=install run_mcp
     ;;
-  xstream-mcp-start|xstream-mcp-start-dev)
+  xconnect-mcp-start|xconnect-mcp-start-dev)
     MCP_MODE=start-dev run_mcp
     ;;
-  xstream-mcp-start-runtime)
+  xconnect-mcp-start-runtime)
     MCP_MODE=start-runtime run_mcp
     ;;
   sync-macos-config)

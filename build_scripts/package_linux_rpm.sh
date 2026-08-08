@@ -21,6 +21,6 @@ chmod 0755 packaging/nfpm/postinstall.sh
 VERSION="$VERSION" "$NFPM_BIN" package \
   --packager rpm \
   --config packaging/nfpm/nfpm.yaml \
-  --target "$DIST_DIR/xstream-${VERSION}.${ARCH}.rpm"
+  --target "$DIST_DIR/xconnect-${VERSION}.${ARCH}.rpm"
 
-echo "Built $DIST_DIR/xstream-${VERSION}.${ARCH}.rpm"
+echo "Built $DIST_DIR/xconnect-${VERSION}.${ARCH}.rpm"

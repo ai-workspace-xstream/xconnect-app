@@ -16,7 +16,7 @@ class DarwinHostApiImpl: DarwinHostApi {
   private let statusErrorKey = "packet_tunnel_last_error"
   private let statusStartedAtKey = "packet_tunnel_started_at"
   private let metricsSnapshotKey = "packet_tunnel_metrics_snapshot"
-  private let packetTunnelDisplayName = "Xstream"
+  private let packetTunnelDisplayName = "XConnect"
 
   private let flutterApi: DarwinFlutterApi?
 

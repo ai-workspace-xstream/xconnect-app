@@ -34,8 +34,8 @@ case "$platform" in
     IOS_NO_CODESIGN=1 ./build_scripts/build_ios_ipa.sh
     (
       cd build/ios/iphoneos
-      rm -f XStream.app.zip
-      zip -qry XStream.app.zip Runner.app
+      rm -f XConnect.app.zip
+      zip -qry XConnect.app.zip Runner.app
     )
     ;;
   *)

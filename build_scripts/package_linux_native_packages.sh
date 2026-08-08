@@ -14,8 +14,8 @@ if [[ ! -d "$BUNDLE_DIR" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$BUNDLE_DIR/xstream" ]]; then
-  echo "Linux bundle executable not found: $BUNDLE_DIR/xstream" >&2
+if [[ ! -f "$BUNDLE_DIR/xconnect" ]]; then
+  echo "Linux bundle executable not found: $BUNDLE_DIR/xconnect" >&2
   exit 1
 fi
 
@@ -32,48 +32,48 @@ if [[ "$PUBSPEC_VERSION" == *"+"* ]]; then
 fi
 
 rm -rf "$OUTPUT_DIR"
-mkdir -p "$STAGE_DIR/opt/xstream"
+mkdir -p "$STAGE_DIR/opt/xconnect"
 mkdir -p "$STAGE_DIR/usr/bin"
 mkdir -p "$STAGE_DIR/usr/share/applications"
 mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps"
 
 echo ">>> Staging Linux bundle for native packages ..."
-rsync -a --delete "$BUNDLE_DIR/" "$STAGE_DIR/opt/xstream/"
+rsync -a --delete "$BUNDLE_DIR/" "$STAGE_DIR/opt/xconnect/"
 
-cat > "$STAGE_DIR/usr/bin/xstream" <<'EOF'
+cat > "$STAGE_DIR/usr/bin/xconnect" <<'EOF'
 #!/usr/bin/env bash
-export LD_LIBRARY_PATH="/opt/xstream/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-exec /opt/xstream/xstream "$@"
+export LD_LIBRARY_PATH="/opt/xconnect/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec /opt/xconnect/xconnect "$@"
 EOF
-chmod +x "$STAGE_DIR/usr/bin/xstream"
+chmod +x "$STAGE_DIR/usr/bin/xconnect"
 
-cat > "$STAGE_DIR/usr/share/applications/xstream.desktop" <<'EOF'
+cat > "$STAGE_DIR/usr/share/applications/xconnect.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
-Name=XStream
+Name=XConnect
 Comment=Secure Tunnel desktop client
-Exec=/usr/bin/xstream
-Icon=xstream
+Exec=/usr/bin/xconnect
+Icon=xconnect
 Terminal=false
 Categories=Utility;Network;
 EOF
 
 cp "$PROJECT_ROOT/assets/logo.png" \
-  "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps/xstream.png"
+  "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps/xconnect.png"
 
 cat > "$NFPM_CONFIG" <<EOF
-name: xstream
+name: xconnect
 arch: amd64
 platform: linux
 version: ${APP_VERSION}
 release: ${RELEASE_NUMBER}
 section: default
 priority: optional
-maintainer: Xstream Team
+maintainer: XConnect Team
 description: |
-  XStream desktop client for managing Secure Tunnel connections.
-vendor: Xstream Team
-homepage: https://github.com/cloud-neutral-toolkit/xstream.svc.plus
+  XConnect desktop client for managing Secure Tunnel connections.
+vendor: XConnect Team
+homepage: https://github.com/cloud-neutral-toolkit/xconnect.svc.plus
 license: Apache-2.0
 depends:
   - libgtk-3-0
@@ -87,30 +87,30 @@ overrides:
       - libX11
       - libstdc++
 contents:
-  - src: ${STAGE_DIR}/opt/xstream/
-    dst: /opt/xstream
-  - src: ${STAGE_DIR}/usr/bin/xstream
-    dst: /usr/bin/xstream
+  - src: ${STAGE_DIR}/opt/xconnect/
+    dst: /opt/xconnect
+  - src: ${STAGE_DIR}/usr/bin/xconnect
+    dst: /usr/bin/xconnect
     file_info:
       mode: 0755
-  - src: ${STAGE_DIR}/usr/share/applications/xstream.desktop
-    dst: /usr/share/applications/xstream.desktop
-  - src: ${STAGE_DIR}/usr/share/icons/hicolor/256x256/apps/xstream.png
-    dst: /usr/share/icons/hicolor/256x256/apps/xstream.png
+  - src: ${STAGE_DIR}/usr/share/applications/xconnect.desktop
+    dst: /usr/share/applications/xconnect.desktop
+  - src: ${STAGE_DIR}/usr/share/icons/hicolor/256x256/apps/xconnect.png
+    dst: /usr/share/icons/hicolor/256x256/apps/xconnect.png
 EOF
 
 echo ">>> Building .deb package ..."
 nfpm pkg \
   --packager deb \
   --config "$NFPM_CONFIG" \
-  --target "$OUTPUT_DIR/xstream-linux-amd64.deb"
+  --target "$OUTPUT_DIR/xconnect-linux-amd64.deb"
 
 echo ">>> Building .rpm package ..."
 nfpm pkg \
   --packager rpm \
   --config "$NFPM_CONFIG" \
-  --target "$OUTPUT_DIR/xstream-linux-x86_64.rpm"
+  --target "$OUTPUT_DIR/xconnect-linux-x86_64.rpm"
 
 echo ">>> Linux native packages ready:"
-echo "    $OUTPUT_DIR/xstream-linux-amd64.deb"
-echo "    $OUTPUT_DIR/xstream-linux-x86_64.rpm"
+echo "    $OUTPUT_DIR/xconnect-linux-amd64.deb"
+echo "    $OUTPUT_DIR/xconnect-linux-x86_64.rpm"

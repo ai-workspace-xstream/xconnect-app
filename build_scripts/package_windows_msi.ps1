@@ -3,12 +3,12 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "windows_bundle_utils.ps1")
 
-function Get-XstreamProjectRoot {
+function Get-XConnectProjectRoot {
     return (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 }
 
-function Get-XstreamVersion {
-    $projectRoot = Get-XstreamProjectRoot
+function Get-XConnectVersion {
+    $projectRoot = Get-XConnectProjectRoot
     $pubspecPath = Join-Path $projectRoot "pubspec.yaml"
     $versionLine = Select-String -Path $pubspecPath -Pattern '^version:\s*(.+)$' | Select-Object -First 1
     if (-not $versionLine) {
@@ -144,17 +144,17 @@ function Emit-DirectoryContents {
 $releaseDir = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\build\windows\x64\runner\Release"))
 New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
 
-Copy-XstreamBridgeDll -ReleaseDir $releaseDir
-Copy-XstreamVcRuntime -ReleaseDir $releaseDir
-Copy-XstreamWintunDll -ReleaseDir $releaseDir
+Copy-XConnectBridgeDll -ReleaseDir $releaseDir
+Copy-XConnectVcRuntime -ReleaseDir $releaseDir
+Copy-XConnectWintunDll -ReleaseDir $releaseDir
 
 Ensure-WixCli
 
-$version = Get-XstreamVersion
-$projectRoot = Get-XstreamProjectRoot
+$version = Get-XConnectVersion
+$projectRoot = Get-XConnectProjectRoot
 $installerDir = Join-Path $projectRoot "build\windows\x64\installer"
-$wxsPath = Join-Path $installerDir "xstream.wxs"
-$msiPath = Join-Path $releaseDir "xstream-windows.msi"
+$wxsPath = Join-Path $installerDir "xconnect.wxs"
+$msiPath = Join-Path $releaseDir "xconnect-windows.msi"
 
 if (Test-Path $installerDir) {
     Remove-Item -Recurse -Force $installerDir
@@ -235,24 +235,24 @@ $wxsContent = @"
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
-    Name="XStream"
-    Manufacturer="Xstream Team"
+    Name="XConnect"
+    Manufacturer="XConnect Team"
     Version="$version"
     UpgradeCode="D0F4C9A0-ED57-4F14-BB65-30B5CFC8CB0A"
     Scope="perMachine"
     InstallerVersion="500"
     Compressed="yes">
-    <SummaryInformation Description="XStream Windows Installer" Manufacturer="Xstream Team" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of XStream is already installed." />
+    <SummaryInformation Description="XConnect Windows Installer" Manufacturer="XConnect Team" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of XConnect is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="XStream">
+      <Directory Id="INSTALLFOLDER" Name="XConnect">
 $($directoryXml -join [Environment]::NewLine)
       </Directory>
     </StandardDirectory>
 
-    <Feature Id="MainFeature" Title="XStream" Level="1">
+    <Feature Id="MainFeature" Title="XConnect" Level="1">
 $($componentRefs -join [Environment]::NewLine)
     </Feature>
   </Package>

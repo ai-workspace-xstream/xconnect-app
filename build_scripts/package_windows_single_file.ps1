@@ -3,20 +3,20 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "windows_bundle_utils.ps1")
 
-$releaseDir = Get-XstreamWindowsReleaseDir
+$releaseDir = Get-XConnectWindowsReleaseDir
 $portableDir = Join-Path $PSScriptRoot "..\build\windows\x64\portable"
 $runtimeDir = Join-Path $portableDir "runtime"
 $launcherSrcDir = Join-Path $portableDir "launcher-src"
 $payloadZip = Join-Path $portableDir "payload.zip"
-$portableExe = Join-Path $portableDir "xstream.exe"
-$innerExeName = "xstream_runtime.exe"
+$portableExe = Join-Path $portableDir "xconnect.exe"
+$innerExeName = "xconnect_runtime.exe"
 
 New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
 New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
 
-Copy-XstreamBridgeDll -ReleaseDir $releaseDir
-Copy-XstreamVcRuntime -ReleaseDir $releaseDir
-Copy-XstreamWintunDll -ReleaseDir $releaseDir
+Copy-XConnectBridgeDll -ReleaseDir $releaseDir
+Copy-XConnectVcRuntime -ReleaseDir $releaseDir
+Copy-XConnectWintunDll -ReleaseDir $releaseDir
 
 if (Test-Path $runtimeDir) {
     Remove-Item -Recurse -Force $runtimeDir
@@ -32,7 +32,7 @@ New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 New-Item -ItemType Directory -Force -Path $launcherSrcDir | Out-Null
 
 $excludeNames = @(
-    "xstream-windows.zip",
+    "xconnect-windows.zip",
     "AppxManifest.xml",
     "Images",
     "resources.pri",
@@ -49,7 +49,7 @@ Get-ChildItem $releaseDir -Force | ForEach-Object {
 
     if ($_.PSIsContainer) {
         Copy-Item $_.FullName -Destination (Join-Path $runtimeDir $_.Name) -Recurse -Force
-    } elseif ($_.Name -eq "xstream.exe") {
+    } elseif ($_.Name -eq "xconnect.exe") {
         Copy-Item $_.FullName -Destination (Join-Path $runtimeDir $innerExeName) -Force
     } else {
         Copy-Item $_.FullName -Destination (Join-Path $runtimeDir $_.Name) -Force

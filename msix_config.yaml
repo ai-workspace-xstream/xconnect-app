@@ -1,6 +1,6 @@
-display_name: Xstream
-publisher_display_name: Xstream Team
-identity_name: XstreamTeam.Xstream
+display_name: XConnect
+publisher_display_name: XConnect Team
+identity_name: XConnectTeam.XConnect
 msix_version: 1.0.0.0
 logo_path: assets/logo.png
 capabilities: internetClient
