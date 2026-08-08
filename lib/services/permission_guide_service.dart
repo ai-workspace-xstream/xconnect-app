@@ -164,7 +164,7 @@ class PermissionGuideService {
           passed: false,
           detail: 'Linux tunnel privilege check failed: $e',
           suggestion:
-            'Install the desktop package, then verify pkexec and the xconnect-net-helper helper are present.',
+              'Install the desktop package, then verify pkexec and the xconnect-net-helper helper are present.',
         );
       }
     }
@@ -217,8 +217,8 @@ class PermissionGuideService {
           detail: 'Packet Tunnel last error: $lastError',
           suggestion: permissionDenied
               ? (Platform.isAndroid
-                    ? 'Approve the Android VPN permission for XConnect, or reopen VPN settings and retry.'
-                    : 'Open Privacy & Security, approve System VPN permission for XConnect, then retry.')
+                  ? 'Approve the Android VPN permission for XConnect, or reopen VPN settings and retry.'
+                  : 'Open Privacy & Security, approve System VPN permission for XConnect, then retry.')
               : 'Review the Packet Tunnel error details, then retry after fixing authorization or configuration.',
         );
       }
@@ -245,11 +245,14 @@ class PermissionGuideService {
   static Future<PermissionCheckItem> _checkLaunchAgentReadiness() async {
     if (Platform.isWindows) {
       try {
-        final result = await Process.run('cmd', [
-          '/c',
-          'schtasks',
-          '/Query',
-        ], runInShell: true);
+        final result = await Process.run(
+            'cmd',
+            [
+              '/c',
+              'schtasks',
+              '/Query',
+            ],
+            runInShell: true);
         final passed = result.exitCode == 0;
         return PermissionCheckItem(
           id: 'launch_agent',
@@ -369,8 +372,7 @@ class PermissionGuideService {
     if (Platform.isLinux) {
       try {
         final status = await NativeBridge.getLinuxDesktopIntegrationStatus();
-        final supported =
-            status.desktopEnvironment == 'gnome' ||
+        final supported = status.desktopEnvironment == 'gnome' ||
             status.desktopEnvironment == 'kde';
         return PermissionCheckItem(
           id: 'network_query',
@@ -410,9 +412,8 @@ class PermissionGuideService {
         detail: ok
             ? 'System network query commands are available.'
             : 'Network query failed: scutil=${a.exitCode}, networksetup=${b.exitCode}',
-        suggestion: ok
-            ? ''
-            : 'Check terminal/system permission policy, then retry.',
+        suggestion:
+            ok ? '' : 'Check terminal/system permission policy, then retry.',
       );
     } catch (e) {
       return PermissionCheckItem(

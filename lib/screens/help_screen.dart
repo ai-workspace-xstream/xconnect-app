@@ -258,7 +258,10 @@ class _HelpScreenState extends State<HelpScreen> {
         const SizedBox(height: 4),
         SelectableText(
           value,
-          style: TextStyle(fontFamily: 'monospace', fontSize: 13, color: Theme.of(context).colorScheme.onSurface),
+          style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurface),
         ),
       ],
     );

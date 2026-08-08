@@ -245,14 +245,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _clearMonitoringData({required bool clearLatency}) {
     final activeNode = _activeNode.trim();
-    final hadMetrics =
-        _packetTunnelMetrics.updatedAt != null ||
+    final hadMetrics = _packetTunnelMetrics.updatedAt != null ||
         _packetTunnelMetrics.downloadBytesPerSecond != null ||
         _packetTunnelMetrics.uploadBytesPerSecond != null ||
         _packetTunnelMetrics.memoryBytes != null ||
         _packetTunnelMetrics.cpuPercent != null;
-    final hadLatency =
-        clearLatency &&
+    final hadLatency = clearLatency &&
         activeNode.isNotEmpty &&
         _latencyByNode.containsKey(activeNode);
     if (!hadMetrics && !hadLatency) {
@@ -280,8 +278,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     final status = await NativeBridge.getPacketTunnelStatus();
     if (!mounted) return;
-    final changed =
-        status.status != _packetTunnelStatus.status ||
+    final changed = status.status != _packetTunnelStatus.status ||
         status.lastError != _packetTunnelStatus.lastError ||
         status.startedAt != _packetTunnelStatus.startedAt ||
         status.utunInterfaces.join(',') !=
@@ -314,9 +311,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     _connectedAt ??= DateTime.now();
     final node = vpnNodes.cast<VpnNode?>().firstWhere(
-      (n) => n?.name == _activeNode,
-      orElse: () => null,
-    );
+          (n) => n?.name == _activeNode,
+          orElse: () => null,
+        );
     _connectedLocation = (node?.countryCode ?? '-').toUpperCase();
     if (_requiresPacketTunnelStatus &&
         _packetTunnelStatus.status != 'connected') {
@@ -367,10 +364,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final previous = _packetTunnelMetrics;
     final changed =
         previous.downloadBytesPerSecond != snapshot.downloadBytesPerSecond ||
-        previous.uploadBytesPerSecond != snapshot.uploadBytesPerSecond ||
-        previous.memoryBytes != snapshot.memoryBytes ||
-        previous.cpuPercent != snapshot.cpuPercent ||
-        previous.updatedAt != snapshot.updatedAt;
+            previous.uploadBytesPerSecond != snapshot.uploadBytesPerSecond ||
+            previous.memoryBytes != snapshot.memoryBytes ||
+            previous.cpuPercent != snapshot.cpuPercent ||
+            previous.updatedAt != snapshot.updatedAt;
     if (!changed) return;
     setState(() {
       _packetTunnelMetrics = snapshot;
@@ -444,14 +441,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
     try {
       final watch = Stopwatch()..start();
-      final request = await client
-          .headUrl(uri)
-          .timeout(const Duration(seconds: 4));
+      final request =
+          await client.headUrl(uri).timeout(const Duration(seconds: 4));
       request.followRedirects = false;
       request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
       final response = await request.close().timeout(
-        const Duration(seconds: 4),
-      );
+            const Duration(seconds: 4),
+          );
       await response.drain<void>();
       watch.stop();
       if (response.statusCode >= 200 && response.statusCode < 500) {
@@ -460,15 +456,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {
       try {
         final watch = Stopwatch()..start();
-        final request = await client
-            .getUrl(uri)
-            .timeout(const Duration(seconds: 4));
+        final request =
+            await client.getUrl(uri).timeout(const Duration(seconds: 4));
         request.followRedirects = false;
         request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
         request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
         final response = await request.close().timeout(
-          const Duration(seconds: 4),
-        );
+              const Duration(seconds: 4),
+            );
         await response.drain<void>();
         watch.stop();
         if (response.statusCode >= 200 && response.statusCode < 500) {
@@ -626,9 +621,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
         addAppLog(
           '[socks5] $verifyMsg',
-          level: verifyMsg.startsWith('success:')
-              ? LogLevel.info
-              : LogLevel.error,
+          level:
+              verifyMsg.startsWith('success:') ? LogLevel.info : LogLevel.error,
         );
         _showMessage(verifyMsg);
       } else {
@@ -649,8 +643,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   ) async {
     final shouldShow =
         await PermissionGuideService.shouldPromptForPacketTunnelAuthorization(
-          failureMessage: failureMessage,
-        );
+      failureMessage: failureMessage,
+    );
     if (!mounted || !shouldShow) return;
     await showPermissionGuideDialog(context, failureMessage: failureMessage);
   }
@@ -820,9 +814,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_isSwitchingNode) {
       return xc.warning;
     }
-    return _hasActiveConnection
-        ? xc.success
-        : xc.subtleText;
+    return _hasActiveConnection ? xc.success : xc.subtleText;
   }
 
   String _connectionMetaLine(BuildContext context) {
@@ -896,14 +888,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         vertical: compact ? 6 : 8,
       ),
       decoration: BoxDecoration(
-        color: isEmpty
-            ? xc.cardBackground
-            : latency.color.withValues(alpha: 0.08),
+        color:
+            isEmpty ? xc.cardBackground : latency.color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: isEmpty
-              ? xc.cardBorder
-              : latency.color.withValues(alpha: 0.18),
+          color:
+              isEmpty ? xc.cardBorder : latency.color.withValues(alpha: 0.18),
         ),
       ),
       child: Row(
@@ -1347,8 +1337,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   _isSwitchingNode
                       ? _connectionStateLabel(context)
                       : (_hasActiveConnection
-                            ? context.l10n.get('stopAcceleration')
-                            : context.l10n.get('startAcceleration')),
+                          ? context.l10n.get('stopAcceleration')
+                          : context.l10n.get('startAcceleration')),
                 ),
               ),
             ),

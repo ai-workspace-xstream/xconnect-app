@@ -88,10 +88,12 @@ void main() {
     )));
 
     final dimmed = tester.widget<Opacity>(
-      find.ancestor(
-        of: find.text('运行态 MCP Server'),
-        matching: find.byType(Opacity),
-      ).first,
+      find
+          .ancestor(
+            of: find.text('运行态 MCP Server'),
+            matching: find.byType(Opacity),
+          )
+          .first,
     );
     expect(dimmed.opacity, 0.4);
 

@@ -29,8 +29,8 @@ class AboutScreen extends StatelessWidget {
                     Text(
                       buildVersion,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).disabledColor,
-                      ),
+                            color: Theme.of(context).disabledColor,
+                          ),
                     ),
                   ],
                 );

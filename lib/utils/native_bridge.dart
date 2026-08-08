@@ -12,7 +12,8 @@ import 'app_logger.dart';
 import 'global_config.dart';
 
 class NativeBridge {
-  static const MethodChannel _channel = MethodChannel('plus.svc.xconnect/native');
+  static const MethodChannel _channel =
+      MethodChannel('plus.svc.xconnect/native');
   static const MethodChannel _loggerChannel = MethodChannel(
     'plus.svc.xconnect/logger',
   );
@@ -20,13 +21,12 @@ class NativeBridge {
       darwin_host.DarwinHostApi();
   static bool _darwinFlutterApiReady = false;
   static Future<void> Function(String action, Map<String, dynamic> payload)?
-  _nativeMenuActionHandler;
+      _nativeMenuActionHandler;
   static String? _mobileActiveNodeName;
   static String? _darwinAppGroupPathCache;
   static Future<void> _connectionLifecycleQueue = Future<void>.value();
 
-  static final bool _useFfi =
-      Platform.isWindows ||
+  static final bool _useFfi = Platform.isWindows ||
       Platform.isLinux ||
       Platform.isMacOS ||
       Platform.isIOS ||
@@ -96,15 +96,13 @@ class NativeBridge {
 
   static Future<T> _runSerializedConnectionOp<T>(Future<T> Function() action) {
     final completer = Completer<T>();
-    _connectionLifecycleQueue = _connectionLifecycleQueue
-        .then((_) async {
-          try {
-            completer.complete(await action());
-          } catch (error, stackTrace) {
-            completer.completeError(error, stackTrace);
-          }
-        })
-        .catchError((_) {});
+    _connectionLifecycleQueue = _connectionLifecycleQueue.then((_) async {
+      try {
+        completer.complete(await action());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    }).catchError((_) {});
     return completer.future;
   }
 
@@ -147,7 +145,7 @@ class NativeBridge {
   }
 
   static Future<LinuxDesktopIntegrationStatus>
-  getLinuxDesktopIntegrationStatus() async {
+      getLinuxDesktopIntegrationStatus() async {
     if (!Platform.isLinux) {
       return const LinuxDesktopIntegrationStatus(
         desktopEnvironment: 'unsupported',
@@ -565,7 +563,8 @@ class NativeBridge {
       malloc.free(namePtr);
       if (Platform.isLinux && result.toLowerCase().startsWith('success')) {
         await _invokeLinuxDesktopCommand('setSystemProxy');
-        await _notifyLinuxDesktop('XConnect', 'Proxy Mode connected: $nodeName');
+        await _notifyLinuxDesktop(
+            'XConnect', 'Proxy Mode connected: $nodeName');
       }
       return result;
     } else {
@@ -682,13 +681,12 @@ class NativeBridge {
     _nativeMenuActionHandler = onAction;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'nativeMenuAction') {
-        final args =
-            (call.arguments as Map?)?.cast<Object?, Object?>() ??
+        final args = (call.arguments as Map?)?.cast<Object?, Object?>() ??
             <Object?, Object?>{};
         final action = (args['action'] as String?) ?? '';
         final payloadRaw =
             (args['payload'] as Map?)?.cast<Object?, Object?>() ??
-            <Object?, Object?>{};
+                <Object?, Object?>{};
         final payload = <String, dynamic>{};
         payloadRaw.forEach((key, value) {
           if (key is String) {
@@ -1657,9 +1655,8 @@ class PacketTunnelStatus {
   factory PacketTunnelStatus.fromMap(Map<Object?, Object?> map) {
     final status = map['status'] as String? ?? 'unknown';
     final utunRaw = map['utun'];
-    final utunList = utunRaw is List
-        ? utunRaw.whereType<String>().toList()
-        : <String>[];
+    final utunList =
+        utunRaw is List ? utunRaw.whereType<String>().toList() : <String>[];
     final lastError = map['lastError'] as String?;
     final startedAtRaw = map['startedAt'];
     final startedAt = startedAtRaw is int ? startedAtRaw : null;
@@ -1701,8 +1698,8 @@ class DesktopRuntimeSnapshot {
       }
       return DesktopRuntimeSnapshot(
         running: raw['running'] == true,
-        downloadBytesPerSecond: (raw['downloadBytesPerSecond'] as num?)
-            ?.toInt(),
+        downloadBytesPerSecond:
+            (raw['downloadBytesPerSecond'] as num?)?.toInt(),
         uploadBytesPerSecond: (raw['uploadBytesPerSecond'] as num?)?.toInt(),
         memoryBytes: (raw['memoryBytes'] as num?)?.toInt(),
         cpuPercent: (raw['cpuPercent'] as num?)?.toDouble(),
