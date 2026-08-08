@@ -300,7 +300,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Icon(Icons.link_outlined, size: 64, color: xc.brand),
                       const SizedBox(height: 16),
                       Text(
-                        context.l10n.get('connectors'),
+                        context.l10n.get('selfHostedConnector'),
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -312,12 +312,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         context.l10n.get('connectorIntro'),
                         style: TextStyle(fontSize: 14, color: xc.mutedText),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        context.l10n.get('connectorDisclaimer'),
-                        style: TextStyle(fontSize: 12, color: xc.mutedText),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 32),
@@ -450,6 +444,15 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           );
                         },
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Client-only note, kept below the form
+                      Text(
+                        context.l10n.get('connectorDisclaimer'),
+                        style: TextStyle(fontSize: 12, color: xc.mutedText),
+                        textAlign: TextAlign.center,
                       ),
 
                       const SizedBox(height: 32),

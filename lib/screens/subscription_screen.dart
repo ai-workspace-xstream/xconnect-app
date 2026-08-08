@@ -293,9 +293,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 _usageLoading
-                                    ? '正在从 accounts.svc.plus 同步权威流量统计…'
+                                    ? '正在从 accounts.example.com 同步权威流量统计…'
                                     : _usageSummary == null
-                                        ? '登录后可查看由 accounts.svc.plus 聚合的权威流量与余额。'
+                                        ? '登录后可查看由 accounts.example.com 聚合的权威流量与余额。'
                                         : '累计 ${_usageSummary!.totalBytes} B，余额 ${_usageSummary!.currentBalance.toStringAsFixed(2)}，同步延迟约 ${_usageSummary!.syncDelaySeconds} 秒。',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
