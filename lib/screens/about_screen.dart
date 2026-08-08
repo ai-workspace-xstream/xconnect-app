@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/global_config.dart';
 import '../widgets/app_breadcrumb.dart';
 
@@ -7,6 +8,16 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key, this.breadcrumbItems});
 
   final List<String>? breadcrumbItems;
+
+  static const _githubUrl =
+      'https://github.com/ai-workspace-xstream/xconnect-app';
+
+  Future<void> _openGithub() async {
+    final uri = Uri.parse(_githubUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   Widget _buildBody(BuildContext context) {
     return Padding(
@@ -38,6 +49,25 @@ class AboutScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text('© 2025-2026 svc.plus'),
+            const SizedBox(height: 4),
+            Text(
+              'XConnect is a client-only, self-hosted connector app. '
+              'Optional workspace sync, when enabled, is provided by svc.plus.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).disabledColor,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: _openGithub,
+              child: Text(
+                'Open source on GitHub: $_githubUrl',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+              ),
+            ),
             const SizedBox(height: 16),
             const Text(
               'XConnect is licensed under the Apache License 2.0.\n\n'

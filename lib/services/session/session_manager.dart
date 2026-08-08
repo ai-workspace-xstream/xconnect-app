@@ -35,8 +35,9 @@ class SessionManager {
   final ValueNotifier<String?> currentUser = ValueNotifier<String?>(null);
   final ValueNotifier<String?> lastError = ValueNotifier<String?>(null);
   final ValueNotifier<bool> loading = ValueNotifier<bool>(false);
-  final ValueNotifier<String> baseUrl =
-      ValueNotifier<String>('https://accounts.svc.plus');
+  // No default endpoint: this is a self-hosted connector, the app must not
+  // ship pre-pointed at any specific commercial service.
+  final ValueNotifier<String> baseUrl = ValueNotifier<String>('');
 
   String? _cookie;
   String? _sessionToken;
