@@ -18,6 +18,16 @@ class SettingsGroup extends StatelessWidget {
 
   static const double _radius = 12;
 
+  /// Whether these children would render anything.
+  ///
+  /// Lets a caller decide *before* layout — e.g. to drop the tab that would
+  /// otherwise host an empty group, along with the gap in front of it.
+  static bool hasVisibleChildren(List<Widget> children) =>
+      children.any((child) => child is! _Absent);
+
+  /// True when this group would render nothing at all.
+  bool get isEmpty => !hasVisibleChildren(children);
+
   @override
   Widget build(BuildContext context) {
     final xc = context.xColors;
@@ -152,8 +162,7 @@ class SettingsRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final xc = context.xColors;
     final accent = destructive ? xc.error : xc.brand;
-    final minHeight =
-        MediaQuery.of(context).size.width < 768 ? 48.0 : 44.0;
+    final minHeight = MediaQuery.of(context).size.width < 768 ? 48.0 : 44.0;
 
     Widget? tail = trailing;
     if (tail == null) {

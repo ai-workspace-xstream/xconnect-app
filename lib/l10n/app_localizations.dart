@@ -98,7 +98,26 @@ class AppLocalizations {
       'logExported': '📤 Logs exported to console',
       'clearLogs': '🧹 Clear logs',
       'exportLogs': '📤 Export logs',
-      'settingsCenter': '⚙️ Settings',
+      'settingsCenter': 'Settings',
+      'settingsSubtitle':
+          'Connection, DNS, routing, transport and diagnostics.',
+      'settingsTabConnection': 'Connection',
+      'settingsTabDns': 'DNS',
+      'settingsTabRouting': 'Routing',
+      'settingsTabTransport': 'Transport',
+      'settingsTabConfig': 'Config',
+      'settingsTabSystem': 'System',
+      'dangerZone': 'Danger Zone',
+      'deleteConfigMeaning':
+          'Removes the selected connections and their config files. This cannot be undone.',
+      'resetAllMeaning':
+          'Clears the system VPN profile and every generated runtime file, then re-registers from scratch.',
+      'resetAllConfirmTitle': 'Reset all connections?',
+      'resetAllConfirmBody':
+          'The system VPN profile and all generated runtime files will be removed. Your imported connections are kept. You will be asked to approve the VPN permission again on the next connect.',
+      'reset': 'Reset',
+      'unsavedChanges': 'Unsaved',
+      'tunnelActive': 'Carrying system traffic',
       'xrayMgmt': 'Advanced Networking',
       'configMgmt': 'Connection Management',
       'genDefaultNodes': 'Generate Default Connections',
@@ -175,8 +194,14 @@ class AppLocalizations {
       'tunnelDnsViaProxy': 'Tunnel DNS via Proxy',
       'tunnelDnsViaProxyHint':
           'Forces all TUN DNS queries through proxy resolver. Recommended for CN users when DoH is blocked locally.',
+      'proxyDnsWarnCnOnly':
+          'This resolver only answers correctly inside CN, but proxy DNS is '
+              'queried from the exit node. Move it to Direct DNS.',
       'dnsDialogHintDoh':
-          'Enter DoH HTTPS endpoints. DNSPod / AliDNS are CN-safe.',
+          'Enter DoH HTTPS endpoints. These are queried through the proxy '
+              'outbound, so use IP-literal resolvers that answer correctly '
+              'from the exit node (e.g. 1.1.1.1). CN-only providers belong '
+              'on Direct DNS.',
       'dnsDialogHintPlain': 'Enter plain DNS server addresses, e.g. 1.1.1.1.',
       'dnsDialogHintDirect':
           'Enter direct DNS server addresses for the Direct Resolver policy and for system DNS override on platforms that do not yet use the local Secure DNS endpoint.',
@@ -370,7 +395,23 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'logExported': '📤 日志已导出至控制台',
       'clearLogs': '🧹 清空日志',
       'exportLogs': '📤 导出日志',
-      'settingsCenter': '⚙️ 设置中心',
+      'settingsCenter': '设置',
+      'settingsSubtitle': '连接、DNS、路由、传输与诊断选项。',
+      'settingsTabConnection': '连接',
+      'settingsTabDns': 'DNS',
+      'settingsTabRouting': '路由',
+      'settingsTabTransport': '传输',
+      'settingsTabConfig': '配置',
+      'settingsTabSystem': '系统',
+      'dangerZone': '危险区域',
+      'deleteConfigMeaning': '删除所选连接及其配置文件，不可撤销。',
+      'resetAllMeaning': '清除系统 VPN 配置与生成的运行文件，并重新注册。',
+      'resetAllConfirmTitle': '重置所有连接？',
+      'resetAllConfirmBody':
+          '将清除系统 VPN 配置和所有生成的运行文件。已导入的连接会保留。下次连接时需要重新授权 VPN 权限。',
+      'reset': '重置',
+      'unsavedChanges': '未保存',
+      'tunnelActive': '已接管系统流量',
       'xrayMgmt': '高级网络',
       'configMgmt': '连接管理',
       'genDefaultNodes': '生成默认连接',
@@ -443,7 +484,9 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'secondaryDns': '备用 DNS',
       'tunnelDnsViaProxy': '隧道 DNS 走代理',
       'tunnelDnsViaProxyHint': '强制所有 TUN DNS 查询经代理解析器处理。国内 DoH 被墙时建议开启。',
-      'dnsDialogHintDoh': '请输入 DoH HTTPS 端点，DNSPod / 阿里DNS 在国内可用。',
+      'proxyDnsWarnCnOnly': '该服务商仅在国内可正常应答，但代理 DNS 是从出口节点发起查询的。请改配到直连 DNS。',
+      'dnsDialogHintDoh': '请输入 DoH HTTPS 端点。此处解析走代理出站，请使用出口节点可正常访问的 IP 字面量端点'
+          '（如 1.1.1.1）。国内专用服务商应配置在直连 DNS。',
       'dnsDialogHintPlain': '请输入 DNS 服务器地址，例如 1.1.1.1。',
       'dnsDialogHintDirect':
           '请输入直连 DNS 服务器地址，用于 Direct Resolver 策略，并继续作为尚未接入本地 Secure DNS 端点平台上的系统 DNS 来源。',
