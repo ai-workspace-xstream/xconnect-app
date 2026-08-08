@@ -29,7 +29,7 @@ if [[ "$platform_name" == "windows" ]]; then
   msix_file="$(find "$artifact_dir" -name '*.msix' | head -n 1 || true)"
   if [[ -n "$msix_file" ]]; then
     rsync -av "$msix_file" \
-      "root@${VPS_HOST}:/data/update-server/xstream-windows-latest/xstream-windows-latest.msix" \
+      "root@${VPS_HOST}:/data/update-server/xconnect-windows-latest/xconnect-windows-latest.msix" \
       --delete
   fi
 fi

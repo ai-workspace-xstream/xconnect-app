@@ -54,7 +54,7 @@ index 1452441c..f0844da7 100644
 +	if lastErr == nil {
 +		lastErr = windows.ERROR_ALREADY_INITIALIZED
 +	}
-+	return zero, fmt.Errorf("wintun adapter %q is already active in another xstream instance: %w", name, lastErr)
++	return zero, fmt.Errorf("wintun adapter %q is already active in another xconnect instance: %w", name, lastErr)
 +}
 +
  func open(name string) (*wintun.Adapter, error) {

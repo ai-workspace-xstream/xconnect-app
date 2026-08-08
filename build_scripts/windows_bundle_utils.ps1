@@ -1,12 +1,12 @@
-Set-Variable -Name XstreamWintunVersion -Option ReadOnly -Value "0.14.1"
-Set-Variable -Name XstreamWintunSha256 -Option ReadOnly -Value "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51"
-Set-Variable -Name XstreamWintunZipUrl -Option ReadOnly -Value "https://www.wintun.net/builds/wintun-0.14.1.zip"
+Set-Variable -Name XConnectWintunVersion -Option ReadOnly -Value "0.14.1"
+Set-Variable -Name XConnectWintunSha256 -Option ReadOnly -Value "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51"
+Set-Variable -Name XConnectWintunZipUrl -Option ReadOnly -Value "https://www.wintun.net/builds/wintun-0.14.1.zip"
 
-function Get-XstreamWindowsReleaseDir {
+function Get-XConnectWindowsReleaseDir {
     return Join-Path $PSScriptRoot "..\build\windows\x64\runner\Release"
 }
 
-function Copy-XstreamBridgeDll {
+function Copy-XConnectBridgeDll {
     param(
         [Parameter(Mandatory = $true)][string]$ReleaseDir
     )
@@ -20,7 +20,7 @@ function Copy-XstreamBridgeDll {
     Write-Host "Copied bridge DLL: $source"
 }
 
-function Get-XstreamVcRedistDir {
+function Get-XConnectVcRedistDir {
     $candidates = @()
 
     if ($env:VCToolsRedistDir) {
@@ -47,12 +47,12 @@ function Get-XstreamVcRedistDir {
     return $null
 }
 
-function Copy-XstreamVcRuntime {
+function Copy-XConnectVcRuntime {
     param(
         [Parameter(Mandatory = $true)][string]$ReleaseDir
     )
 
-    $redistDir = Get-XstreamVcRedistDir
+    $redistDir = Get-XConnectVcRedistDir
     if (-not $redistDir) {
         Write-Warning "Visual C++ redistributable directory not found. Portable package may require the VC runtime to be installed on the target machine."
         return
@@ -67,12 +67,12 @@ function Copy-XstreamVcRuntime {
     }
 }
 
-function Get-XstreamWintunCacheDir {
-    return Join-Path $env:LOCALAPPDATA "Xstream\cache\wintun\$XstreamWintunVersion"
+function Get-XConnectWintunCacheDir {
+    return Join-Path $env:LOCALAPPDATA "XConnect\cache\wintun\$XConnectWintunVersion"
 }
 
-function Resolve-XstreamWintunDll {
-    $cacheDir = Get-XstreamWintunCacheDir
+function Resolve-XConnectWintunDll {
+    $cacheDir = Get-XConnectWintunCacheDir
     $dllPath = Join-Path $cacheDir "wintun\bin\amd64\wintun.dll"
     if (Test-Path $dllPath) {
         return $dllPath
@@ -80,12 +80,12 @@ function Resolve-XstreamWintunDll {
 
     New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
-    $zipPath = Join-Path $cacheDir "wintun-$XstreamWintunVersion.zip"
-    Invoke-WebRequest -Uri $XstreamWintunZipUrl -OutFile $zipPath
+    $zipPath = Join-Path $cacheDir "wintun-$XConnectWintunVersion.zip"
+    Invoke-WebRequest -Uri $XConnectWintunZipUrl -OutFile $zipPath
 
     $actualHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actualHash -ne $XstreamWintunSha256) {
-        throw "Downloaded wintun.zip hash mismatch. Expected $XstreamWintunSha256, got $actualHash"
+    if ($actualHash -ne $XConnectWintunSha256) {
+        throw "Downloaded wintun.zip hash mismatch. Expected $XConnectWintunSha256, got $actualHash"
     }
 
     Expand-Archive -Path $zipPath -DestinationPath $cacheDir -Force
@@ -97,12 +97,12 @@ function Resolve-XstreamWintunDll {
     return $dllPath
 }
 
-function Copy-XstreamWintunDll {
+function Copy-XConnectWintunDll {
     param(
         [Parameter(Mandatory = $true)][string]$ReleaseDir
     )
 
-    $source = Resolve-XstreamWintunDll
+    $source = Resolve-XConnectWintunDll
     Copy-Item $source -Destination (Join-Path $ReleaseDir "wintun.dll") -Force
     Write-Host "Copied Wintun DLL: $source"
 }

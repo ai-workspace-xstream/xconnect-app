@@ -60,7 +60,7 @@ echo "[xcode-debug] prepare LLDB init + app filename"
 ensure_flutter_lldbinit "ios"
 ensure_flutter_lldbinit "macos"
 ensure_app_filename "ios" "Runner.app"
-ensure_app_filename "macos" "xstream.app"
+ensure_app_filename "macos" "XConnect.app"
 
 echo "[xcode-debug] done"
 echo "Open Xcode workspaces:"

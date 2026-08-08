@@ -168,7 +168,7 @@ upload_ios() {
 
 build_macos_archive_export() {
   local export_opts
-  export_opts="$(mktemp /tmp/xstream-macos-export-options.XXXXXX)"
+  export_opts="$(mktemp /tmp/xconnect-macos-export-options.XXXXXX)"
   cat > "$export_opts" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
