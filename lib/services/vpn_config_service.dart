@@ -921,8 +921,7 @@ class VpnConfig {
       final xmux = Map<String, dynamic>.from(
         extra['xmux'] as Map? ?? const {},
       );
-      xmux['maxConcurrency'] =
-          XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+      xmux['maxConcurrency'] = XhttpAdvancedConfig.xmuxMaxConcurrency.value;
       final hMaxRequestTimes = xmux['hMaxRequestTimes'];
       if (hMaxRequestTimes == null ||
           (hMaxRequestTimes is String && hMaxRequestTimes.trim().isEmpty)) {

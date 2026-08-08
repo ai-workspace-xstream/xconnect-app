@@ -189,8 +189,8 @@ void main() {
       final result = await VpnConfig.applyXhttpAdvancedSettingsToFile(
         configFile.path,
       );
-      final rewritten = jsonDecode(await configFile.readAsString())
-          as Map<String, dynamic>;
+      final rewritten =
+          jsonDecode(await configFile.readAsString()) as Map<String, dynamic>;
       final streamSettings = _proxyStreamSettingsFromConfig(
         jsonEncode(rewritten),
       );
@@ -203,13 +203,13 @@ void main() {
         '4-8',
       );
       expect(
-        ((streamSettings['xhttpSettings'] as Map)['extra']
-            as Map)['xmux']['hMaxRequestTimes'],
+        ((streamSettings['xhttpSettings'] as Map)['extra'] as Map)['xmux']
+            ['hMaxRequestTimes'],
         XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes,
       );
       expect(
-        ((streamSettings['xhttpSettings'] as Map)['extra']
-            as Map)['xmux']['hMaxReusableSecs'],
+        ((streamSettings['xhttpSettings'] as Map)['extra'] as Map)['xmux']
+            ['hMaxReusableSecs'],
         XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs,
       );
     });
@@ -238,9 +238,8 @@ void main() {
 
       final result = VpnConfig.applyXhttpAdvancedSettings(config);
       final streamSettings = _proxyStreamSettingsFromConfig(jsonEncode(config));
-      final xmux =
-          ((streamSettings['xhttpSettings'] as Map)['extra'] as Map)['xmux']
-              as Map;
+      final xmux = ((streamSettings['xhttpSettings'] as Map)['extra']
+          as Map)['xmux'] as Map;
 
       expect(result.foundXhttp, isTrue);
       expect(result.changed, isTrue);

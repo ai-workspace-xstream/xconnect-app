@@ -138,8 +138,7 @@ Future<void> showPermissionGuideDialog(
                 final statusText = item.passed
                     ? context.l10n.get('permissionStatusPass')
                     : context.l10n.get('permissionStatusFail');
-                final statusColor =
-                    item.passed ? xc.success : cs.error;
+                final statusColor = item.passed ? xc.success : cs.error;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Column(
@@ -171,8 +170,8 @@ Future<void> showPermissionGuideDialog(
                           ),
                         ),
                       ],
-                      ],
-                    ),
+                    ],
+                  ),
                 );
               }),
               if (!report.allPassed) ...[
@@ -216,8 +215,7 @@ Future<void> showPermissionGuideDialog(
               if (!report.allPassed) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content:
-                        Text(context.l10n.get('permissionGuideNeedsFix')),
+                    content: Text(context.l10n.get('permissionGuideNeedsFix')),
                   ),
                 );
               }
