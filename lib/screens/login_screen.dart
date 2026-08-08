@@ -297,7 +297,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.cloud_outlined, size: 64, color: xc.brand),
+                      Icon(Icons.link_outlined, size: 64, color: xc.brand),
                       const SizedBox(height: 16),
                       Text(
                         context.l10n.get('connectors'),
@@ -314,6 +314,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(fontSize: 14, color: xc.mutedText),
                         textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.l10n.get('connectorDisclaimer'),
+                        style: TextStyle(fontSize: 12, color: xc.mutedText),
+                        textAlign: TextAlign.center,
+                      ),
                       const SizedBox(height: 32),
 
                       // Server address
@@ -321,6 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _baseUrlController,
                         decoration: InputDecoration(
                           labelText: context.l10n.get('serverAddress'),
+                          hintText: context.l10n.get('serverAddressHint'),
                           prefixIcon: const Icon(Icons.dns_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
