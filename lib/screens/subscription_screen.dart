@@ -45,7 +45,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       });
     }).catchError((_) {
       setState(() {
-        _bundleId = 'com.xstream'; // Fallback value if error occurs
+        _bundleId = 'plus.svc.xconnect'; // Fallback value if error occurs
       });
     });
 
@@ -301,7 +301,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'xstream-vpn 不在本地计算账单，展示数据以服务端分钟桶聚合结果为准。',
+                                'xconnect-vpn 不在本地计算账单，展示数据以服务端分钟桶聚合结果为准。',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall

@@ -1,6 +1,6 @@
 # macOS Packet Tunnel Implementation Record
 
-This document records the current macOS Packet Tunnel design and implementation in Xstream.
+This document records the current macOS Packet Tunnel design and implementation in XConnect.
 It is a code-aligned maintenance note for future debugging, refactoring, and App Store readiness work.
 
 ## 1. Scope
@@ -59,14 +59,14 @@ It is two main macOS processes, and the tunnel engine runs inside the extension 
 
 | Runtime item | Example path | Separate process | Role in current implementation | How to observe |
 | --- | --- | --- | --- | --- |
-| Host app | `/Applications/xstream.app/Contents/MacOS/xstream` | Yes | Flutter UI, state menu integration, Pigeon host bootstrap, Packet Tunnel control requests | `ps -axo pid,ppid,etime,command \| rg '/Applications/xstream.app/Contents/MacOS/xstream'` |
-| Packet Tunnel extension | `/Applications/xstream.app/Contents/PlugIns/PacketTunnel.appex/Contents/MacOS/PacketTunnel` | Yes | Runs `NEPacketTunnelProvider`, applies network settings, resolves fd / `utun`, starts tunnel engine | `ps -axo pid,ppid,etime,command \| rg 'PacketTunnel.appex/Contents/MacOS/PacketTunnel'` |
+| Host app | `/Applications/xconnect.app/Contents/MacOS/xconnect` | Yes | Flutter UI, state menu integration, Pigeon host bootstrap, Packet Tunnel control requests | `ps -axo pid,ppid,etime,command \| rg '/Applications/xconnect.app/Contents/MacOS/xconnect'` |
+| Packet Tunnel extension | `/Applications/xconnect.app/Contents/PlugIns/PacketTunnel.appex/Contents/MacOS/PacketTunnel` | Yes | Runs `NEPacketTunnelProvider`, applies network settings, resolves fd / `utun`, starts tunnel engine | `ps -axo pid,ppid,etime,command \| rg 'PacketTunnel.appex/Contents/MacOS/PacketTunnel'` |
 | `libxray_bridge.dylib` | `PacketTunnel.appex/Contents/Frameworks/libxray_bridge.dylib` | No | Go-built native bridge loaded by the extension with `dlopen` / `dlsym` | check extension bundle contents and Packet Tunnel logs |
 | `go_core/bridge_apple.go` | compiled into `libxray_bridge.dylib` | No | Exposes `StartXrayTunnelWithFd` / stop / error functions to Swift | inspect exported bridge code, not process list |
 | `libXray` | linked through `go_core/go.mod` replace | No | Native wrapper that runs Xray from JSON inside the same process | inspect Go deps and bridge build output |
 | `xray-core` | linked under `libXray` | No | Actual tun inbound and outbound engine running in-process inside `PacketTunnel.appex` | inspect Packet Tunnel behavior and bridge logs, not a standalone PID |
-| Host-side standalone `xray` binary | `xstream.app/Contents/Resources/xray/xray` | Usually no in TUN mode | Runner-side proxy/runtime resource path, not the current Packet Tunnel data-plane entry | `ps -axo ... \| rg '/xray|xray '` only relevant for proxy-mode checks |
-| `xstream-mcp-server` | `xstream.app/Contents/Resources/runtime-tools/xstream-mcp/xstream-mcp-server` | Yes | Auxiliary runtime MCP tooling, unrelated to Packet Tunnel data plane | `pgrep -fl 'xstream-mcp-server'` |
+| Host-side standalone `xray` binary | `xconnect.app/Contents/Resources/xray/xray` | Usually no in TUN mode | Runner-side proxy/runtime resource path, not the current Packet Tunnel data-plane entry | `ps -axo ... \| rg '/xray|xray '` only relevant for proxy-mode checks |
+| `xconnect-mcp-server` | `xconnect.app/Contents/Resources/runtime-tools/xconnect-mcp/xconnect-mcp-server` | Yes | Auxiliary runtime MCP tooling, unrelated to Packet Tunnel data plane | `pgrep -fl 'xconnect-mcp-server'` |
 
 Operationally, the most important distinction is:
 
@@ -119,7 +119,7 @@ Operationally, the most important distinction is:
   - exposes status back to Flutter
 - `macos/Runner/AppDelegate.swift`
   - owns macOS status menu
-  - sends menu actions to Flutter through `com.xstream/native`
+  - sends menu actions to Flutter through `com.xconnect/native`
   - does not directly start Packet Tunnel
 
 ### 3.4 Packet Tunnel extension
@@ -283,7 +283,7 @@ When a new manager is created:
 
 Current display name used by the control plane:
 
-- `Xstream`
+- `XConnect`
 
 ## 5. Packet Tunnel Provider Data Plane
 
@@ -526,7 +526,7 @@ Status source:
 Important detail:
 
 - `utunInterfaces` is a list of all current `utun*` interfaces on the system
-- it is not guaranteed to be only the one bound by Xstream
+- it is not guaranteed to be only the one bound by XConnect
 
 ### 7.3 Provider-side status path
 
@@ -739,7 +739,7 @@ For runtime validation, use:
 - `dart analyze`
 - `make macos-arm64`
 - `scutil --nc list`
-- `scutil --nc status "Xstream"`
+- `scutil --nc status "XConnect"`
 - `route -n get default`
 - `ps -axo pid,ppid,etime,command | rg 'PacketTunnel|xray'`
 - `/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "plus.svc.xconnect" OR process CONTAINS "PacketTunnel" OR process == "nesessionmanager"'`
@@ -748,7 +748,7 @@ See also:
 
 - `docs/packet_tunnel_provider_design.md`
 - `docs/system-vpn-packet-tunnel-xray26.md`
-- `skills/xstream-functional-test-baseline/`
+- `skills/xconnect-functional-test-baseline/`
 
 ## 13. Codex Handoff Map
 

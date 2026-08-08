@@ -386,7 +386,7 @@ class VpnConfig {
     );
     if (serviceContent.isEmpty) {
       if (_requiresServiceDefinition) return;
-      serviceContent = '# Xstream mobile node marker for $nodeName\n';
+      serviceContent = '# XConnect mobile node marker for $nodeName\n';
     }
 
     final vpnNodesConfigPath =

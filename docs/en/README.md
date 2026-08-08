@@ -1,11 +1,11 @@
-# XStream Service Plus Documentation
+# XConnect Service Plus Documentation
 
 This repository is a Flutter client application and should document platform architecture, build pipeline, and operator troubleshooting.
 
 ## Current state snapshot
 
-- Root README title: `XStream`
-- Build/runtime evidence: pubspec.yaml (`xstream`)
+- Root README title: `XConnect`
+- Build/runtime evidence: pubspec.yaml (`xconnect`)
 - Primary directories detected: `scripts/`, `test/`, `lib/`, `ios/`, `android/`, `web/`
 - Existing docs count: 28
 

@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/sync/sync_crypto.dart';
+import 'package:xconnect/services/sync/sync_crypto.dart';
 
 void main() {
   group('SyncCrypto', () {
@@ -11,7 +11,7 @@ void main() {
     final nonce = Uint8List.fromList(List<int>.generate(24, (i) => 24 - i));
 
     test('encrypt/decrypt round trip preserves plaintext bytes', () async {
-      final plaintext = utf8.encode('xstream-sync-payload');
+      final plaintext = utf8.encode('xconnect-sync-payload');
 
       final cipher = await SyncCrypto.encrypt(
         secret: secret,

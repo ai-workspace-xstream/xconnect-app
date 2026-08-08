@@ -1,6 +1,6 @@
 # iOS App Design
 
-本文档说明 Xstream 在 iOS 平台的整体实现方式，重点覆盖 Flutter UI、Host App、Network Extension 与内置 Secure Tunnel engine 的协作关系。
+本文档说明 XConnect 在 iOS 平台的整体实现方式，重点覆盖 Flutter UI、Host App、Network Extension 与内置 Secure Tunnel engine 的协作关系。
 
 ## 架构一览
 

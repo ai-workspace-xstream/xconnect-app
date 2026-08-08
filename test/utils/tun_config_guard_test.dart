@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/utils/tun_config_guard.dart';
+import 'package:xconnect/utils/tun_config_guard.dart';
 
 void main() {
   group('guardTunInterfaceFieldsForWrite', () {

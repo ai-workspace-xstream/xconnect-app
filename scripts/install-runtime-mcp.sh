@@ -46,17 +46,17 @@ if ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
-SERVER_SRC="$ROOT_DIR/tools/xstream-mcp-server"
+SERVER_SRC="$ROOT_DIR/tools/xconnect-mcp-server"
 if [ ! -f "$SERVER_SRC/main.go" ]; then
-  echo "xstream-mcp-server source not found: $SERVER_SRC" >&2
+  echo "xconnect-mcp-server source not found: $SERVER_SRC" >&2
   exit 1
 fi
 
-RUNTIME_DIR="$APP_BUNDLE/Contents/Resources/runtime-tools/xstream-mcp"
+RUNTIME_DIR="$APP_BUNDLE/Contents/Resources/runtime-tools/xconnect-mcp"
 mkdir -p "$RUNTIME_DIR"
 
-BIN_PATH="$RUNTIME_DIR/xstream-mcp-server"
-LAUNCHER_PATH="$RUNTIME_DIR/start-xstream-mcp-server.sh"
+BIN_PATH="$RUNTIME_DIR/xconnect-mcp-server"
+LAUNCHER_PATH="$RUNTIME_DIR/start-xconnect-mcp-server.sh"
 README_PATH="$RUNTIME_DIR/README.txt"
 
 (
@@ -71,15 +71,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Runtime mode: no repo is required; server will inspect standard macOS paths.
-exec "$SCRIPT_DIR/xstream-mcp-server"
+exec "$SCRIPT_DIR/xconnect-mcp-server"
 LAUNCHER
 chmod +x "$LAUNCHER_PATH"
 
 cat > "$README_PATH" <<'README'
-XStream Runtime MCP Server
+XConnect Runtime MCP Server
 
-- Binary: ./xstream-mcp-server
-- Launcher: ./start-xstream-mcp-server.sh
+- Binary: ./xconnect-mcp-server
+- Launcher: ./start-xconnect-mcp-server.sh
 - Transport: stdio (MCP)
 
 This runtime package is embedded inside the macOS app bundle to support

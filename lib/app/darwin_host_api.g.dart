@@ -301,7 +301,7 @@ class DarwinHostApi {
   final String pigeonVar_messageChannelSuffix;
 
   Future<String> appGroupPath() async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.appGroupPath$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.appGroupPath$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -328,7 +328,7 @@ class DarwinHostApi {
   }
 
   Future<void> startXApiServer(Uint8List config) async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.startXApiServer$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.startXApiServer$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -350,7 +350,7 @@ class DarwinHostApi {
   }
 
   Future<void> redirectStdErr(String path) async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.redirectStdErr$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.redirectStdErr$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -372,7 +372,7 @@ class DarwinHostApi {
   }
 
   Future<Uint8List> generateTls() async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.generateTls$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.generateTls$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -399,7 +399,7 @@ class DarwinHostApi {
   }
 
   Future<void> setupShutdownNotification() async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.setupShutdownNotification$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.setupShutdownNotification$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -421,7 +421,7 @@ class DarwinHostApi {
   }
 
   Future<String> savePacketTunnelProfile(TunnelProfile profile) async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.savePacketTunnelProfile$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.savePacketTunnelProfile$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -448,7 +448,7 @@ class DarwinHostApi {
   }
 
   Future<void> startPacketTunnel() async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.startPacketTunnel$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.startPacketTunnel$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -470,7 +470,7 @@ class DarwinHostApi {
   }
 
   Future<void> stopPacketTunnel() async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.stopPacketTunnel$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.stopPacketTunnel$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -492,7 +492,7 @@ class DarwinHostApi {
   }
 
   Future<TunnelStatus> getPacketTunnelStatus() async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.getPacketTunnelStatus$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.getPacketTunnelStatus$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -519,7 +519,7 @@ class DarwinHostApi {
   }
 
   Future<TunnelMetricsSnapshot> getPacketTunnelMetrics() async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.xstream.DarwinHostApi.getPacketTunnelMetrics$pigeonVar_messageChannelSuffix';
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.xconnect.DarwinHostApi.getPacketTunnelMetrics$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -563,7 +563,7 @@ abstract class DarwinFlutterApi {
     messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
     {
       final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
-          'dev.flutter.pigeon.xstream.DarwinFlutterApi.onSystemWillShutdown$messageChannelSuffix', pigeonChannelCodec,
+          'dev.flutter.pigeon.xconnect.DarwinFlutterApi.onSystemWillShutdown$messageChannelSuffix', pigeonChannelCodec,
           binaryMessenger: binaryMessenger);
       if (api == null) {
         pigeonVar_channel.setMessageHandler(null);
@@ -582,7 +582,7 @@ abstract class DarwinFlutterApi {
     }
     {
       final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
-          'dev.flutter.pigeon.xstream.DarwinFlutterApi.onSystemWillRestart$messageChannelSuffix', pigeonChannelCodec,
+          'dev.flutter.pigeon.xconnect.DarwinFlutterApi.onSystemWillRestart$messageChannelSuffix', pigeonChannelCodec,
           binaryMessenger: binaryMessenger);
       if (api == null) {
         pigeonVar_channel.setMessageHandler(null);
@@ -601,7 +601,7 @@ abstract class DarwinFlutterApi {
     }
     {
       final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
-          'dev.flutter.pigeon.xstream.DarwinFlutterApi.onSystemWillSleep$messageChannelSuffix', pigeonChannelCodec,
+          'dev.flutter.pigeon.xconnect.DarwinFlutterApi.onSystemWillSleep$messageChannelSuffix', pigeonChannelCodec,
           binaryMessenger: binaryMessenger);
       if (api == null) {
         pigeonVar_channel.setMessageHandler(null);
@@ -620,18 +620,18 @@ abstract class DarwinFlutterApi {
     }
     {
       final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
-          'dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelStateChanged$messageChannelSuffix', pigeonChannelCodec,
+          'dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelStateChanged$messageChannelSuffix', pigeonChannelCodec,
           binaryMessenger: binaryMessenger);
       if (api == null) {
         pigeonVar_channel.setMessageHandler(null);
       } else {
         pigeonVar_channel.setMessageHandler((Object? message) async {
           assert(message != null,
-          'Argument for dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelStateChanged was null.');
+          'Argument for dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelStateChanged was null.');
           final List<Object?> args = (message as List<Object?>?)!;
           final TunnelStatus? arg_status = (args[0] as TunnelStatus?);
           assert(arg_status != null,
-              'Argument for dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelStateChanged was null, expected non-null TunnelStatus.');
+              'Argument for dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelStateChanged was null, expected non-null TunnelStatus.');
           try {
             api.onPacketTunnelStateChanged(arg_status!);
             return wrapResponse(empty: true);
@@ -645,21 +645,21 @@ abstract class DarwinFlutterApi {
     }
     {
       final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
-          'dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelError$messageChannelSuffix', pigeonChannelCodec,
+          'dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelError$messageChannelSuffix', pigeonChannelCodec,
           binaryMessenger: binaryMessenger);
       if (api == null) {
         pigeonVar_channel.setMessageHandler(null);
       } else {
         pigeonVar_channel.setMessageHandler((Object? message) async {
           assert(message != null,
-          'Argument for dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelError was null.');
+          'Argument for dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelError was null.');
           final List<Object?> args = (message as List<Object?>?)!;
           final String? arg_code = (args[0] as String?);
           assert(arg_code != null,
-              'Argument for dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelError was null, expected non-null String.');
+              'Argument for dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelError was null, expected non-null String.');
           final String? arg_message = (args[1] as String?);
           assert(arg_message != null,
-              'Argument for dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelError was null, expected non-null String.');
+              'Argument for dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelError was null, expected non-null String.');
           try {
             api.onPacketTunnelError(arg_code!, arg_message!);
             return wrapResponse(empty: true);

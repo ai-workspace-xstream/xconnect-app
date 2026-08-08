@@ -12,9 +12,9 @@ import 'app_logger.dart';
 import 'global_config.dart';
 
 class NativeBridge {
-  static const MethodChannel _channel = MethodChannel('com.xstream/native');
+  static const MethodChannel _channel = MethodChannel('plus.svc.xconnect/native');
   static const MethodChannel _loggerChannel = MethodChannel(
-    'com.xstream/logger',
+    'plus.svc.xconnect/logger',
   );
   static final darwin_host.DarwinHostApi _darwinHostApi =
       darwin_host.DarwinHostApi();
@@ -165,7 +165,7 @@ class NativeBridge {
       'setAutostartEnabled',
       payload: <String, dynamic>{
         'enable': enabled,
-        'execPath': '/opt/xstream/xstream',
+        'execPath': '/opt/xconnect/xconnect',
       },
     );
     return (response['message'] as String?) ??
@@ -425,7 +425,7 @@ class NativeBridge {
           malloc.free(configPtr);
           if (result.toLowerCase().startsWith('success')) {
             await _notifyLinuxDesktop(
-              'Xstream',
+              'XConnect',
               'Tunnel Mode connected: $nodeName',
             );
             return 'TUN 模式启动成功 ($nodeName)';
@@ -477,7 +477,7 @@ class NativeBridge {
               'stopTunnelHelper',
               payload: <String, dynamic>{'mode': 'tun'},
             );
-            await _notifyLinuxDesktop('Xstream', 'Tunnel Mode disconnected');
+            await _notifyLinuxDesktop('XConnect', 'Tunnel Mode disconnected');
           }
           return result.toLowerCase().startsWith('success')
               ? 'TUN 模式已停止'
@@ -565,7 +565,7 @@ class NativeBridge {
       malloc.free(namePtr);
       if (Platform.isLinux && result.toLowerCase().startsWith('success')) {
         await _invokeLinuxDesktopCommand('setSystemProxy');
-        await _notifyLinuxDesktop('Xstream', 'Proxy Mode connected: $nodeName');
+        await _notifyLinuxDesktop('XConnect', 'Proxy Mode connected: $nodeName');
       }
       return result;
     } else {
@@ -618,7 +618,7 @@ class NativeBridge {
       malloc.free(namePtr);
       if (Platform.isLinux && result.toLowerCase().startsWith('success')) {
         await _invokeLinuxDesktopCommand('clearSystemProxy');
-        await _notifyLinuxDesktop('Xstream', 'Proxy Mode disconnected');
+        await _notifyLinuxDesktop('XConnect', 'Proxy Mode disconnected');
       }
       return result;
     } else {

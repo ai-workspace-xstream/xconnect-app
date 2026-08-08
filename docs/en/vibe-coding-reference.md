@@ -6,15 +6,15 @@ Use this page to align AI-assisted coding prompts, repo boundaries, safe edit ru
 
 ## Current code-aligned notes
 
-- Documentation target: `xstream.svc.plus`
+- Documentation target: `xconnect.svc.plus`
 - Repo kind: `flutter-app`
-- Manifest and build evidence: pubspec.yaml (`xstream`)
+- Manifest and build evidence: pubspec.yaml (`xconnect`)
 - Primary implementation and ops directories: `scripts/`, `test/`, `lib/`, `ios/`, `android/`, `web/`
 - Package scripts snapshot: No package.json scripts were detected.
 
 ## Existing docs to reconcile
 
-- `xstream-mcp-server.md`
+- `xconnect-mcp-server.md`
 
 ## What this page should cover next
 

@@ -1,11 +1,11 @@
-# XStream 客户端应用 文档
+# XConnect 客户端应用 文档
 
 该仓库是 Flutter 客户端应用，文档需要覆盖平台架构、构建链路与运维排障。
 
 ## 当前状态快照
 
-- 根 README 标题: `XStream`
-- 构建与运行时证据: pubspec.yaml (`xstream`)
+- 根 README 标题: `XConnect`
+- 构建与运行时证据: pubspec.yaml (`xconnect`)
 - 自动识别的主要目录: `scripts/`, `test/`, `lib/`, `ios/`, `android/`, `web/`
 - 现有文档数量: 28
 

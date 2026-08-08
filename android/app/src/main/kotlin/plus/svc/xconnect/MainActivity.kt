@@ -19,7 +19,7 @@ class MainActivity : FlutterFragmentActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "com.xstream/native"
+            "plus.svc.xconnect/native"
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "savePacketTunnelProfile" -> {

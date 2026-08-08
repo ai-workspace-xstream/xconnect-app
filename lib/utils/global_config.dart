@@ -871,7 +871,7 @@ class GlobalApplicationConfig {
   static String get windowsBasePath {
     final program = Platform.environment['ProgramFiles'];
     if (program != null) {
-      final path = '$program\\Xstream';
+      final path = '$program\\XConnect';
       try {
         Directory(path).createSync(recursive: true);
         return path;
@@ -880,7 +880,7 @@ class GlobalApplicationConfig {
       }
     }
     final local = Platform.environment['LOCALAPPDATA'] ?? '.';
-    final alt = '$local\\Xstream';
+    final alt = '$local\\XConnect';
     Directory(alt).createSync(recursive: true);
     return alt;
   }
@@ -921,12 +921,12 @@ class GlobalApplicationConfig {
         return line.split('=').last.trim();
       } catch (_) {
         // macOS 下若读取失败返回默认值
-        return 'com.xstream';
+        return 'plus.svc.xconnect';
       }
     }
 
     // 其他平台直接返回默认值
-    return 'com.xstream';
+    return 'plus.svc.xconnect';
   }
 
   /// 返回各平台下存放 Xray 配置文件的目录，末尾已包含分隔符
@@ -939,7 +939,7 @@ class GlobalApplicationConfig {
       case 'windows':
         final base =
             Platform.environment['ProgramFiles'] ?? 'C:\\Program Files';
-        return '$base\\Xstream\\';
+        return '$base\\XConnect\\';
       case 'linux':
         return '/opt/etc/';
       default:
@@ -956,16 +956,16 @@ class GlobalApplicationConfig {
         return await getVpnNodesConfigPath();
 
       case 'windows':
-        final xstreamDir = Directory(windowsBasePath);
-        await xstreamDir.create(recursive: true);
-        return '${xstreamDir.path}\\vpn_nodes.json';
+        final xconnectDir = Directory(windowsBasePath);
+        await xconnectDir.create(recursive: true);
+        return '${xconnectDir.path}\\vpn_nodes.json';
 
       case 'linux':
         final home = Platform.environment['HOME'] ??
             (await getApplicationSupportDirectory()).path;
-        final xstreamDir = Directory('$home/.config/xstream');
-        await xstreamDir.create(recursive: true);
-        return '${xstreamDir.path}/vpn_nodes.json';
+        final xconnectDir = Directory('$home/.config/xconnect');
+        await xconnectDir.create(recursive: true);
+        return '${xconnectDir.path}/vpn_nodes.json';
 
       default:
         return await getVpnNodesConfigPath();

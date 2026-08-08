@@ -1,6 +1,6 @@
 # Flutter + Go FFI 跨平台桥接架构
 
-本篇文档概述 XStream 在 Windows 与 Linux 平台上如何利用 `dart:ffi` 与 Go 进行通信，
+本篇文档概述 XConnect 在 Windows 与 Linux 平台上如何利用 `dart:ffi` 与 Go 进行通信，
 从而避免使用 C++ 与平台通道带来的复杂性。macOS 仍沿用原有的 Flutter 插件实现，
 其他平台均通过动态库提供统一的接口。
 

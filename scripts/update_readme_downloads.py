@@ -60,11 +60,11 @@ def format_links(assets: dict[str, str], names: list[tuple[str, str | None]]) ->
 
 def build_table(repo: str, tag: str, assets: dict[str, str]) -> str:
     macos_dmg = find_first(assets, lambda name: name.endswith(".dmg"))
-    linux_zip = find_first(assets, lambda name: name == "xstream-linux.zip")
+    linux_zip = find_first(assets, lambda name: name == "xconnect-linux.zip")
     linux_appimage = find_first(assets, lambda name: name.endswith(".AppImage"))
     linux_deb = find_first(assets, lambda name: name.endswith(".deb"))
     linux_rpm = find_first(assets, lambda name: name.endswith(".rpm"))
-    windows_zip = find_first(assets, lambda name: name == "xstream-windows.zip")
+    windows_zip = find_first(assets, lambda name: name == "xconnect-windows.zip")
     windows_msi = find_first(assets, lambda name: name.endswith(".msi"))
     android_apk = find_first(assets, lambda name: name == "app-release.apk")
     ios_ipa = find_first(assets, lambda name: name.endswith(".ipa"))

@@ -46,9 +46,9 @@ RUN_TARGET_SCRIPT := $(MAKE_SCRIPT_DIR)/run-target.sh
 DMG_TAG := $(shell git describe --tags --exact-match 2>/dev/null || echo "")
 DMG_NAME := $(shell \
 	if [ "$(DMG_TAG)" != "" ]; then \
-		echo "XConnect-release-$(DMG_TAG).dmg"; \
+		echo "xconnect-release-$(DMG_TAG).dmg"; \
 	else \
-		echo "XConnect-dev-$(BUILD_ID).dmg"; \
+		echo "xconnect-dev-$(BUILD_ID).dmg"; \
 	fi)
 
 DART_DEFINES := --dart-define=BRANCH_NAME=$(BRANCH) --dart-define=BUILD_ID=$(BUILD_ID) --dart-define=BUILD_DATE=$(BUILD_DATE)
@@ -135,7 +135,7 @@ build-windows-x64: check-flutter check-go
 	./build_scripts/build_windows.sh
 	$(FLUTTER) build windows --release $(DART_DEFINES)
 	@cp bindings/libgo_native_bridge.dll build/windows/x64/runner/Release/ 2>/dev/null || true
-	@echo ">>> Build complete: build/windows/x64/runner/Release/XConnect.exe"
+	@echo ">>> Build complete: build/windows/x64/runner/Release/xconnect.exe"
 
 build-linux-x64: check-flutter check-go
 	@echo ">>> Building Linux x64 release"
@@ -149,7 +149,7 @@ build-linux-x64: check-flutter check-go
 build-ios-ipa: check-flutter check-macos check-git-submodules
 	@echo ">>> Building iOS IPA"
 	./build_scripts/build_ios_ipa.sh
-	@echo ">>> IPA ready: build/ios/ipa/XConnect.ipa"
+	@echo ">>> IPA ready: build/ios/ipa/xconnect.ipa"
 
 build-android-apk: check-flutter check-go check-git-submodules
 	@echo ">>> Building Android APK"

@@ -1,6 +1,6 @@
 # PacketTunnelProvider Design
 
-This document describes the design and architecture for the `PacketTunnelProvider` component used by Xstream to implement a system VPN / secure network tunnel on Apple platforms. It lives under the `Network Extension` framework and is the single entry point for all system-wide network traffic.
+This document describes the design and architecture for the `PacketTunnelProvider` component used by XConnect to implement a system VPN / secure network tunnel on Apple platforms. It lives under the `Network Extension` framework and is the single entry point for all system-wide network traffic.
 
 ## Role and Responsibilities
 
@@ -48,7 +48,7 @@ They should not all be treated as the same category of failure.
 
 * `DarwinHostApiImpl` persists the latest startup error to the shared app-group defaults so Flutter can query and present actionable guidance.
 * Packet Tunnel provider failures are logged with the `plus.svc.xconnect` subsystem and mirrored into the shared status store when startup or rollback fails.
-* The current macOS UI now checks for authorization-related failures such as `permission denied` and opens a permissions guide that directs the user to approve the System VPN / Packet Tunnel request for `Xstream`.
+* The current macOS UI now checks for authorization-related failures such as `permission denied` and opens a permissions guide that directs the user to approve the System VPN / Packet Tunnel request for `XConnect`.
 * Restart and recovery behavior is currently conservative: the tunnel is stopped on startup failure and the user is expected to retry after fixing authorization, signing, configuration, or runtime issues.
 * Missing or invalid Packet Tunnel fd handoff is treated as a provider startup failure, because Packet Tunnel is the only permitted system-level entry point on Apple platforms.
 
@@ -56,7 +56,7 @@ They should not all be treated as the same category of failure.
 
 * Unit tests for Go core packet handling exist in `libXray/xray_wrapper_test.go` and `go_core` packages.
 * Apple `RunnerTests` targets are currently placeholders; there is not yet automated Packet Tunnel startup coverage for manager preparation, authorization flow, or provider startup.
-* Current Apple validation is primarily manual. Use [docs/macos-menubar-regression-checklist.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xstream.svc.plus/docs/macos-menubar-regression-checklist.md) together with Packet Tunnel system logs during development.
+* Current Apple validation is primarily manual. Use [docs/macos-menubar-regression-checklist.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xconnect.svc.plus/docs/macos-menubar-regression-checklist.md) together with Packet Tunnel system logs during development.
 * During development, verify Packet Tunnel startup using `xcodebuild` or `flutter run`, then inspect `/usr/bin/log show` entries for the `plus.svc.xconnect` subsystem and `PacketTunnel` process.
 
 ## Documentation and Maintenance
@@ -66,7 +66,7 @@ They should not all be treated as the same category of failure.
 
 ---
 
-This design document provides the high‑level overview of how the PacketTunnelProvider integrates into Xstream. For detailed implementation, refer to platform source files under `darwin/` and the Go core bridge sources.
+This design document provides the high‑level overview of how the PacketTunnelProvider integrates into XConnect. For detailed implementation, refer to platform source files under `darwin/` and the Go core bridge sources.
 
 See also the cross-platform architecture diagram and extension notes: [docs/architecture_overview.md](docs/architecture_overview.md).
 
@@ -87,7 +87,7 @@ The following lists where the packet-tunnel related adapters, bridge code, and p
 	- For Apple platforms, the current implementation hands an fd hint from the provider into `XrayTunnelBridge`; it does not currently document a direct `packetFlow.readPackets(...)` / `writePackets(...)` loop in the provider.
 
 - Android:
-	- VPN service and controller: `android/app/src/main/kotlin/.../XstreamPacketTunnelService.kt`, `android/app/src/main/kotlin/.../PacketTunnelController.kt` — `VpnService` implementation and TUN fd handling.
+	- VPN service and controller: `android/app/src/main/kotlin/.../XConnectPacketTunnelService.kt`, `android/app/src/main/kotlin/.../PacketTunnelController.kt` — `VpnService` implementation and TUN fd handling.
 	- Manifest registration: `android/app/src/main/AndroidManifest.xml` includes `android.net.VpnService` action.
 	- The Go bridge supports `StartXrayTunnelWithFd` use-cases in `go_core/bridge_android.go`.
 

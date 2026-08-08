@@ -1,10 +1,10 @@
 # DNS Secure Tunnel Design
 
-本文档定义 Xstream 在 macOS 与 iOS 上的统一 DNS 控制面目标、当前实现边界与阶段计划。所有语义均以 Secure Tunnel / System VPN / Packet Tunnel 为前提，不引入其他系统级网络路径。
+本文档定义 XConnect 在 macOS 与 iOS 上的统一 DNS 控制面目标、当前实现边界与阶段计划。所有语义均以 Secure Tunnel / System VPN / Packet Tunnel 为前提，不引入其他系统级网络路径。
 
 ## 1. 目标
 
-Xstream 的 DNS 设计目标如下：
+XConnect 的 DNS 设计目标如下：
 
 - 统一 DNS 控制面，单一配置源生成：
   - `Resolvers`

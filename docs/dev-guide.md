@@ -1,11 +1,11 @@
 # 开发者构建指南（macOS）
 
-本指南适用于希望在 macOS 上本地构建和调试 XStream 项目的开发者。
+本指南适用于希望在 macOS 上本地构建和调试 XConnect 项目的开发者。
 
 如果你使用 Xcode 进行 iOS/macOS 联调，请先阅读：
 
 - [Xcode 在线调试（macOS / iOS）](xcode-online-debug.md)
-- [本机 MCP Server（Codex / Genmini）](xstream-mcp-server.md)
+- [本机 MCP Server（Codex / Genmini）](xconnect-mcp-server.md)
 - [Apple Signing 与 Packet Tunnel 能力申请（macOS / iOS）](apple-network-extension-signing-setup.md)
 - [macOS Packet Tunnel 实现记录](macos-packet-tunnel-implementation.md)
 - [VpnConfig 与节点持久化说明](VpnConfigStruct.md)
@@ -153,6 +153,6 @@ macos/
     └── NativeBridge+Logger.swift       # logToFlutter 日志通道封装
 
 - DMG filename now follows the pattern:
-  - `xstream-release-<tag>.dmg` if tagged on main branch
-  - `xstream-latest-<commit>.dmg` if untagged on main
-  - `xstream-dev-<commit>.dmg` for non-main branches
+  - `xconnect-release-<tag>.dmg` if tagged on main branch
+  - `xconnect-latest-<commit>.dmg` if untagged on main
+  - `xconnect-dev-<commit>.dmg` for non-main branches

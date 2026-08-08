@@ -1,8 +1,8 @@
-# VX -> Xstream Reuse Diff Checklist
+# VX -> XConnect Reuse Diff Checklist
 
 ## Scope
-- Source baseline: `/Users/shenlan/workspaces/Xstream/VX`
-- Target repo: `/Users/shenlan/workspaces/cloud-neutral-toolkit/Xstream`
+- Source baseline: `/Users/shenlan/workspaces/XConnect/VX`
+- Target repo: `/Users/shenlan/workspaces/cloud-neutral-toolkit/XConnect`
 - Focus areas:
   - `PacketTunnelProvider` implementation pattern
   - Darwin Pigeon native communication
@@ -14,7 +14,7 @@
 - `ios/PacketTunnel/PacketTunnelProvider.swift` and `macos/PacketTunnel/PacketTunnelProvider.swift` use direct `X_darwinNew(...)` and `Tm` runtime binding.
 - Provider handles packet I/O and lifecycle in a monolithic class.
 
-### Xstream current
+### XConnect current
 - `ios/PacketTunnel/PacketTunnelProvider.swift` and `macos/PacketTunnel/PacketTunnelProvider.swift` already use:
   - `SecureTunnelEngine` abstraction
   - `XrayTunnelEngine` adapter
@@ -23,9 +23,9 @@
 - Status persistence and lifecycle reporting are integrated.
 
 ### Reuse status
-- `DONE`: VX PacketTunnelProvider architecture pattern has been migrated and adapted to Xstream xray-core tunnel lifecycle.
+- `DONE`: VX PacketTunnelProvider architecture pattern has been migrated and adapted to XConnect xray-core tunnel lifecycle.
 - `DONE`: Startup failure rollback path is present.
-- `KEEP DIFFERENCE`: Xstream keeps Packet Tunnel as sole system-level network entry point and does not use VX-style direct `Tm` runtime start path.
+- `KEEP DIFFERENCE`: XConnect keeps Packet Tunnel as sole system-level network entry point and does not use VX-style direct `Tm` runtime start path.
 
 ## 2) Darwin Pigeon Channel
 
@@ -38,9 +38,9 @@
   - `setupShutdownNotification`
 - Channel namespace is `dev.flutter.pigeon.vx.*`.
 
-### Xstream current
+### XConnect current
 - `pigeons/darwin.dart`, `darwin/Messages.g.swift`, `lib/app/darwin_host_api.g.dart` are present.
-- Xstream channel namespace is `dev.flutter.pigeon.xstream.*`.
+- XConnect channel namespace is `dev.flutter.pigeon.xconnect.*`.
 - Added Packet Tunnel control APIs:
   - `savePacketTunnelProfile`
   - `startPacketTunnel`
@@ -52,8 +52,8 @@
 
 ### Reuse status
 - `DONE`: VX Darwin Pigeon channel model reused.
-- `DONE`: Extended to one unified Packet Tunnel control path for Xstream.
-- `KEEP DIFFERENCE`: `startXApiServer/generateTls` are kept as compatibility stubs in Xstream and are not used as the primary Packet Tunnel control path.
+- `DONE`: Extended to one unified Packet Tunnel control path for XConnect.
+- `KEEP DIFFERENCE`: `startXApiServer/generateTls` are kept as compatibility stubs in XConnect and are not used as the primary Packet Tunnel control path.
 
 ## 3) Xcode Target Organization (iOS/macOS)
 
@@ -61,20 +61,20 @@
 - iOS has `Runner + PacketTunnel` with embedded `PacketTunnel.appex`.
 - macOS includes `PacketTunnel.appex`; VX also has `SystemExtension` target in the project.
 
-### Xstream current
+### XConnect current
 - iOS workspace schemes include `PacketTunnel` and `Runner`.
 - macOS workspace schemes include `PacketTunnel` and `Runner`.
 - Both projects embed `PacketTunnel.appex` in `Runner`.
 
 ### Reuse status
 - `DONE`: VX PacketTunnel target embedding pattern reused on iOS/macOS.
-- `KEEP DIFFERENCE (Intentional)`: Xstream does not import VX `SystemExtension` target; Packet Tunnel remains the sole system-level networking entry.
+- `KEEP DIFFERENCE (Intentional)`: XConnect does not import VX `SystemExtension` target; Packet Tunnel remains the sole system-level networking entry.
 
-## 4) Workspace Sync Result (Xstream_flutter_workspace -> Xstream)
+## 4) Workspace Sync Result (XConnect_flutter_workspace -> XConnect)
 
 ### Synced
-- Core source and project changes were synced back into `/Users/shenlan/workspaces/cloud-neutral-toolkit/Xstream`.
-- Includes Dart/Swift/Go/Xcode project updates already staged in `Xstream`.
+- Core source and project changes were synced back into `/Users/shenlan/workspaces/cloud-neutral-toolkit/XConnect`.
+- Includes Dart/Swift/Go/Xcode project updates already staged in `XConnect`.
 
 ### Remaining unsynced (environment-generated)
 - Only root-owned/generated ephemeral files still differ under:
@@ -93,11 +93,11 @@
 - Android side in VX uses external AAR runtime (`tm_android/x.aar`) to host native tunnel/Xray logic.
 - Direct Kotlin source in VX does not contain an in-repo `VpnService -> tun fd -> xray tun` bridge implementation.
 
-### Xstream current
+### XConnect current
 - Added Android `VpnService` implementation:
-  - `android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt`
+  - `android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt`
 - Added JNI adapter and native loader:
-  - `android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt`
+  - `android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt`
   - `android/app/src/main/cpp/packet_tunnel_jni.cpp`
   - `android/app/src/main/cpp/CMakeLists.txt`
 - Added Go bridge entry:
@@ -109,6 +109,6 @@
   - `lib/utils/native_bridge.dart`
 
 ### Reuse status
-- `DONE`: Android native tunnel entry and Flutter bridge skeleton are in place in Xstream.
+- `DONE`: Android native tunnel entry and Flutter bridge skeleton are in place in XConnect.
 - `DONE`: Android data plane is wired to xray-core 26 tun inbound through `xray.tun.fd`.
-- `KEEP DIFFERENCE`: VX external AAR runtime is not imported; Xstream keeps all Packet Tunnel control and native bridge code in-repo for auditability and maintainability.
+- `KEEP DIFFERENCE`: VX external AAR runtime is not imported; XConnect keeps all Packet Tunnel control and native bridge code in-repo for auditability and maintainability.

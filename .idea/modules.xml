@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/xstream.iml" filepath="$PROJECT_DIR$/xstream.iml" />
-      <module fileurl="file://$PROJECT_DIR$/android/xstream_android.iml" filepath="$PROJECT_DIR$/android/xstream_android.iml" />
+      <module fileurl="file://$PROJECT_DIR$/xconnect.iml" filepath="$PROJECT_DIR$/xconnect.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/xconnect_android.iml" filepath="$PROJECT_DIR$/android/xconnect_android.iml" />
     </modules>
   </component>
 </project>
