@@ -25,7 +25,7 @@
   - `ios/PacketTunnel/PacketTunnelProvider.swift`
   - `macos/PacketTunnel/PacketTunnelProvider.swift`
 - 但 Go 侧 `SubmitInboundPacket` 目前是占位实现（直接返回，不做实际转发处理）：
-  - `go_core/bridge_ios.go`
+  - `go_core/bridge_apple.go`
 - 同时未见从 Xray 回写到 `packetFlow.writePackets(...)` 的明确数据回流通道。
 
 结论：Darwin 上“PacketTunnel 直连 libXray 处理 IP 包”当前是**控制面可用、数据面未闭环**。

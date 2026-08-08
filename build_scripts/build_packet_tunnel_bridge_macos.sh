@@ -70,6 +70,15 @@ if [[ ! -f "${TMP_LIB}" ]]; then
   exit 1
 fi
 
+# A build constraint that silently drops the bridge sources still produces a
+# valid dylib, so the appex only fails at dlsym time. Fail the build instead.
+for required_symbol in _StartXrayTunnelWithFd _StopXrayTunnel _FreeXrayTunnel _GetLastXrayTunnelError; do
+  if ! nm -gU "${TMP_LIB}" | grep -q " T ${required_symbol}$"; then
+    echo "error: ${TMP_LIB} does not export ${required_symbol}" >&2
+    exit 1
+  fi
+done
+
 cp -f "${TMP_LIB}" "${OUTPUT_LIB}"
 
 if [[ -n "${DWARF_DSYM_FOLDER_PATH:-}" ]]; then

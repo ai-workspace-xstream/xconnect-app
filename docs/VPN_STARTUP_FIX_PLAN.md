@@ -1,7 +1,7 @@
 # Phase 1: Root Cause Analysis & Planning
 - [x] Analyze Flutter layer (`native_bridge.dart`, `home_screen.dart`, `main.dart`, `vpn_config_service.dart`)
 - [x] Analyze Native layer (`AppDelegate.swift`, `PacketTunnelProvider.swift`, `NativeBridge+ServiceControl.swift`)
-- [x] Analyze Go layer (`bridge_ios.go`, `bridge.h`)
+- [x] Analyze Go layer (`bridge_apple.go`, `bridge.h`)
 - [x] Analyze Pigeon API (`darwin_host_api.g.dart`)
 - [x] Analyze entitlements (macOS + iOS)
 - [x] Identify root cause of "节点配置文件不存在" error

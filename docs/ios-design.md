@@ -46,7 +46,7 @@ Flutter UI (Dart)
 ## Swift bridge 与 PacketTunnel target
 
 - `ios/PacketTunnel/PacketTunnel-Bridging-Header.h` 引入 `bindings/bridge.h`
-- `go_core/bridge_ios.go` 导出以下 C 接口：
+- `go_core/bridge_apple.go` 导出以下 C 接口：
   - `StartXrayTunnelWithFd`
   - `StopXrayTunnel`
   - `FreeXrayTunnel`

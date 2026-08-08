@@ -54,8 +54,7 @@
 | lib/xray_ffi.dart | docs/engineering/flutter-bridge-contracts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | go_core/bridge.go | docs/engineering/go-core-ffi.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | go_core/bridge_android.go | docs/engineering/go-core-ffi.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| go_core/bridge_darwin.go | docs/engineering/go-core-ffi.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| go_core/bridge_ios.go | docs/engineering/go-core-ffi.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
+| go_core/bridge_apple.go | docs/engineering/go-core-ffi.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | go_core/bridge_linux.go | docs/engineering/go-core-ffi.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | go_core/bridge_windows.go | docs/engineering/go-core-ffi.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | go_core/constants.go | docs/engineering/go-core-ffi.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |

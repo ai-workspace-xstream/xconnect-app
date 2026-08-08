@@ -14,8 +14,7 @@
 | --- | --- | --- |
 | go_core/bridge.go | Go FFI/平台桥接文件，负责 `bridge` 对应的平台实现或公共导出层。 | 手写实现，纳入本页覆盖范围。 |
 | go_core/bridge_android.go | Go FFI/平台桥接文件，负责 `bridge_android` 对应的平台实现或公共导出层。 | 手写实现，纳入本页覆盖范围。 |
-| go_core/bridge_darwin.go | Go FFI/平台桥接文件，负责 `bridge_darwin` 对应的平台实现或公共导出层。 | 手写实现，纳入本页覆盖范围。 |
-| go_core/bridge_ios.go | Go FFI/平台桥接文件，负责 `bridge_ios` 对应的平台实现或公共导出层。 | 手写实现，纳入本页覆盖范围。 |
+| go_core/bridge_apple.go | Go FFI/平台桥接文件，负责 `bridge_ios` 对应的平台实现或公共导出层。 | 手写实现，纳入本页覆盖范围。 |
 | go_core/bridge_linux.go | Go FFI/平台桥接文件，负责 `bridge_linux` 对应的平台实现或公共导出层。 | 手写实现，纳入本页覆盖范围。 |
 | go_core/bridge_windows.go | Go FFI/平台桥接文件，负责 `bridge_windows` 对应的平台实现或公共导出层。 | 手写实现，纳入本页覆盖范围。 |
 | go_core/constants.go | Go FFI/平台桥接文件，负责 `constants` 对应的平台实现或公共导出层。 | 手写实现，纳入本页覆盖范围。 |
@@ -60,40 +59,35 @@ Go FFI/平台桥接文件，负责 `bridge_android` 对应的平台实现或公�
 | IsXrayDownloading | go_core/bridge_android.go / bridge_android.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
 | main | go_core/bridge_android.go / bridge_android.go | 无 | func | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
 
-### `go_core/bridge_darwin.go`
+### `go_core/bridge_apple.go`
 
-Go FFI/平台桥接文件，负责 `bridge_darwin` 对应的平台实现或公共导出层。
+Go FFI/平台桥接文件，负责 iOS 与 macOS 共用的平台实现与导出层。
 
-| 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
-| --- | --- | --- | --- | --- | --- | --- |
-| FreeCString | go_core/bridge_darwin.go / bridge_darwin.go | str *C.char | func | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-
-### `go_core/bridge_ios.go`
-
-Go FFI/平台桥接文件，负责 `bridge_ios` 对应的平台实现或公共导出层。
+文件名不能带 `_ios` / `_darwin` 后缀：Go 会按文件名附加隐式 GOOS 约束，与
+`//go:build ios || darwin` 取交集后，`bridge_ios.go` 在 macOS 构建中会被整体丢弃。
 
 | 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
 | --- | --- | --- | --- | --- | --- | --- |
-| setTunnelLastError | go_core/bridge_ios.go / bridge_ios.go | msg string | func | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| getTunnelLastError | go_core/bridge_ios.go / bridge_ios.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| injectSockoptInterface | go_core/bridge_ios.go / bridge_ios.go | cfgData []byte, iface string | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| startXrayInternal | go_core/bridge_ios.go / bridge_ios.go | cfgData []byte | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| stopXrayInternal | go_core/bridge_ios.go / bridge_ios.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| clearNodeRegistry | go_core/bridge_ios.go / bridge_ios.go | 无 | func | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| WriteConfigFiles | go_core/bridge_ios.go / bridge_ios.go | xrayPathC, xrayContentC, servicePathC, serviceContentC, vpnPathC, vpnContentC, passwordC *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| StartNodeService | go_core/bridge_ios.go / bridge_ios.go | name *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| StopNodeService | go_core/bridge_ios.go / bridge_ios.go | name *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| CheckNodeStatus | go_core/bridge_ios.go / bridge_ios.go | name *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| StartXray | go_core/bridge_ios.go / bridge_ios.go | configC *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| StopXray | go_core/bridge_ios.go / bridge_ios.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| StartXrayTunnelWithFd | go_core/bridge_ios.go / bridge_ios.go | configC *C.char, fd C.int, interfaceC *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| GetLastXrayTunnelError | go_core/bridge_ios.go / bridge_ios.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| StopXrayTunnel | go_core/bridge_ios.go / bridge_ios.go | handle C.longlong | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| FreeXrayTunnel | go_core/bridge_ios.go / bridge_ios.go | handle C.longlong | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| CreateWindowsService | go_core/bridge_ios.go / bridge_ios.go | name, execPath, configPath *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| PerformAction | go_core/bridge_ios.go / bridge_ios.go | action, password *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| IsXrayDownloading | go_core/bridge_ios.go / bridge_ios.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
-| main | go_core/bridge_ios.go / bridge_ios.go | 无 | func | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| setTunnelLastError | go_core/bridge_apple.go / bridge_apple.go | msg string | func | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| getTunnelLastError | go_core/bridge_apple.go / bridge_apple.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| injectSockoptInterface | go_core/bridge_apple.go / bridge_apple.go | cfgData []byte, iface string | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| startXrayInternal | go_core/bridge_apple.go / bridge_apple.go | cfgData []byte | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| stopXrayInternal | go_core/bridge_apple.go / bridge_apple.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| clearNodeRegistry | go_core/bridge_apple.go / bridge_apple.go | 无 | func | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| WriteConfigFiles | go_core/bridge_apple.go / bridge_apple.go | xrayPathC, xrayContentC, servicePathC, serviceContentC, vpnPathC, vpnContentC, passwordC *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| StartNodeService | go_core/bridge_apple.go / bridge_apple.go | name *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| StopNodeService | go_core/bridge_apple.go / bridge_apple.go | name *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| CheckNodeStatus | go_core/bridge_apple.go / bridge_apple.go | name *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| StartXray | go_core/bridge_apple.go / bridge_apple.go | configC *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| StopXray | go_core/bridge_apple.go / bridge_apple.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| StartXrayTunnelWithFd | go_core/bridge_apple.go / bridge_apple.go | configC *C.char, fd C.int, interfaceC *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| GetLastXrayTunnelError | go_core/bridge_apple.go / bridge_apple.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| StopXrayTunnel | go_core/bridge_apple.go / bridge_apple.go | handle C.longlong | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| FreeXrayTunnel | go_core/bridge_apple.go / bridge_apple.go | handle C.longlong | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| CreateWindowsService | go_core/bridge_apple.go / bridge_apple.go | name, execPath, configPath *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| PerformAction | go_core/bridge_apple.go / bridge_apple.go | action, password *C.char | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| IsXrayDownloading | go_core/bridge_apple.go / bridge_apple.go | 无 | Void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
+| main | go_core/bridge_apple.go / bridge_apple.go | 无 | func | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 调用 libxray、系统服务、桌面集成或 C FFI。 | 由 Dart FFI、Swift Packet Tunnel 或 JNI/宿主层调用。 |
 
 ### `go_core/bridge_linux.go`
 
