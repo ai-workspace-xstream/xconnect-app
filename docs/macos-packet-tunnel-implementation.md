@@ -35,7 +35,7 @@ flowchart LR
   MANAGER["NETunnelProviderManager"]
   PROVIDER["PacketTunnelProvider"]
   BRIDGE["XrayTunnelBridge"]
-  GO["go_core/bridge_ios.go"]
+  GO["go_core/bridge_apple.go"]
   LIBXRAY["libXray / xray-core"]
   OS["macOS Network Stack"]
 
@@ -62,7 +62,7 @@ It is two main macOS processes, and the tunnel engine runs inside the extension 
 | Host app | `/Applications/xstream.app/Contents/MacOS/xstream` | Yes | Flutter UI, state menu integration, Pigeon host bootstrap, Packet Tunnel control requests | `ps -axo pid,ppid,etime,command \| rg '/Applications/xstream.app/Contents/MacOS/xstream'` |
 | Packet Tunnel extension | `/Applications/xstream.app/Contents/PlugIns/PacketTunnel.appex/Contents/MacOS/PacketTunnel` | Yes | Runs `NEPacketTunnelProvider`, applies network settings, resolves fd / `utun`, starts tunnel engine | `ps -axo pid,ppid,etime,command \| rg 'PacketTunnel.appex/Contents/MacOS/PacketTunnel'` |
 | `libxray_bridge.dylib` | `PacketTunnel.appex/Contents/Frameworks/libxray_bridge.dylib` | No | Go-built native bridge loaded by the extension with `dlopen` / `dlsym` | check extension bundle contents and Packet Tunnel logs |
-| `go_core/bridge_ios.go` | compiled into `libxray_bridge.dylib` | No | Exposes `StartXrayTunnelWithFd` / stop / error functions to Swift | inspect exported bridge code, not process list |
+| `go_core/bridge_apple.go` | compiled into `libxray_bridge.dylib` | No | Exposes `StartXrayTunnelWithFd` / stop / error functions to Swift | inspect exported bridge code, not process list |
 | `libXray` | linked through `go_core/go.mod` replace | No | Native wrapper that runs Xray from JSON inside the same process | inspect Go deps and bridge build output |
 | `xray-core` | linked under `libXray` | No | Actual tun inbound and outbound engine running in-process inside `PacketTunnel.appex` | inspect Packet Tunnel behavior and bridge logs, not a standalone PID |
 | Host-side standalone `xray` binary | `xstream.app/Contents/Resources/xray/xray` | Usually no in TUN mode | Runner-side proxy/runtime resource path, not the current Packet Tunnel data-plane entry | `ps -axo ... \| rg '/xray|xray '` only relevant for proxy-mode checks |
@@ -71,7 +71,7 @@ It is two main macOS processes, and the tunnel engine runs inside the extension 
 Operationally, the most important distinction is:
 
 - `PacketTunnel.appex` is the real System VPN data-plane process
-- `bridge_ios.go -> libXray -> xray-core` executes inside that same `PacketTunnel.appex` process
+- `bridge_apple.go -> libXray -> xray-core` executes inside that same `PacketTunnel.appex` process
 - there is no extra standalone `xray` process for the macOS Packet Tunnel path
 - a separate `xray` process can still exist in proxy mode, but that is a different runtime path
 
@@ -136,7 +136,7 @@ Operationally, the most important distinction is:
 
 ### 3.5 Go and runtime bridge
 
-- `go_core/bridge_ios.go`
+- `go_core/bridge_apple.go`
   - exports C-compatible functions used by Packet Tunnel
   - starts and stops `libXray` with the live Packet Tunnel fd
 - `bindings/bridge.h`
@@ -174,7 +174,7 @@ sequenceDiagram
   participant M as "NETunnelProviderManager"
   participant PT as "PacketTunnelProvider"
   participant XB as "XrayTunnelBridge"
-  participant GO as "bridge_ios.go"
+  participant GO as "bridge_apple.go"
   participant XR as "libXray / xray-core"
 
   UI->>GS: select Tun Mode / start node
@@ -463,7 +463,7 @@ This makes the extension resilient to packaging layout changes, but the intended
 
 ### 6.3 Go exported functions
 
-`go_core/bridge_ios.go` exports:
+`go_core/bridge_apple.go` exports:
 
 - `StartXrayTunnelWithFd`
 - `StopXrayTunnel`
@@ -601,7 +601,7 @@ This script:
    - `GOARCH` from current Xcode build arch
    - macOS SDK `CC`, `CGO_CFLAGS`, `CGO_LDFLAGS`
 3. builds:
-   - `go build -buildmode=c-shared -o libxray_bridge.dylib ./bridge_ios.go`
+   - `go build -buildmode=c-shared -o libxray_bridge.dylib ./bridge_apple.go`
 4. copies the dylib into:
    - `$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)`
 5. code-signs it with the current Xcode signing identity
@@ -659,7 +659,7 @@ That distinction matters when debugging:
 
 ### 9.3 Go and runtime libraries
 
-- `go_core/bridge_ios.go`
+- `go_core/bridge_apple.go`
 - `github.com/xtls/libxray`
   - replaced locally by `../libXray`
 - `github.com/xtls/xray-core v1.260206.0`
@@ -768,7 +768,7 @@ Use this table as the first-pass map when another Codex session needs to debug o
 | `darwin/MacosHostApi.swift` | `savePacketTunnelProfile()`, `startPacketTunnel()`, `stopPacketTunnel()`, `getPacketTunnelStatus()`, `loadOrCreateTunnelManager()` | Real macOS host control plane over `NETunnelProviderManager` | manager load/save/start/status is failing |
 | `macos/Runner/AppDelegate.swift` | `selectTunMode()`, `selectProxyOnlyMode()`, `toggleAcceleration()`, `reconnectAcceleration()` | Native status-menu UI and menu state rendering | menu items, labels, or menu action payloads are wrong |
 | `macos/PacketTunnel/PacketTunnelProvider.swift` | `startTunnel()`, `stopTunnel()`, `buildNetworkSettings()`, `resolvePacketFlowFileDescriptor()`, `resolveDarwinTunnelHandle()`, `sanitizeConfigForDarwinTun()`, `XrayTunnelBridge` | Packet Tunnel extension startup and in-process data plane | `NETunnelProviderManager` starts but tunnel still fails |
-| `go_core/bridge_ios.go` | `StartXrayTunnelWithFd`, `StopXrayTunnel`, `GetLastXrayTunnelError` | Swift-to-Go bridge entry used by Packet Tunnel | fd handoff succeeds but engine startup still fails |
+| `go_core/bridge_apple.go` | `StartXrayTunnelWithFd`, `StopXrayTunnel`, `GetLastXrayTunnelError` | Swift-to-Go bridge entry used by Packet Tunnel | fd handoff succeeds but engine startup still fails |
 | `libXray/xray/xray.go` | `RunXrayFromJSON`, `StopXray`, state helpers | Local wrapper around xray runtime | Xray lifecycle behavior itself needs inspection |
 | `vendor/Xray-core/proxy/tun/tun_darwin.go` | Darwin tun adapter | Consumes `xray.tun.fd` and owns low-level tun runtime path | native Darwin tun behavior must be understood |
 | `build_scripts/build_packet_tunnel_bridge_macos.sh` | full script | Builds and signs `libxray_bridge.dylib` into the Packet Tunnel bundle | symbols are missing or bridge dylib packaging is broken |
@@ -780,5 +780,5 @@ Practical triage order for a new Codex session:
 1. `lib/utils/native_bridge.dart`
 2. `darwin/MacosHostApi.swift`
 3. `macos/PacketTunnel/PacketTunnelProvider.swift`
-4. `go_core/bridge_ios.go`
+4. `go_core/bridge_apple.go`
 5. `build_scripts/build_packet_tunnel_bridge_macos.sh`

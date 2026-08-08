@@ -28,7 +28,7 @@
 | Packet Tunnel 扩展进程 | `ios/PacketTunnel/PacketTunnelProvider.swift` + `macos/PacketTunnel/PacketTunnelProvider.swift` | 已具备 | 无 | 保持 `PacketTunnelProvider` 为唯一 System VPN 入口 | M0 |
 | `utun` 接管与系统路由生效 | Darwin `PacketTunnelProvider` + 系统 `setTunnelNetworkSettings` | 已具备 | 无 | 持续使用 profile 下发的 route/dns/mtu 参数 | M0 |
 | 扩展内本地代理桥接（SOCKS/HTTP） | `lib/services/vpn_config_service.dart`（可生成 socks/http inbound） | 部分具备 | 扩展内未明确形成“packetFlow -> 本地 inbound -> libXray”闭环 | 在扩展内新增本地桥接层，打通到 `libXray` 运行实例 | M1 |
-| 扩展内 libXray 生命周期 | `go_core/bridge_ios.go` + `XrayTunnelBridge` | 部分具备 | `SubmitInboundPacket` 当前为占位实现 | 增加真实包转发或切换为扩展内本地代理桥接模式 | M1 |
+| 扩展内 libXray 生命周期 | `go_core/bridge_apple.go` + `XrayTunnelBridge` | 部分具备 | `SubmitInboundPacket` 当前为占位实现 | 增加真实包转发或切换为扩展内本地代理桥接模式 | M1 |
 | Proxy Mode（仅本地代理） | `NativeBridge.startNodeService` / `StartXray` | 已具备 | 与 Tunnel 模式状态未完全统一 | 统一状态模型，不改 UI 入口 | M1 |
 | Tunnel Mode（System VPN） | `startPacketTunnel` 流程 | 已具备 | 数据面回包链路需闭环 | 扩展内实现稳定双向数据路径 | M1 |
 | 统一配置入口 | `config.json` 软链接逻辑（`lib/utils/native_bridge.dart`） | 已具备 | 无 | 固化“所有启动统一读取 config.json” | M0 |

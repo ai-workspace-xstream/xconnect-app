@@ -34,7 +34,7 @@ Status callbacks:
 
 ### 2.2 Swift <-> Go bridge points
 
-Declared in `bindings/bridge.h` and exported in `go_core/bridge_ios.go`:
+Declared in `bindings/bridge.h` and exported in `go_core/bridge_apple.go`:
 
 - `StartXrayTunnelWithFd(const char* config, int fd, const char* egressInterface) -> long long`
 - `GetLastXrayTunnelError() -> char*`

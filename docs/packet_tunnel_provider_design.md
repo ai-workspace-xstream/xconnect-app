@@ -83,7 +83,7 @@ The following lists where the packet-tunnel related adapters, bridge code, and p
 	- `lib/utils/native_bridge.dart` — central routing for Packet Tunnel lifecycle from Flutter; shows per-platform control flow (FFI vs MethodChannel vs Pigeon). See `startNodeForTunnel`, `stopNodeForTunnel`, `startPacketTunnel`, `stopPacketTunnel`.
 
 - Go core adapters and platform bridges:
-	- `go_core/bridge_ios.go`, `go_core/bridge_android.go`, `go_core/bridge_linux.go`, `go_core/bridge_windows.go`, `go_core/bridge.go` — platform-specific entry points that connect the host platform to the Go packet processing and Xray integration.
+	- `go_core/bridge_apple.go`, `go_core/bridge_android.go`, `go_core/bridge_linux.go`, `go_core/bridge_windows.go`, `go_core/bridge.go` — platform-specific entry points that connect the host platform to the Go packet processing and Xray integration.
 	- For Apple platforms, the current implementation hands an fd hint from the provider into `XrayTunnelBridge`; it does not currently document a direct `packetFlow.readPackets(...)` / `writePackets(...)` loop in the provider.
 
 - Android:
