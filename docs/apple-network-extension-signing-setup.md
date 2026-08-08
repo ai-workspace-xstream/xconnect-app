@@ -76,6 +76,16 @@ XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
 
 ## 5. Xcode 工程对齐
 
+使用 Flutter 3.44 及以上版本时，首次打开或切换机器后先生成 iOS 工程配置：
+
+```bash
+flutter pub get
+flutter build ios --release --config-only --no-codesign
+open ios/Runner.xcworkspace
+```
+
+请打开 `Runner.xcworkspace`，不要直接打开 `Runner.xcodeproj`。前者会加载 CocoaPods/Swift Package 集成；直接打开项目文件会导致 `Pods-Runner-frameworks-*.xcfilelist` 找不到。
+
 在 `ios/Runner.xcworkspace` 与 `macos/Runner.xcworkspace` 中检查：
 
 1. `Runner` 与 `PacketTunnel` 两个 Target 的 `Signing & Capabilities`。
