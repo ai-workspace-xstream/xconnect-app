@@ -386,7 +386,7 @@ class VpnConfig {
     );
     if (serviceContent.isEmpty) {
       if (_requiresServiceDefinition) return;
-      serviceContent = '# Xstream mobile node marker for $nodeName\n';
+      serviceContent = '# XConnect mobile node marker for $nodeName\n';
     }
 
     final vpnNodesConfigPath =
@@ -921,8 +921,7 @@ class VpnConfig {
       final xmux = Map<String, dynamic>.from(
         extra['xmux'] as Map? ?? const {},
       );
-      xmux['maxConcurrency'] =
-          XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+      xmux['maxConcurrency'] = XhttpAdvancedConfig.xmuxMaxConcurrency.value;
       final hMaxRequestTimes = xmux['hMaxRequestTimes'];
       if (hMaxRequestTimes == null ||
           (hMaxRequestTimes is String && hMaxRequestTimes.trim().isEmpty)) {

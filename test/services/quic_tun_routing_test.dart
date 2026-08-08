@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/dns/dns_control_plane.dart';
-import 'package:xstream/services/vpn_config_service.dart';
-import 'package:xstream/utils/global_config.dart';
+import 'package:xconnect/services/dns/dns_control_plane.dart';
+import 'package:xconnect/services/vpn_config_service.dart';
+import 'package:xconnect/utils/global_config.dart';
 
 const _visionUri =
     'vless://11111111-1111-1111-1111-111111111111@example.com:443'

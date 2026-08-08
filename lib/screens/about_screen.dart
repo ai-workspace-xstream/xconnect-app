@@ -29,8 +29,8 @@ class AboutScreen extends StatelessWidget {
                     Text(
                       buildVersion,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).disabledColor,
-                      ),
+                            color: Theme.of(context).disabledColor,
+                          ),
                     ),
                   ],
                 );
@@ -40,7 +40,7 @@ class AboutScreen extends StatelessWidget {
             const Text('© 2025-2026 svc.plus'),
             const SizedBox(height: 16),
             const Text(
-              'xstream is licensed under the Apache License 2.0.\n\n'
+              'XConnect is licensed under the Apache License 2.0.\n\n'
               'This application includes components from:\n'
               '• Xray-core v26.2.6 (12ee51e, go1.25.7 darwin/arm64)\n'
               '  Xray, high-performance secure tunnel engine.\n'

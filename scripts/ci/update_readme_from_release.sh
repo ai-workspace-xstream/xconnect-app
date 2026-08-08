@@ -2,7 +2,7 @@
 set -euo pipefail
 
 tag="${RELEASE_TAG:-daily-${GITHUB_RUN_NUMBER:-0}}"
-release_json="/tmp/xstream-release-assets.json"
+release_json="/tmp/xconnect-release-assets.json"
 
 gh release view "$tag" --repo "${GITHUB_REPOSITORY}" --json assets > "$release_json"
 

@@ -2,7 +2,7 @@
 
 ## 1) Scope
 
-Xstream uses Apple Network Extension as the only System VPN entry:
+XConnect uses Apple Network Extension as the only System VPN entry:
 
 - System-level networking entry: `NEPacketTunnelProvider`
 - Tunnel engine: `xray-core` (Go bridge)
@@ -69,7 +69,7 @@ Key components:
 1. On iOS app launch, Flutter now proactively saves a baseline Packet Tunnel profile so the System VPN entry can appear before the first node import.
 2. Dart builds `TunnelProfile` and calls `savePacketTunnelProfile`.
 3. On iOS, the runtime tunnel config is normalized into the App Group shared container so the host app and `PacketTunnel` extension use the same config path.
-4. On iOS, `DarwinHostApiImpl` also loads/creates `NETunnelProviderManager` during profile save so `Xstream` becomes visible in the system VPN list before connection starts.
+4. On iOS, `DarwinHostApiImpl` also loads/creates `NETunnelProviderManager` during profile save so `XConnect` becomes visible in the system VPN list before connection starts.
 5. Dart calls `startPacketTunnel`.
 6. `DarwinHostApiImpl` refreshes `NETunnelProviderManager` with latest options, then starts VPN tunnel.
 7. `PacketTunnelProvider.startTunnel` resolves options, builds network settings, and applies `setTunnelNetworkSettings`.
@@ -190,11 +190,11 @@ flowchart LR
   E --> F["Encrypted Outbound"]
 ```
 
-## 9) OneXray-to-Xstream mapping
+## 9) OneXray-to-XConnect mapping
 
 For step-by-step migration mapping and ownership, see:
 
-- `docs/onexray-xstream-migration-matrix.md`
+- `docs/onexray-xconnect-migration-matrix.md`
 
 This mapping is used to migrate implementation details while preserving current UI behavior.
 

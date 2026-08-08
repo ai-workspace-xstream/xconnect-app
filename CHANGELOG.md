@@ -1,4 +1,4 @@
-# XStream v1.1.0
+# XConnect v1.1.0
 
 ## Unreleased
 
@@ -21,14 +21,14 @@ _Release Date: 2026-03-27_
 - Added DNS preset quick-select chips in proxy DNS settings (DNSPod, AliDNS, 360, Cloudflare, Google)
 - Added "Tunnel DNS via Proxy" toggle: forces all TUN DNS queries through proxy resolver via Xray routing rules (solves GFW DoH blocking at the config level)
 
-# XStream v1.0.4
+# XConnect v1.0.4
 
 _Release Date: 2026-04-12_
 
 ## ✅ Changes
 - Fixed Windows MSI packaging so the installer tree generator accepts the root directory entry during packaging
 
-# XStream v0.3.5
+# XConnect v0.3.5
 
 _Release Date: 2026-03-07_
 
@@ -36,7 +36,7 @@ _Release Date: 2026-03-07_
 - Updated project license from GNU GPLv3 to Apache 2.0
 - Realigned documentation and legal notices with Apache 2.0 terms
 
-# XStream v1.0.3
+# XConnect v1.0.3
 
 _Release Date: 2026-03-02_
 
@@ -49,7 +49,7 @@ _Release Date: 2026-03-02_
 - Kept log display in monospaced style and improved visual consistency of the log container
 - Bumped app version to `1.0.3+5` for macOS/iOS build metadata alignment
 
-# XStream v0.3.0 - Preview Release
+# XConnect v0.3.0 - Preview Release
 
 _Release Date: 2026-02-28_
 
@@ -82,10 +82,10 @@ _Release Date: 2026-02-28_
 - Reduced iOS System VPN profile churn by saving Packet Tunnel configuration only when the profile changes, while keeping macOS Packet Tunnel save/start behavior unchanged
 - Realigned the iOS Packet Tunnel extension to use the standard Swift principal-class entry path and removed the temporary Objective-C startup probe
 - Moved iOS Packet Tunnel runtime config into the App Group shared container so the host app and Packet Tunnel extension use the same System VPN runtime path
-- Added iOS startup bootstrap to register the System VPN profile even before the first node import, so `Xstream` can appear in the system VPN list earlier
-- Updated iOS Packet Tunnel profile save flow to register `Xstream` in the system VPN list during profile save, and pre-register the VPN profile after iOS node import without auto-connecting
+- Added iOS startup bootstrap to register the System VPN profile even before the first node import, so `XConnect` can appear in the system VPN list earlier
+- Updated iOS Packet Tunnel profile save flow to register `XConnect` in the system VPN list during profile save, and pre-register the VPN profile after iOS node import without auto-connecting
 - Fixed iOS Packet Tunnel provider build by replacing unavailable iPhoneOS SDK `utun` macros with stable Darwin fallback constants
-- Added repo-local `xstream-ios-real-device-smoke` skill with executable iPhone smoke script, baseline, test cases, and latest report
+- Added repo-local `xconnect-ios-real-device-smoke` skill with executable iPhone smoke script, baseline, test cases, and latest report
 - Added iOS `RunnerTests` Packet Tunnel start/stop smoke coverage and test-host fixes for real-device execution
 - Updated the iOS host app startup to use Flutter's implicit engine registration path so Release builds can register plugins and native Packet Tunnel channels without crashing at launch
 - Simplified iPhone navigation to `Home / Proxy / Account / Settings` and moved `Logs`, `Help`, and `About` into Settings so support and release information remain reachable without expanding the bottom bar
@@ -107,7 +107,7 @@ _Release Date: 2026-02-28_
 - Added Packet Tunnel startup rollback path in iOS/macOS providers and documented startup/failure sequence in `docs/system-vpn-packet-tunnel-xray26.md`
 - Added client-side `vless://` URI support for node import and outbound generation, including `tcp` and `xhttp` transport parameters
 
-# XStream v0.2.0 - Windows Release
+# XConnect v0.2.0 - Windows Release
 
 _Release Date: 2025-06-10_
 
@@ -120,7 +120,7 @@ _Release Date: 2025-06-10_
 - Verified config.json and Task Scheduler deployment
 - Passed multi-region switch and proxy tests on Windows
 
-# XStream v0.1.4 - macOS Tray Support
+# XConnect v0.1.4 - macOS Tray Support
 
 _Release Date: 2025-06-09_
 
@@ -132,7 +132,7 @@ _Release Date: 2025-06-09_
 - Improved minimize behavior on macOS
 - Cleaned plugin registration
 
-# XStream v0.1.3 - Linux Runner
+# XConnect v0.1.3 - Linux Runner
 
 _Release Date: 2025-06-08_
 
@@ -144,7 +144,7 @@ _Release Date: 2025-06-08_
 - Fixed cross-platform build scripts
 - Added Linux systemd documentation
 
-# XStream v0.1.2 - Beta Update
+# XConnect v0.1.2 - Beta Update
 
 _Release Date: 2025-06-08_
 
@@ -161,7 +161,7 @@ _Release Date: 2025-06-08_
 - Resolved logConsoleKey import
 - Improved CI and BuildContext usage
 
-# XStream v0.1.1 - Minor Improvements
+# XConnect v0.1.1 - Minor Improvements
 
 _Release Date: 2025-06-07_
 
@@ -175,7 +175,7 @@ _Release Date: 2025-06-07_
 
 
 
-# XStream v0.1.0 - First Public Preview
+# XConnect v0.1.0 - First Public Preview
 
 _Release Date: 2025-06-06_
 

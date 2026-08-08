@@ -98,7 +98,26 @@ class AppLocalizations {
       'logExported': '📤 Logs exported to console',
       'clearLogs': '🧹 Clear logs',
       'exportLogs': '📤 Export logs',
-      'settingsCenter': '⚙️ Settings',
+      'settingsCenter': 'Settings',
+      'settingsSubtitle':
+          'Connection, DNS, routing, transport and diagnostics.',
+      'settingsTabConnection': 'Connection',
+      'settingsTabDns': 'DNS',
+      'settingsTabRouting': 'Routing',
+      'settingsTabTransport': 'Transport',
+      'settingsTabConfig': 'Config',
+      'settingsTabSystem': 'System',
+      'dangerZone': 'Danger Zone',
+      'deleteConfigMeaning':
+          'Removes the selected connections and their config files. This cannot be undone.',
+      'resetAllMeaning':
+          'Clears the system VPN profile and every generated runtime file, then re-registers from scratch.',
+      'resetAllConfirmTitle': 'Reset all connections?',
+      'resetAllConfirmBody':
+          'The system VPN profile and all generated runtime files will be removed. Your imported connections are kept. You will be asked to approve the VPN permission again on the next connect.',
+      'reset': 'Reset',
+      'unsavedChanges': 'Unsaved',
+      'tunnelActive': 'Carrying system traffic',
       'xrayMgmt': 'Advanced Networking',
       'configMgmt': 'Connection Management',
       'genDefaultNodes': 'Generate Default Connections',
@@ -107,12 +126,12 @@ class AppLocalizations {
       'permissionGuideIntro':
           'Follow the steps below in Privacy & Security to grant permissions:',
       'permissionGuideSteps':
-          '1. Allow the app to read and write its Application Support directory\n2. Allow System VPN (NetworkExtension / Packet Tunnel)\n3. When macOS shows the authorization prompt for Xstream, choose Allow\n4. Confirm LaunchAgent can start in the current user session\n5. Confirm the app can query system network settings',
+          '1. Allow the app to read and write its Application Support directory\n2. Allow System VPN (NetworkExtension / Packet Tunnel)\n3. When macOS shows the authorization prompt for XConnect, choose Allow\n4. Confirm LaunchAgent can start in the current user session\n5. Confirm the app can query system network settings',
       'openPrivacy': 'Open Privacy & Security',
       'permissionFinished': 'All permissions completed',
       'permissionGuideFailureTitle': 'System VPN authorization needed',
       'permissionGuideFailureIntro':
-          'The Secure Tunnel could not start because macOS has not granted the required authorization yet. Complete the checks below, approve the System VPN request for Xstream, then retry.',
+          'The Secure Tunnel could not start because macOS has not granted the required authorization yet. Complete the checks below, approve the System VPN request for XConnect, then retry.',
       'permissionGuideLastError': 'Last start error',
       'permissionCheckAppSupport': 'Config Directory Read/Write',
       'permissionCheckPacketTunnel': 'System VPN Packet Tunnel Permission',
@@ -127,7 +146,7 @@ class AppLocalizations {
       'permissionBootstrapHint':
           'If you see "Bootstrap failed: 5", run app in a normal desktop user session and verify LaunchAgent permissions.',
       'permissionGuideTunnelDeniedHint':
-          'If the last error contains "permission denied", open Privacy & Security and approve the System VPN request for Xstream.',
+          'If the last error contains "permission denied", open Privacy & Security and approve the System VPN request for XConnect.',
       'syncConfig': 'Sync Config',
       'deleteConfig': 'Delete Config',
       'saveConfig': 'Save Config',
@@ -175,8 +194,14 @@ class AppLocalizations {
       'tunnelDnsViaProxy': 'Tunnel DNS via Proxy',
       'tunnelDnsViaProxyHint':
           'Forces all TUN DNS queries through proxy resolver. Recommended for CN users when DoH is blocked locally.',
+      'proxyDnsWarnCnOnly':
+          'This resolver only answers correctly inside CN, but proxy DNS is '
+              'queried from the exit node. Move it to Direct DNS.',
       'dnsDialogHintDoh':
-          'Enter DoH HTTPS endpoints. DNSPod / AliDNS are CN-safe.',
+          'Enter DoH HTTPS endpoints. These are queried through the proxy '
+              'outbound, so use IP-literal resolvers that answer correctly '
+              'from the exit node (e.g. 1.1.1.1). CN-only providers belong '
+              'on Direct DNS.',
       'dnsDialogHintPlain': 'Enter plain DNS server addresses, e.g. 1.1.1.1.',
       'dnsDialogHintDirect':
           'Enter direct DNS server addresses for the Direct Resolver policy and for system DNS override on platforms that do not yet use the local Secure DNS endpoint.',
@@ -225,7 +250,7 @@ class AppLocalizations {
       'runtimeMcpToggleFailed': 'Runtime MCP Server toggle failed',
       'helpQuickStartTitle': 'Quick Start',
       'helpQuickStartIntro':
-          'Xstream supports Proxy Mode and Tunnel Mode. To get started, tap the + button in the top-right corner of the Home screen, choose Read Clipboard, and import a VLESS configuration link. After the import succeeds, select the node and tap Start. When the Home screen shows "Connected", the connection is active.',
+          'XConnect supports Proxy Mode and Tunnel Mode. To get started, tap the + button in the top-right corner of the Home screen, choose Read Clipboard, and import a VLESS configuration link. After the import succeeds, select the node and tap Start. When the Home screen shows "Connected", the connection is active.',
       'helpQuickStartNote':
           'Note: Core features do not require login. Sync is optional and does not affect the basic connection experience.',
       'helpSupportTitle': 'Self-Service Support',
@@ -370,7 +395,23 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'logExported': '📤 日志已导出至控制台',
       'clearLogs': '🧹 清空日志',
       'exportLogs': '📤 导出日志',
-      'settingsCenter': '⚙️ 设置中心',
+      'settingsCenter': '设置',
+      'settingsSubtitle': '连接、DNS、路由、传输与诊断选项。',
+      'settingsTabConnection': '连接',
+      'settingsTabDns': 'DNS',
+      'settingsTabRouting': '路由',
+      'settingsTabTransport': '传输',
+      'settingsTabConfig': '配置',
+      'settingsTabSystem': '系统',
+      'dangerZone': '危险区域',
+      'deleteConfigMeaning': '删除所选连接及其配置文件，不可撤销。',
+      'resetAllMeaning': '清除系统 VPN 配置与生成的运行文件，并重新注册。',
+      'resetAllConfirmTitle': '重置所有连接？',
+      'resetAllConfirmBody':
+          '将清除系统 VPN 配置和所有生成的运行文件。已导入的连接会保留。下次连接时需要重新授权 VPN 权限。',
+      'reset': '重置',
+      'unsavedChanges': '未保存',
+      'tunnelActive': '已接管系统流量',
       'xrayMgmt': '高级网络',
       'configMgmt': '连接管理',
       'genDefaultNodes': '生成默认连接',
@@ -378,12 +419,12 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'permissionGuide': '系统权限向导',
       'permissionGuideIntro': '请在“隐私与安全性”中完成以下步骤：',
       'permissionGuideSteps':
-          '1. 允许应用读写 Application Support 配置目录\n2. 允许系统级 VPN（NetworkExtension / Packet Tunnel）权限\n3. 当 macOS 弹出 Xstream 授权提示时，选择允许\n4. 确认 LaunchAgent 能在当前用户会话中启动\n5. 确认应用可以查询系统网络设置',
+          '1. 允许应用读写 Application Support 配置目录\n2. 允许系统级 VPN（NetworkExtension / Packet Tunnel）权限\n3. 当 macOS 弹出 XConnect 授权提示时，选择允许\n4. 确认 LaunchAgent 能在当前用户会话中启动\n5. 确认应用可以查询系统网络设置',
       'openPrivacy': '打开隐私与安全性',
       'permissionFinished': '权限检查已完成',
       'permissionGuideFailureTitle': '需要完成系统 VPN 授权',
       'permissionGuideFailureIntro':
-          'Secure Tunnel 启动失败，macOS 尚未完成所需授权。请先完成下面的检查项，并在系统弹窗中允许 Xstream 后重试。',
+          'Secure Tunnel 启动失败，macOS 尚未完成所需授权。请先完成下面的检查项，并在系统弹窗中允许 XConnect 后重试。',
       'permissionGuideLastError': '最近启动错误',
       'permissionCheckAppSupport': '配置目录读写',
       'permissionCheckPacketTunnel': '系统 VPN Packet Tunnel 权限',
@@ -397,7 +438,7 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'permissionBootstrapHint':
           '若出现“Bootstrap failed: 5”，请在普通桌面用户会话运行应用并确认 LaunchAgent 权限。',
       'permissionGuideTunnelDeniedHint':
-          '若最近错误包含“permission denied”，请打开“隐私与安全性”，完成 Xstream 的系统 VPN 授权后再重试。',
+          '若最近错误包含“permission denied”，请打开“隐私与安全性”，完成 XConnect 的系统 VPN 授权后再重试。',
       'syncConfig': '同步配置',
       'deleteConfig': '删除配置',
       'saveConfig': '保存配置',
@@ -443,7 +484,9 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'secondaryDns': '备用 DNS',
       'tunnelDnsViaProxy': '隧道 DNS 走代理',
       'tunnelDnsViaProxyHint': '强制所有 TUN DNS 查询经代理解析器处理。国内 DoH 被墙时建议开启。',
-      'dnsDialogHintDoh': '请输入 DoH HTTPS 端点，DNSPod / 阿里DNS 在国内可用。',
+      'proxyDnsWarnCnOnly': '该服务商仅在国内可正常应答，但代理 DNS 是从出口节点发起查询的。请改配到直连 DNS。',
+      'dnsDialogHintDoh': '请输入 DoH HTTPS 端点。此处解析走代理出站，请使用出口节点可正常访问的 IP 字面量端点'
+          '（如 1.1.1.1）。国内专用服务商应配置在直连 DNS。',
       'dnsDialogHintPlain': '请输入 DNS 服务器地址，例如 1.1.1.1。',
       'dnsDialogHintDirect':
           '请输入直连 DNS 服务器地址，用于 Direct Resolver 策略，并继续作为尚未接入本地 Secure DNS 端点平台上的系统 DNS 来源。',
@@ -492,7 +535,7 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'runtimeMcpToggleFailed': '运行态 MCP Server 切换失败',
       'helpQuickStartTitle': '快速开始',
       'helpQuickStartIntro':
-          'Xstream 支持代理模式与隧道模式。首次使用时，点击首页右上角 +，选择“读取剪贴板”，导入 VLESS 配置链接；导入成功后选择节点并点击“启动”，当首页显示“已连接”即表示连接已建立。',
+          'XConnect 支持代理模式与隧道模式。首次使用时，点击首页右上角 +，选择“读取剪贴板”，导入 VLESS 配置链接；导入成功后选择节点并点击“启动”，当首页显示“已连接”即表示连接已建立。',
       'helpQuickStartNote': '说明：核心功能无需登录即可使用；Sync 为可选功能，不影响基本连接体验。',
       'helpSupportTitle': '自助排查支持',
       'helpSupportIntro':

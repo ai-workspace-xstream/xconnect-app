@@ -18,7 +18,7 @@ class _HelpScreenState extends State<HelpScreen> {
 
   Future<void> _openManual() async {
     const url =
-        'https://github.com/svc-design/Xstream/blob/main/docs/user-manual.md';
+        'https://github.com/svc-design/xconnect/blob/main/docs/user-manual.md';
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -27,7 +27,7 @@ class _HelpScreenState extends State<HelpScreen> {
 
   Future<void> _openSupportDocs() async {
     const url =
-        'https://github.com/svc-design/Xstream/blob/main/Runbook/Tunnel-Mode-Site-Diff-From-Proxy-Mode.md';
+        'https://github.com/svc-design/xconnect/blob/main/Runbook/Tunnel-Mode-Site-Diff-From-Proxy-Mode.md';
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -258,7 +258,10 @@ class _HelpScreenState extends State<HelpScreen> {
         const SizedBox(height: 4),
         SelectableText(
           value,
-          style: TextStyle(fontFamily: 'monospace', fontSize: 13, color: Theme.of(context).colorScheme.onSurface),
+          style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurface),
         ),
       ],
     );

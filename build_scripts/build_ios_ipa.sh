@@ -41,7 +41,7 @@ if [[ "$NO_CODESIGN" == "1" ]]; then
   cp -R "$APP_DIR/Runner.app" "$IPA_DIR/Payload/"
   (
     cd "$IPA_DIR"
-    zip -qry XStream.ipa Payload
+    zip -qry xconnect.ipa Payload
   )
 else
   echo ">>> Building signed iOS IPA (export method: $EXPORT_METHOD) ..."

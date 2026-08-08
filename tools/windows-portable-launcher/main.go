@@ -19,7 +19,7 @@ import (
 	"unsafe"
 )
 
-const payloadExeName = "xstream_runtime.exe"
+const payloadExeName = "xconnect_runtime.exe"
 
 //go:embed payload.zip
 var payloadZip []byte
@@ -34,11 +34,11 @@ func extractionDir() string {
 	if err != nil || base == "" {
 		base = os.TempDir()
 	}
-	return filepath.Join(base, "Xstream", "portable", payloadHash())
+	return filepath.Join(base, "XConnect", "portable", payloadHash())
 }
 
 func showError(message string) {
-	title, _ := syscall.UTF16PtrFromString("Xstream")
+	title, _ := syscall.UTF16PtrFromString("XConnect")
 	body, _ := syscall.UTF16PtrFromString(message)
 	user32 := syscall.NewLazyDLL("user32.dll")
 	messageBoxW := user32.NewProc("MessageBoxW")
@@ -56,7 +56,7 @@ func logError(message string) {
 	if err != nil {
 		return
 	}
-	logPath := filepath.Join(filepath.Dir(exePath), "xstream-launcher-error.log")
+	logPath := filepath.Join(filepath.Dir(exePath), "xconnect-launcher-error.log")
 	entry := fmt.Sprintf("[%s] %s\r\n", time.Now().Format(time.RFC3339), message)
 	_ = os.WriteFile(logPath, []byte(entry), 0o644)
 }
@@ -146,7 +146,7 @@ func launchRuntime(dir string) error {
 	runtimeExe := filepath.Join(dir, payloadExeName)
 	cmd := exec.Command(runtimeExe, os.Args[1:]...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "XSTREAM_SINGLE_FILE=1")
+	cmd.Env = append(os.Environ(), "XCONNECT_SINGLE_FILE=1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{}
 	return cmd.Start()
 }

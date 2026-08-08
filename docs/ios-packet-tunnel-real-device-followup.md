@@ -5,14 +5,14 @@ Last updated: 2026-02-27
 ## Current Status
 
 - iOS release install to physical device passed on UDID `00008140-000E75903EF2801C`.
-- Repo-local iPhone smoke skill was added under `skills/xstream-ios-real-device-smoke/`.
+- Repo-local iPhone smoke skill was added under `skills/xconnect-ios-real-device-smoke/`.
 - Device smoke script passed for build, install, relaunch, process visibility, and sandbox readiness.
 - `RunnerTests.testPacketTunnelStartStopSmoke()` now compiles and launches on device, but Packet Tunnel control-plane start is still blocked at runtime by system permission denial.
 
 ## Verified Today
 
 - `make ios-install-release IOS_DEVICE=00008140-000E75903EF2801C`
-- `skills/xstream-ios-real-device-smoke/scripts/ios_real_device_smoke.sh --device 00008140-000E75903EF2801C --report skills/xstream-ios-real-device-smoke/last-report.md --keep-artifacts`
+- `skills/xconnect-ios-real-device-smoke/scripts/ios_real_device_smoke.sh --device 00008140-000E75903EF2801C --report skills/xconnect-ios-real-device-smoke/last-report.md --keep-artifacts`
 - `xcodebuild test -workspace ios/Runner.xcworkspace -scheme Runner -destination 'id=00008140-000E75903EF2801C' -only-testing:RunnerTests/RunnerTests/testPacketTunnelStartStopSmoke`
 
 ## Current Blocker
@@ -45,7 +45,7 @@ This is a runtime environment / signing / entitlement / provisioning blocker, no
 
 ## Useful Paths
 
-- Skill: `skills/xstream-ios-real-device-smoke/`
-- Latest smoke report: `skills/xstream-ios-real-device-smoke/last-report.md`
+- Skill: `skills/xconnect-ios-real-device-smoke/`
+- Latest smoke report: `skills/xconnect-ios-real-device-smoke/last-report.md`
 - Latest failed device test result bundle:
   `/Users/shenlan/Library/Developer/Xcode/DerivedData/Runner-dxfoinntfllvvedximfyrhzjuztu/Logs/Test/Test-Runner-2026.02.27_19-26-33-+0800.xcresult`

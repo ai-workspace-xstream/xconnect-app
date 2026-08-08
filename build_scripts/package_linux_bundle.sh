@@ -10,8 +10,8 @@ BUNDLE_DIR="$PROJECT_ROOT/build/linux/x64/release/bundle"
 LIB_DIR="$BUNDLE_DIR/lib"
 APPDIR="$PROJECT_ROOT/build/linux/AppDir"
 APPIMAGE_DIR="$PROJECT_ROOT/build/linux/x64/release/AppImage"
-OUTPUT_ZIP="$BUNDLE_DIR/xstream-linux.zip"
-APPIMAGE_OUTPUT="$APPIMAGE_DIR/xstream-linux.AppImage"
+OUTPUT_ZIP="$BUNDLE_DIR/xconnect-linux.zip"
+APPIMAGE_OUTPUT="$APPIMAGE_DIR/xconnect-linux.AppImage"
 APPIMAGE_TMP_DIR="$PROJECT_ROOT/build/linux/appimage-tmp"
 
 echo ">>> Preparing directories..."
@@ -43,22 +43,22 @@ zip -r "$(basename "$OUTPUT_ZIP")" . -x "$(basename "$OUTPUT_ZIP")"
 cd -
 
 echo ">>> Preparing AppDir structure..."
-cp -v "$BUNDLE_DIR/xstream" "$APPDIR/usr/bin/"
+cp -v "$BUNDLE_DIR/xconnect" "$APPDIR/usr/bin/"
 cp -v "$LIB_DIR/"*.so "$APPDIR/usr/lib/"
 
 
 echo ">>> Generating icon..."
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps/"
-convert "$PROJECT_ROOT/assets/logo.png" -resize 256x256 "$APPDIR/xstream.png"
-convert "$PROJECT_ROOT/assets/logo.png" -resize 256x256 "$APPDIR/usr/share/icons/hicolor/256x256/apps/xstream.png"
+convert "$PROJECT_ROOT/assets/logo.png" -resize 256x256 "$APPDIR/xconnect.png"
+convert "$PROJECT_ROOT/assets/logo.png" -resize 256x256 "$APPDIR/usr/share/icons/hicolor/256x256/apps/xconnect.png"
 
-echo ">>> Preparing AppDir structure/xstream.desktop..."
-cat << EOF > "$APPDIR/xstream.desktop"
+echo ">>> Preparing AppDir structure/xconnect.desktop..."
+cat << EOF > "$APPDIR/xconnect.desktop"
 [Desktop Entry]
 Type=Application
-Name=XStream
-Exec=xstream
-Icon=xstream
+Name=XConnect
+Exec=xconnect
+Icon=xconnect
 Categories=Utility;
 EOF
 
@@ -67,7 +67,7 @@ cat << 'EOF' > "$APPDIR/AppRun"
 #!/bin/bash
 HERE="$(dirname "$(readlink -f "$0")")"
 export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
-exec "$HERE/usr/bin/xstream" "$@"
+exec "$HERE/usr/bin/xconnect" "$@"
 EOF
 
 chmod +x "$APPDIR/AppRun"

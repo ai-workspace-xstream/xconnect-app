@@ -1,6 +1,6 @@
 # Windows 构建指南
 
-本文档说明如何在 Windows 平台编译 XStream 所需的 `libgo_native_bridge.dll` 动态库并构建桌面应用。
+本文档说明如何在 Windows 平台编译 XConnect 所需的 `libgo_native_bridge.dll` 动态库并构建桌面应用。
 
 ## 1. 安装依赖
 
@@ -48,7 +48,7 @@ flutter build windows
 ./build_scripts/package_windows_bundle.ps1
 ```
 
-该脚本会从 `bindings/libgo_native_bridge.dll` 复制最新 bridge 产物到 `build/windows/x64/runner/Release/`，然后将整个 Release 目录压缩为 `xstream-windows.zip`。
+该脚本会从 `bindings/libgo_native_bridge.dll` 复制最新 bridge 产物到 `build/windows/x64/runner/Release/`，然后将整个 Release 目录压缩为 `xconnect-windows.zip`。
 
 为了降低对目标机器 VC Runtime 预装状态的依赖，脚本会优先从本机 Visual Studio Build Tools 的 redist 目录补齐 `msvcp140.dll`、`vcruntime140.dll` 和 `vcruntime140_1.dll`。
 
@@ -56,7 +56,7 @@ flutter build windows
 
 ## 5. 单文件 Windows Launcher
 
-如果你需要一个“单文件分发”的 `xstream.exe`，请执行：
+如果你需要一个“单文件分发”的 `xconnect.exe`，请执行：
 
 ```powershell
 ./build_scripts/package_windows_single_file.ps1
@@ -64,9 +64,9 @@ flutter build windows
 
 该脚本会生成：
 
-- `build/windows/x64/portable/xstream.exe`
+- `build/windows/x64/portable/xconnect.exe`
 
-这个文件是一个 **self-extract launcher**：它会把 Flutter Windows 运行时、`flutter_windows.dll`、`data/`、插件 DLL 与 `libgo_native_bridge.dll` 一起嵌入到单个外层 `xstream.exe` 中，启动时自动解压到用户缓存目录后再拉起内层运行时。
+这个文件是一个 **self-extract launcher**：它会把 Flutter Windows 运行时、`flutter_windows.dll`、`data/`、插件 DLL 与 `libgo_native_bridge.dll` 一起嵌入到单个外层 `xconnect.exe` 中，启动时自动解压到用户缓存目录后再拉起内层运行时。
 
 > 说明：基于当前 Flutter Windows 发布形态，真正“无任何运行时文件、直接把 Flutter engine 和资源全部静态并入同一个原生 PE”的方式并不现实。这里提供的是可落地的单文件分发方案。
 
@@ -78,7 +78,7 @@ CI 发布的 Windows 安装包现在默认是 MSI。在 Windows 环境执行：
 ./build_scripts/package_windows_msi.ps1
 ```
 
-脚本会基于 `build/windows/x64/runner/Release/` 下的 Flutter Release 产物生成 `xstream-windows.msi`，并自动补齐 `libgo_native_bridge.dll`、VC Runtime 与 `wintun.dll`。
+脚本会基于 `build/windows/x64/runner/Release/` 下的 Flutter Release 产物生成 `xconnect-windows.msi`，并自动补齐 `libgo_native_bridge.dll`、VC Runtime 与 `wintun.dll`。
 
 如果你还需要 Microsoft Store 分发包，项目仍然保留 MSIX 打包脚本：
 

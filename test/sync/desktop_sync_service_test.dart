@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/sync/desktop_sync_service.dart';
+import 'package:xconnect/services/sync/desktop_sync_service.dart';
 
 void main() {
   group('DesktopSyncService.shouldApplySyncPayload', () {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/permission_guide_service.dart';
+import 'package:xconnect/services/permission_guide_service.dart';
 
 void main() {
   group('PermissionGuideService.looksLikePacketTunnelPermissionDenied', () {

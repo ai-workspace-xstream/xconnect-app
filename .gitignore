@@ -30,7 +30,7 @@ doc/api/
 .flutter-plugins
 .flutter-plugins-dependencies
 
-init_xstream.sh
+init_xconnect.sh
 merged_code.dart
 *.dmg
 .DS_Store
@@ -58,8 +58,8 @@ windows/runner/resources/app_icon.ico
 windows/runner/resources/iconset/
 
 # Local MCP server dependencies
-tools/xstream-mcp-server/node_modules/
-tools/xstream-mcp-server/xstream-mcp-server
+tools/xconnect-mcp-server/node_modules/
+tools/xconnect-mcp-server/xconnect-mcp-server
 
 # Reference-only subproject
 vx/
@@ -72,4 +72,4 @@ macos/Resources/xray/xray
 macos/Resources/xray/xray-x86_64
 
 # Local macOS installer artifact
-macos/Runner 2026-03-07 17-50-46/xstream.pkg
+macos/Runner 2026-03-07 17-50-46/xconnect.pkg

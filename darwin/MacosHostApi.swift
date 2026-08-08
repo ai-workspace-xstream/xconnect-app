@@ -16,7 +16,7 @@ class DarwinHostApiImpl: DarwinHostApi {
   private let statusErrorKey = "packet_tunnel_last_error"
   private let statusStartedAtKey = "packet_tunnel_started_at"
   private let metricsSnapshotKey = "packet_tunnel_metrics_snapshot"
-  private let packetTunnelDisplayName = "Xstream"
+  private let packetTunnelDisplayName = "XConnect"
 
   private let flutterApi: DarwinFlutterApi?
 
@@ -48,7 +48,7 @@ class DarwinHostApiImpl: DarwinHostApi {
       .failure(
         PigeonError(
           code: "unsupported",
-          message: "XApi server is not integrated in this Xstream build",
+          message: "XApi server is not integrated in this XConnect build",
           details: nil
         )
       )
@@ -75,7 +75,7 @@ class DarwinHostApiImpl: DarwinHostApi {
   func generateTls() throws -> FlutterStandardTypedData {
     throw PigeonError(
       code: "unsupported",
-      message: "TLS generation is not integrated in this Xstream build",
+      message: "TLS generation is not integrated in this XConnect build",
       details: nil
     )
   }
@@ -239,7 +239,7 @@ class DarwinHostApiImpl: DarwinHostApi {
         let data = try Data(contentsOf: url)
         if data.isEmpty {
           throw NSError(
-            domain: "Xstream", code: -1,
+            domain: "XConnect", code: -1,
             userInfo: [NSLocalizedDescriptionKey: "Config file is empty"])
         }
         options["config"] = data as NSData

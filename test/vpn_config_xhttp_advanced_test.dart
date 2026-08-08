@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/vpn_config_service.dart';
-import 'package:xstream/utils/global_config.dart';
+import 'package:xconnect/services/vpn_config_service.dart';
+import 'package:xconnect/utils/global_config.dart';
 
 Map<String, dynamic> _proxyStreamSettingsFromConfig(String jsonText) {
   final obj = jsonDecode(jsonText) as Map<String, dynamic>;
@@ -167,7 +167,7 @@ void main() {
     test('rewrites a legacy xhttp node file', () async {
       XhttpAdvancedConfig.setXmuxMaxConcurrency('4-8');
       final tempDir = await Directory.systemTemp.createTemp(
-        'xstream-xhttp-migration-',
+        'xconnect-xhttp-migration-',
       );
       addTearDown(() => tempDir.delete(recursive: true));
       final configFile = File('${tempDir.path}/node-legacy-config.json');
@@ -189,8 +189,8 @@ void main() {
       final result = await VpnConfig.applyXhttpAdvancedSettingsToFile(
         configFile.path,
       );
-      final rewritten = jsonDecode(await configFile.readAsString())
-          as Map<String, dynamic>;
+      final rewritten =
+          jsonDecode(await configFile.readAsString()) as Map<String, dynamic>;
       final streamSettings = _proxyStreamSettingsFromConfig(
         jsonEncode(rewritten),
       );
@@ -203,13 +203,13 @@ void main() {
         '4-8',
       );
       expect(
-        ((streamSettings['xhttpSettings'] as Map)['extra']
-            as Map)['xmux']['hMaxRequestTimes'],
+        ((streamSettings['xhttpSettings'] as Map)['extra'] as Map)['xmux']
+            ['hMaxRequestTimes'],
         XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes,
       );
       expect(
-        ((streamSettings['xhttpSettings'] as Map)['extra']
-            as Map)['xmux']['hMaxReusableSecs'],
+        ((streamSettings['xhttpSettings'] as Map)['extra'] as Map)['xmux']
+            ['hMaxReusableSecs'],
         XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs,
       );
     });
@@ -238,9 +238,8 @@ void main() {
 
       final result = VpnConfig.applyXhttpAdvancedSettings(config);
       final streamSettings = _proxyStreamSettingsFromConfig(jsonEncode(config));
-      final xmux =
-          ((streamSettings['xhttpSettings'] as Map)['extra'] as Map)['xmux']
-              as Map;
+      final xmux = ((streamSettings['xhttpSettings'] as Map)['extra']
+          as Map)['xmux'] as Map;
 
       expect(result.foundXhttp, isTrue);
       expect(result.changed, isTrue);

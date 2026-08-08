@@ -1,6 +1,6 @@
 # Linux 构建须知
 
-本文档说明如何在 Linux 平台编译 XStream 所需的 `libgo_native_bridge.so` 动态库并构建桌面应用。
+本文档说明如何在 Linux 平台编译 XConnect 所需的 `libgo_native_bridge.so` 动态库并构建桌面应用。
 
 ## 生成共享库
 

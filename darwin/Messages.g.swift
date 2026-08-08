@@ -333,7 +333,7 @@ class DarwinHostApiSetup {
   /// Sets up an instance of `DarwinHostApi` to handle messages through the `binaryMessenger`.
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: DarwinHostApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
-    let appGroupPathChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.appGroupPath\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let appGroupPathChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.appGroupPath\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       appGroupPathChannel.setMessageHandler { _, reply in
         do {
@@ -346,7 +346,7 @@ class DarwinHostApiSetup {
     } else {
       appGroupPathChannel.setMessageHandler(nil)
     }
-    let startXApiServerChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.startXApiServer\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let startXApiServerChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.startXApiServer\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       startXApiServerChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
@@ -363,7 +363,7 @@ class DarwinHostApiSetup {
     } else {
       startXApiServerChannel.setMessageHandler(nil)
     }
-    let redirectStdErrChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.redirectStdErr\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let redirectStdErrChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.redirectStdErr\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       redirectStdErrChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
@@ -380,7 +380,7 @@ class DarwinHostApiSetup {
     } else {
       redirectStdErrChannel.setMessageHandler(nil)
     }
-    let generateTlsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.generateTls\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let generateTlsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.generateTls\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       generateTlsChannel.setMessageHandler { _, reply in
         do {
@@ -393,7 +393,7 @@ class DarwinHostApiSetup {
     } else {
       generateTlsChannel.setMessageHandler(nil)
     }
-    let setupShutdownNotificationChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.setupShutdownNotification\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let setupShutdownNotificationChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.setupShutdownNotification\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       setupShutdownNotificationChannel.setMessageHandler { _, reply in
         do {
@@ -406,7 +406,7 @@ class DarwinHostApiSetup {
     } else {
       setupShutdownNotificationChannel.setMessageHandler(nil)
     }
-    let savePacketTunnelProfileChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.savePacketTunnelProfile\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let savePacketTunnelProfileChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.savePacketTunnelProfile\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       savePacketTunnelProfileChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
@@ -423,7 +423,7 @@ class DarwinHostApiSetup {
     } else {
       savePacketTunnelProfileChannel.setMessageHandler(nil)
     }
-    let startPacketTunnelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.startPacketTunnel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let startPacketTunnelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.startPacketTunnel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       startPacketTunnelChannel.setMessageHandler { _, reply in
         api.startPacketTunnel { result in
@@ -438,7 +438,7 @@ class DarwinHostApiSetup {
     } else {
       startPacketTunnelChannel.setMessageHandler(nil)
     }
-    let stopPacketTunnelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.stopPacketTunnel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let stopPacketTunnelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.stopPacketTunnel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       stopPacketTunnelChannel.setMessageHandler { _, reply in
         api.stopPacketTunnel { result in
@@ -453,7 +453,7 @@ class DarwinHostApiSetup {
     } else {
       stopPacketTunnelChannel.setMessageHandler(nil)
     }
-    let getPacketTunnelStatusChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.getPacketTunnelStatus\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let getPacketTunnelStatusChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.getPacketTunnelStatus\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       getPacketTunnelStatusChannel.setMessageHandler { _, reply in
         api.getPacketTunnelStatus { result in
@@ -468,7 +468,7 @@ class DarwinHostApiSetup {
     } else {
       getPacketTunnelStatusChannel.setMessageHandler(nil)
     }
-    let getPacketTunnelMetricsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xstream.DarwinHostApi.getPacketTunnelMetrics\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let getPacketTunnelMetricsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.getPacketTunnelMetrics\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       getPacketTunnelMetricsChannel.setMessageHandler { _, reply in
         api.getPacketTunnelMetrics { result in
@@ -504,7 +504,7 @@ class DarwinFlutterApi: DarwinFlutterApiProtocol {
     return MessagesPigeonCodec.shared
   }
   func onSystemWillShutdown(completion: @escaping (Result<Void, PigeonError>) -> Void) {
-    let channelName: String = "dev.flutter.pigeon.xstream.DarwinFlutterApi.onSystemWillShutdown\(messageChannelSuffix)"
+    let channelName: String = "dev.flutter.pigeon.xconnect.DarwinFlutterApi.onSystemWillShutdown\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage(nil) { response in
       guard let listResponse = response as? [Any?] else {
@@ -522,7 +522,7 @@ class DarwinFlutterApi: DarwinFlutterApiProtocol {
     }
   }
   func onSystemWillRestart(completion: @escaping (Result<Void, PigeonError>) -> Void) {
-    let channelName: String = "dev.flutter.pigeon.xstream.DarwinFlutterApi.onSystemWillRestart\(messageChannelSuffix)"
+    let channelName: String = "dev.flutter.pigeon.xconnect.DarwinFlutterApi.onSystemWillRestart\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage(nil) { response in
       guard let listResponse = response as? [Any?] else {
@@ -540,7 +540,7 @@ class DarwinFlutterApi: DarwinFlutterApiProtocol {
     }
   }
   func onSystemWillSleep(completion: @escaping (Result<Void, PigeonError>) -> Void) {
-    let channelName: String = "dev.flutter.pigeon.xstream.DarwinFlutterApi.onSystemWillSleep\(messageChannelSuffix)"
+    let channelName: String = "dev.flutter.pigeon.xconnect.DarwinFlutterApi.onSystemWillSleep\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage(nil) { response in
       guard let listResponse = response as? [Any?] else {
@@ -558,7 +558,7 @@ class DarwinFlutterApi: DarwinFlutterApiProtocol {
     }
   }
   func onPacketTunnelStateChanged(status statusArg: TunnelStatus, completion: @escaping (Result<Void, PigeonError>) -> Void) {
-    let channelName: String = "dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelStateChanged\(messageChannelSuffix)"
+    let channelName: String = "dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelStateChanged\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage([statusArg] as [Any?]) { response in
       guard let listResponse = response as? [Any?] else {
@@ -576,7 +576,7 @@ class DarwinFlutterApi: DarwinFlutterApiProtocol {
     }
   }
   func onPacketTunnelError(code codeArg: String, message messageArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void) {
-    let channelName: String = "dev.flutter.pigeon.xstream.DarwinFlutterApi.onPacketTunnelError\(messageChannelSuffix)"
+    let channelName: String = "dev.flutter.pigeon.xconnect.DarwinFlutterApi.onPacketTunnelError\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage([codeArg, messageArg] as [Any?]) { response in
       guard let listResponse = response as? [Any?] else {

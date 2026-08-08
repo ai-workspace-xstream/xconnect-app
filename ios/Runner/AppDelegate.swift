@@ -24,8 +24,8 @@ import UIKit
     let api = DarwinHostApiImpl(binaryMessenger: messenger)
     DarwinHostApiSetup.setUp(binaryMessenger: messenger, api: api)
 
-    let channel = FlutterMethodChannel(name: "com.xstream/native", binaryMessenger: messenger)
-    let bundleId = Bundle.main.bundleIdentifier ?? "com.xstream"
+    let channel = FlutterMethodChannel(name: "plus.svc.xconnect/native", binaryMessenger: messenger)
+    let bundleId = Bundle.main.bundleIdentifier ?? "com.xconnect"
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self else { return }
       switch call.method {

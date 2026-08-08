@@ -342,7 +342,7 @@ type windowPlacement struct {
 }
 
 func findMainWindow() windows.Handle {
-	title, _ := windows.UTF16PtrFromString("xstream")
+	title, _ := windows.UTF16PtrFromString("xconnect")
 	h, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
 	return windows.Handle(h)
 }

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/sync/sync_payload.dart';
+import 'package:xconnect/services/sync/sync_payload.dart';
 
 void main() {
   group('SyncRequest', () {

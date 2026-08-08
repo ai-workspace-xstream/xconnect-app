@@ -38,12 +38,12 @@ concurrency:
 env:
   FLUTTER_VERSION: 3.41.4
   GO_VERSION: "1.26.4"
-  XSTREAM_APPLE_TEAM_ID: N3G9T67W78
-  XSTREAM_APP_GROUP_ID: group.plus.svc.xstream
-  XSTREAM_IOS_BUNDLE_ID: plus.svc.xstream
-  XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID: plus.svc.xstream.PacketTunnel
-  XSTREAM_MACOS_BUNDLE_ID: plus.svc.xstream
-  XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID: plus.svc.xstream.PacketTunnel
+  XCONNECT_APPLE_TEAM_ID: N3G9T67W78
+  XCONNECT_APP_GROUP_ID: group.plus.svc.xconnect
+  XCONNECT_IOS_BUNDLE_ID: plus.svc.xconnect
+  XCONNECT_IOS_PACKET_TUNNEL_BUNDLE_ID: plus.svc.xconnect.PacketTunnel
+  XCONNECT_MACOS_BUNDLE_ID: plus.svc.xconnect
+  XCONNECT_MACOS_PACKET_TUNNEL_BUNDLE_ID: plus.svc.xconnect.PacketTunnel
 
 jobs:
   prepare-release:
@@ -98,8 +98,8 @@ jobs:
             runs_on: ubuntu-22.04
             artifact_name: build-linux-x64
             artifact_paths: |
-              build/linux/x64/release/bundle/xstream-linux.zip
-              build/linux/x64/release/AppImage/xstream-linux.AppImage
+              build/linux/x64/release/bundle/xconnect-linux.zip
+              build/linux/x64/release/AppImage/xconnect-linux.AppImage
               build/linux/x64/release/packages/*.deb
               build/linux/x64/release/packages/*.rpm
           - platform: windows
@@ -107,7 +107,7 @@ jobs:
             runs_on: windows-2022
             artifact_name: build-windows-x64
             artifact_paths: |
-              build/windows/x64/runner/Release/xstream-windows.zip
+              build/windows/x64/runner/Release/xconnect-windows.zip
               build/windows/x64/runner/Release/*.msi
           - platform: macos
             arch: arm64
@@ -120,7 +120,7 @@ jobs:
             runs_on: macos-14
             artifact_name: build-ios-arm64
             artifact_paths: |
-              build/ios/iphoneos/XStream.app.zip
+              build/ios/iphoneos/xconnect.app.zip
               build/ios/ipa/*.ipa
           - platform: android
             arch: universal

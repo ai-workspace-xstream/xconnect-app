@@ -93,10 +93,10 @@ make build-macos-arm64   # 或 build-macos-x64（Intel）
 ```bash
 # 检查 app bundle 版本
 /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" \
-  build/macos/Build/Products/Release/xstream.app/Contents/Info.plist
+  build/macos/Build/Products/Release/xconnect.app/Contents/Info.plist
 
 /usr/libexec/PlistBuddy -c "Print CFBundleVersion" \
-  build/macos/Build/Products/Release/xstream.app/Contents/Info.plist
+  build/macos/Build/Products/Release/xconnect.app/Contents/Info.plist
 ```
 
 输出应与 `pubspec.yaml` 中的版本一致。

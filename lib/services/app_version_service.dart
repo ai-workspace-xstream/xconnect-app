@@ -8,7 +8,7 @@ class AppVersionInfo {
   final String buildNumber;
 
   const AppVersionInfo({
-    this.appName = 'xstream',
+    this.appName = 'xconnect',
     this.packageName = '',
     this.version = '0.0.0',
     this.buildNumber = '0',
@@ -25,7 +25,7 @@ class AppVersionService {
     try {
       final package = await PackageInfo.fromPlatform();
       info.value = AppVersionInfo(
-        appName: package.appName.isEmpty ? 'xstream' : package.appName,
+        appName: package.appName.isEmpty ? 'xconnect' : package.appName,
         packageName: package.packageName,
         version: package.version.isEmpty ? '0.0.0' : package.version,
         buildNumber: package.buildNumber.isEmpty ? '0' : package.buildNumber,

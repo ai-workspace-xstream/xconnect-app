@@ -2,7 +2,7 @@
 	pub-get prepare-macos sync-macos-config clean-macos \
 	build-macos-arm64 build-macos-x64 package-mac
 help: ## Show this help message
-	@echo "XStream VPN Build System"
+	@echo "XConnect Build System"
 	@echo ""
 	@echo "Usage: make <target> [ARCH=<arch>]"
 	@echo ""
@@ -46,9 +46,9 @@ RUN_TARGET_SCRIPT := $(MAKE_SCRIPT_DIR)/run-target.sh
 DMG_TAG := $(shell git describe --tags --exact-match 2>/dev/null || echo "")
 DMG_NAME := $(shell \
 	if [ "$(DMG_TAG)" != "" ]; then \
-		echo "xstream-release-$(DMG_TAG).dmg"; \
+		echo "xconnect-release-$(DMG_TAG).dmg"; \
 	else \
-		echo "xstream-dev-$(BUILD_ID).dmg"; \
+		echo "xconnect-dev-$(BUILD_ID).dmg"; \
 	fi)
 
 DART_DEFINES := --dart-define=BRANCH_NAME=$(BRANCH) --dart-define=BUILD_ID=$(BUILD_ID) --dart-define=BUILD_DATE=$(BUILD_DATE)
@@ -135,7 +135,7 @@ build-windows-x64: check-flutter check-go
 	./build_scripts/build_windows.sh
 	$(FLUTTER) build windows --release $(DART_DEFINES)
 	@cp bindings/libgo_native_bridge.dll build/windows/x64/runner/Release/ 2>/dev/null || true
-	@echo ">>> Build complete: build/windows/x64/runner/Release/xstream.exe"
+	@echo ">>> Build complete: build/windows/x64/runner/Release/xconnect.exe"
 
 build-linux-x64: check-flutter check-go
 	@echo ">>> Building Linux x64 release"
@@ -144,12 +144,12 @@ build-linux-x64: check-flutter check-go
 	CXX=/snap/flutter/current/usr/bin/clang++ \
 	$(FLUTTER) build linux --release -v $(DART_DEFINES)
 	@cp linux/lib/libgo_native_bridge.so build/linux/x64/release/bundle/lib/ 2>/dev/null || true
-	@echo ">>> Build complete: build/linux/x64/release/bundle/xstream"
+	@echo ">>> Build complete: build/linux/x64/release/bundle/xconnect"
 
 build-ios-ipa: check-flutter check-macos check-git-submodules
 	@echo ">>> Building iOS IPA"
 	./build_scripts/build_ios_ipa.sh
-	@echo ">>> IPA ready: build/ios/ipa/XStream.ipa"
+	@echo ">>> IPA ready: build/ios/ipa/xconnect.ipa"
 
 build-android-apk: check-flutter check-go check-git-submodules
 	@echo ">>> Building Android APK"

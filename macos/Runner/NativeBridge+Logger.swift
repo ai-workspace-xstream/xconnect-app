@@ -7,7 +7,7 @@ extension AppDelegate {
     DispatchQueue.main.async {
       if let controller = self.mainFlutterWindow?.contentViewController as? FlutterViewController {
         let messenger = controller.engine.binaryMessenger
-        let loggerChannel = FlutterMethodChannel(name: "com.xstream/logger", binaryMessenger: messenger)
+        let loggerChannel = FlutterMethodChannel(name: "plus.svc.xconnect/logger", binaryMessenger: messenger)
         loggerChannel.invokeMethod("log", arguments: fullLog)
       }
     }

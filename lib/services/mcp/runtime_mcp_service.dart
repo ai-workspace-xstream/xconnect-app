@@ -122,7 +122,7 @@ class RuntimeMcpService {
     }
 
     const defaultInstalled =
-        '/Applications/xstream.app/Contents/Resources/runtime-tools/xstream-mcp/start-xstream-mcp-server.sh';
+        '/Applications/xconnect.app/Contents/Resources/runtime-tools/xconnect-mcp/start-xconnect-mcp-server.sh';
     if (await File(defaultInstalled).exists()) {
       return defaultInstalled;
     }
@@ -136,6 +136,6 @@ class RuntimeMcpService {
     if (!contentsDir.endsWith('/Contents')) {
       return null;
     }
-    return '$contentsDir/Resources/runtime-tools/xstream-mcp/start-xstream-mcp-server.sh';
+    return '$contentsDir/Resources/runtime-tools/xconnect-mcp/start-xconnect-mcp-server.sh';
   }
 }

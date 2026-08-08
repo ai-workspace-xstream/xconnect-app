@@ -46,7 +46,7 @@ jstring toJStringAndFree(JNIEnv* env, char* ptr) {
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_example_xstream_NativePacketTunnelBridge_nativeStartTunnel(
+Java_plus_svc_xconnect_NativePacketTunnelBridge_nativeStartTunnel(
     JNIEnv* env,
     jobject /* thiz */,
     jstring configJson,
@@ -69,7 +69,7 @@ Java_com_example_xstream_NativePacketTunnelBridge_nativeStartTunnel(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_xstream_NativePacketTunnelBridge_nativeStopTunnel(
+Java_plus_svc_xconnect_NativePacketTunnelBridge_nativeStopTunnel(
     JNIEnv* env,
     jobject /* thiz */,
     jlong handle
@@ -85,7 +85,7 @@ Java_com_example_xstream_NativePacketTunnelBridge_nativeStopTunnel(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_xstream_NativePacketTunnelBridge_nativeFreeTunnel(
+Java_plus_svc_xconnect_NativePacketTunnelBridge_nativeFreeTunnel(
     JNIEnv* env,
     jobject /* thiz */,
     jlong handle

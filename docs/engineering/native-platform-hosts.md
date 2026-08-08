@@ -30,10 +30,10 @@
 | macos/Runner/NativeBridge+SystemProxy.swift | Apple Runner 宿主文件，负责 Flutter 通道、菜单栏/生命周期、配置或系统集成。 | 手写实现，纳入本页覆盖范围。 |
 | macos/Runner/NativeBridge+XrayInit.swift | Apple Runner 宿主文件，负责 Flutter 通道、菜单栏/生命周期、配置或系统集成。 | 手写实现，纳入本页覆盖范围。 |
 | macos/PacketTunnel/PacketTunnelProvider.swift | Apple Packet Tunnel 扩展实现，负责系统网络设置、utun 解析、Xray 启停与指标采样。 | 手写实现，纳入本页覆盖范围。 |
-| android/app/src/main/kotlin/com/example/xstream/MainActivity.kt | Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。 | 手写实现，纳入本页覆盖范围。 |
-| android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt | Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。 | 手写实现，纳入本页覆盖范围。 |
-| android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt | Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。 | 手写实现，纳入本页覆盖范围。 |
-| android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt | Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。 | 手写实现，纳入本页覆盖范围。 |
+| android/app/src/main/kotlin/com/example/xconnect/MainActivity.kt | Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。 | 手写实现，纳入本页覆盖范围。 |
+| android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt | Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。 | 手写实现，纳入本页覆盖范围。 |
+| android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt | Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。 | 手写实现，纳入本页覆盖范围。 |
+| android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt | Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。 | 手写实现，纳入本页覆盖范围。 |
 | android/app/src/main/cpp/packet_tunnel_jni.cpp | C++ 宿主文件，负责 JNI 或 Windows Runner 宿主行为。 | 手写实现，纳入本页覆盖范围。 |
 | linux/main.cc | Linux/Windows 宿主文件，负责窗口壳层或声明。 | 手写实现，纳入本页覆盖范围。 |
 | linux/my_application.cc | Linux/Windows 宿主文件，负责窗口壳层或声明。 | 手写实现，纳入本页覆盖范围。 |
@@ -78,8 +78,8 @@
 | AppDelegate | extension | macos/Runner/NativeBridge+SystemProxy.swift | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | AppDelegate | extension | macos/Runner/NativeBridge+XrayInit.swift | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | PacketTunnelProvider: | class | macos/PacketTunnel/PacketTunnelProvider.swift | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| MainActivity | class | android/app/src/main/kotlin/com/example/xstream/MainActivity.kt | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| XstreamPacketTunnelService | class | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
+| MainActivity | class | android/app/src/main/kotlin/com/example/xconnect/MainActivity.kt | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
+| XConnectPacketTunnelService | class | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | _MyApplication | struct | linux/my_application.cc | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | FlutterWindow | class | windows/runner/flutter_window.h | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | TrayMenuState | struct | windows/runner/flutter_window.h | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
@@ -397,68 +397,68 @@ Apple Packet Tunnel 扩展实现，负责系统网络设置、utun 解析、Xray
 | describe | macos/PacketTunnel/PacketTunnelProvider.swift / PacketTunnelProvider | _ reason: NEProviderStopReason | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由宿主进程、系统回调或 Flutter 通道调用。 |
 | isFailureReason | macos/PacketTunnel/PacketTunnelProvider.swift / PacketTunnelProvider | _ reason: NEProviderStopReason | Bool | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由宿主进程、系统回调或 Flutter 通道调用。 |
 
-### `android/app/src/main/kotlin/com/example/xstream/MainActivity.kt`
+### `android/app/src/main/kotlin/com/example/xconnect/MainActivity.kt`
 
 Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。
 
 | 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
 | --- | --- | --- | --- | --- | --- | --- |
-| configureFlutterEngine | android/app/src/main/kotlin/com/example/xstream/MainActivity.kt / MainActivity | flutterEngine: FlutterEngine | override fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| openVpnSettings | android/app/src/main/kotlin/com/example/xstream/MainActivity.kt / MainActivity | 无 | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| configureFlutterEngine | android/app/src/main/kotlin/com/example/xconnect/MainActivity.kt / MainActivity | flutterEngine: FlutterEngine | override fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| openVpnSettings | android/app/src/main/kotlin/com/example/xconnect/MainActivity.kt / MainActivity | 无 | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
 
-### `android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt`
-
-Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。
-
-| 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
-| --- | --- | --- | --- | --- | --- | --- |
-| isAvailable | android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | 无 | Boolean | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| startTunnel | android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | configJson: String, tunFd: Int | Long | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| stopTunnel | android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | handle: Long | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| freeTunnel | android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | handle: Long | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| nativeStartTunnel | android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | configJson: String, tunFd: Int | Long | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| nativeStopTunnel | android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | handle: Long | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| nativeFreeTunnel | android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | handle: Long | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-
-### `android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt`
+### `android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt`
 
 Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。
 
 | 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
 | --- | --- | --- | --- | --- | --- | --- |
-| saveProfile | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, profileMap: Map<*, *> | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| onVpnPermissionResult | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, granted: Boolean | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| startService | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, stored: String | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| stop | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| status | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | Map<String, Any?> | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| markConnected | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| markDisconnected | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| markFailed | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, message: String | fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| prefs | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | Unit | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| writeState | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, state: String | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| readState | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| writeError | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, message: String | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| clearError | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| clearStartedAt | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| markPendingPermission | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| clearPendingPermission | android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| isAvailable | android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | 无 | Boolean | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| startTunnel | android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | configJson: String, tunFd: Int | Long | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| stopTunnel | android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | handle: Long | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| freeTunnel | android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | handle: Long | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| nativeStartTunnel | android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | configJson: String, tunFd: Int | Long | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| nativeStopTunnel | android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | handle: Long | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| nativeFreeTunnel | android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt / NativePacketTunnelBridge.kt | handle: Long | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
 
-### `android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt`
+### `android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt`
 
 Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。
 
 | 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
 | --- | --- | --- | --- | --- | --- | --- |
-| onDestroy | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | 无 | override fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| startTunnel | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | profileJson: String? | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| stopTunnel | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | markDisconnected: Boolean = true | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| resolveConfigJson | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | profile: JSONObject | String? | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| ensureTunInbound | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | configJson: String, mtu: Int | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| addIpv4Routes | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | builder: Builder, routes: JSONArray? | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| addIpv6Routes | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | builder: Builder, routes: JSONArray? | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| maskToPrefixLength | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | mask: String | Int | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| jsonStringArray | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | array: JSONArray? | List<String> | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
-| jsonIntArray | android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt / XstreamPacketTunnelService | array: JSONArray? | List<Int> | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| saveProfile | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, profileMap: Map<*, *> | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| onVpnPermissionResult | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, granted: Boolean | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| startService | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, stored: String | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| stop | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| status | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | Map<String, Any?> | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| markConnected | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| markDisconnected | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| markFailed | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, message: String | fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| prefs | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | Unit | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| writeState | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, state: String | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| readState | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| writeError | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context, message: String | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| clearError | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| clearStartedAt | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| markPendingPermission | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| clearPendingPermission | android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt / PacketTunnelController.kt | context: Context | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+
+### `android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt`
+
+Android 自研宿主文件，负责 Activity / Controller / Service / JNI 桥接。
+
+| 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
+| --- | --- | --- | --- | --- | --- | --- |
+| onDestroy | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | 无 | override fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| startTunnel | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | profileJson: String? | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| stopTunnel | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | markDisconnected: Boolean = true | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| resolveConfigJson | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | profile: JSONObject | String? | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| ensureTunInbound | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | configJson: String, mtu: Int | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| addIpv4Routes | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | builder: Builder, routes: JSONArray? | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| addIpv6Routes | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | builder: Builder, routes: JSONArray? | private fun | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| maskToPrefixLength | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | mask: String | Int | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| jsonStringArray | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | array: JSONArray? | List<String> | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
+| jsonIntArray | android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt / XConnectPacketTunnelService | array: JSONArray? | List<Int> | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 系统 API / MethodChannel / FFI / NetworkExtension。 | 由 Android/Linux/Windows 宿主主流程调用。 |
 
 ### `android/app/src/main/cpp/packet_tunnel_jni.cpp`
 
@@ -594,7 +594,7 @@ Linux/Windows 宿主文件，负责窗口壳层或声明。
 | --- | --- | --- |
 | `MainActivity` MethodChannel handlers | Flutter -> Android | 负责保存 profile、请求 VPN 权限、启动/停止 `VpnService`、读取状态。 |
 | `PacketTunnelController` | Activity/Service 间共享 | 负责 profile 持久化、权限状态、服务启动状态与错误信息。 |
-| `XstreamPacketTunnelService` | Android 系统 -> Service | 真正建立 TUN 接口、补齐 Xray TUN inbound 并调用 JNI/Go bridge。 |
+| `XConnectPacketTunnelService` | Android 系统 -> Service | 真正建立 TUN 接口、补齐 Xray TUN inbound 并调用 JNI/Go bridge。 |
 | `NativePacketTunnelBridge` / JNI | Kotlin -> C++ -> Go | 负责 `nativeStartTunnel/nativeStopTunnel/nativeFreeTunnel` 句柄调用。 |
 
 ### Desktop Hosts

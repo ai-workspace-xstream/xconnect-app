@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=XConnect
+Comment=XConnect secure network desktop client
+Exec=/opt/xconnect/xconnect
+Icon=xconnect
+Terminal=false
+Categories=Network;Utility;
+StartupNotify=true

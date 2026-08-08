@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:xstream/services/account_usage_service.dart';
+import 'package:xconnect/services/account_usage_service.dart';
 
 void main() {
   test('loads usage summary from accounts service', () async {

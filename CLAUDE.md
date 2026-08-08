@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-XStream is a cross-platform network accelerator powered by XTLS VLESS. It's a Flutter application with a Go core module that provides a GUI client for managing Xray-core multi-node connections across macOS, Windows, Linux, Android, and iOS.
+XConnect is a cross-platform network accelerator powered by XTLS VLESS. It's a Flutter application with a Go core module that provides a GUI client for managing Xray-core multi-node connections across macOS, Windows, Linux, Android, and iOS.
 
 ## Development Commands
 
@@ -79,7 +79,7 @@ Each platform has native bridge extensions in Swift (iOS/macOS) that handle:
 ### Multi-Platform Considerations
 - The app supports Chinese and English localization
 - Platform-specific builds have different packaging (DMG for macOS, MSIX for Windows)
-- DMG naming follows pattern: `xstream-release-<tag>.dmg` for tagged releases, `xstream-latest-<commit>.dmg` for main branch, `xstream-dev-<commit>.dmg` for feature branches
+- DMG naming follows pattern: `xconnect-release-<tag>.dmg` for tagged releases, `xconnect-latest-<commit>.dmg` for main branch, `xconnect-dev-<commit>.dmg` for feature branches
 
 ### macOS Development
 - Requires Xcode and CocoaPods

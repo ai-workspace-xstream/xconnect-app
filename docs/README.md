@@ -1,4 +1,4 @@
-# XStream Service Plus / XStream 客户端应用
+# XConnect Service Plus / XConnect 客户端应用
 
 This `docs/` directory now has a bilingual canonical layer for the current repository state.
 
@@ -22,9 +22,9 @@ This `docs/` directory now has a bilingual canonical layer for the current repos
 
 ## Current Repo Context / 当前仓库背景
 
-- Root README: `XStream`
+- Root README: `XConnect`
 - Previous docs index: `Documentation`
-- Manifest evidence / 构建清单: pubspec.yaml (`xstream`)
+- Manifest evidence / 构建清单: pubspec.yaml (`xconnect`)
 - Active code and ops directories / 当前主要目录: `scripts/`, `test/`, `lib/`, `ios/`, `android/`, `web/`
 
 ## Existing Docs To Reconcile / 需要继续归并的现有文档

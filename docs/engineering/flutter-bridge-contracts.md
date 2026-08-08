@@ -111,8 +111,8 @@ iOS 进程内 Xray 直接 FFI 入口。
 
 | Channel | 方向 | 主要方法 | 返回约定 |
 | --- | --- | --- | --- |
-| `com.xstream/native` | Flutter -> 原生 | `writeConfigFiles`、`startNodeService`、`stopNodeService`、`checkNodeStatus`、`performAction`、`savePacketTunnelProfile`、`startPacketTunnel`、`stopPacketTunnel`、`getPacketTunnelStatus`、`openVpnSettings`、`setSystemProxy` | 以 `String` 成功消息、布尔值、状态字典或 `FlutterError`/平台错误字符串返回。 |
-| `com.xstream/logger` | 原生 -> Flutter | `log` | 原生侧推送日志文本，Flutter 侧写入 `LogConsole` / `LogStore`。 |
+| `com.xconnect/native` | Flutter -> 原生 | `writeConfigFiles`、`startNodeService`、`stopNodeService`、`checkNodeStatus`、`performAction`、`savePacketTunnelProfile`、`startPacketTunnel`、`stopPacketTunnel`、`getPacketTunnelStatus`、`openVpnSettings`、`setSystemProxy` | 以 `String` 成功消息、布尔值、状态字典或 `FlutterError`/平台错误字符串返回。 |
+| `com.xconnect/logger` | 原生 -> Flutter | `log` | 原生侧推送日志文本，Flutter 侧写入 `LogConsole` / `LogStore`。 |
 
 ### Pigeon / Darwin Host API
 

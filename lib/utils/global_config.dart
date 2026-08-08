@@ -234,11 +234,25 @@ class DnsConfig {
   static const _fakeDnsEnabledKey = 'fakeDnsEnabled';
   static const _tunnelDnsViaProxyKey = 'tunnelDnsViaProxy';
   static const _http3PassthroughKey = 'http3Passthrough';
-  // Domestic-safe DoH DNS (work in CN, resolve via remote proxy)
-  static const _defaultDohDns1 = 'https://doh.pub/dns-query'; // DNSPod
-  static const _defaultDohDns2 = 'https://dns.alidns.com/dns-query'; // Aliyun
+  static const _schemaVersionKey = 'dnsSchemaVersion';
+  static const _currentSchemaVersion = 1;
+  // Proxy resolvers are routed through the `proxy` outbound (see
+  // RoutePolicy.buildSecureDnsRules), so they are queried from the exit node's
+  // vantage point. They must be IP-literal — a domain address adds a bootstrap
+  // dependency on the very tunnel being brought up — and must answer correctly
+  // from anywhere. CN-domestic providers belong on the direct resolvers.
+  static const _defaultDohDns1 = 'https://1.1.1.1/dns-query'; // Cloudflare
+  static const _defaultDohDns2 = 'https://8.8.8.8/dns-query'; // Google
   static const _defaultPlainDns1 = '1.1.1.1';
   static const _defaultPlainDns2 = '8.8.8.8';
+
+  /// DoH endpoints that only answer correctly from inside CN. Kept as data so
+  /// the schema migration can recognise values persisted by older builds.
+  static const _cnOnlyDohHosts = <String>[
+    'doh.pub',
+    'dns.alidns.com',
+    'doh.360.cn',
+  ];
   static const _defaultDirectDns6Servers = <String>[
     '2606:4700:4700::1111',
     '2001:4860:4860::8888',
@@ -345,8 +359,38 @@ class DnsConfig {
   static String get directSecondaryDefault =>
       _normalizeDirectEndpoint(directDns2.value, primary: false);
 
+  static bool _isCnOnlyDohEndpoint(String value) {
+    final host = Uri.tryParse(value.trim())?.host.toLowerCase() ?? '';
+    return _cnOnlyDohHosts.contains(host);
+  }
+
+  /// One-shot migration to schema v1.
+  ///
+  /// Builds up to v1.1.0+5 defaulted the proxy DoH slot to CN-domestic
+  /// providers (doh.pub / dns.alidns.com). Those resolvers are routed through
+  /// the proxy outbound, so every lookup travelled to the overseas exit node
+  /// and back into CN — high RTT, frequent rate-limiting of foreign source
+  /// IPs, and CN-optimised answers then dialled from the wrong vantage point.
+  /// Rewrite them to the IP-literal defaults; any other user-chosen value is
+  /// left untouched.
+  static Future<void> _migrateProxyResolvers(SharedPreferences prefs) async {
+    if ((prefs.getInt(_schemaVersionKey) ?? 0) >= _currentSchemaVersion) {
+      return;
+    }
+    final storedPrimary = prefs.getString(_proxyDns1Key);
+    if (storedPrimary != null && _isCnOnlyDohEndpoint(storedPrimary)) {
+      await prefs.setString(_proxyDns1Key, _defaultDohDns1);
+    }
+    final storedSecondary = prefs.getString(_proxyDns2Key);
+    if (storedSecondary != null && _isCnOnlyDohEndpoint(storedSecondary)) {
+      await prefs.setString(_proxyDns2Key, _defaultDohDns2);
+    }
+    await prefs.setInt(_schemaVersionKey, _currentSchemaVersion);
+  }
+
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    await _migrateProxyResolvers(prefs);
     final legacyDotEnabled = prefs.getBool(_legacyDotEnabledKey);
     transportMode.value = DnsTransportMode.fromStorage(
       prefs.getString(_transportModeKey) ??
@@ -450,18 +494,29 @@ class DnsConfig {
   }
 
   static List<String> proxyResolversForXray() {
-    return <String>[proxyDns1.value, proxyDns2.value]
-        .map(
-          (value) => _normalizeProxyEndpoint(
-            value,
-            transportMode.value,
-            primary: true,
-          ),
-        )
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList();
+    final servers = <String>[
+      _normalizeProxyEndpoint(
+        proxyDns1.value,
+        transportMode.value,
+        primary: true,
+      ),
+      _normalizeProxyEndpoint(
+        proxyDns2.value,
+        transportMode.value,
+        primary: false,
+      ),
+    ].where((server) => server.isNotEmpty).toList();
+    return servers.toSet().toList();
   }
+
+  /// Proxy-slot resolvers that cannot answer correctly from the exit node.
+  ///
+  /// Proxy resolvers are queried through the `proxy` outbound, so a CN-only
+  /// provider here means every lookup crosses the tunnel and comes back with
+  /// answers optimised for the wrong vantage point. Surfaced in settings so
+  /// the misconfiguration is visible rather than silent.
+  static List<String> get misplacedProxyResolvers =>
+      proxyResolversForXray().where(_isCnOnlyDohEndpoint).toList();
 
   static List<String> directResolversForXray() {
     final servers = <String>[
@@ -871,7 +926,7 @@ class GlobalApplicationConfig {
   static String get windowsBasePath {
     final program = Platform.environment['ProgramFiles'];
     if (program != null) {
-      final path = '$program\\Xstream';
+      final path = '$program\\XConnect';
       try {
         Directory(path).createSync(recursive: true);
         return path;
@@ -880,7 +935,7 @@ class GlobalApplicationConfig {
       }
     }
     final local = Platform.environment['LOCALAPPDATA'] ?? '.';
-    final alt = '$local\\Xstream';
+    final alt = '$local\\XConnect';
     Directory(alt).createSync(recursive: true);
     return alt;
   }
@@ -921,12 +976,12 @@ class GlobalApplicationConfig {
         return line.split('=').last.trim();
       } catch (_) {
         // macOS 下若读取失败返回默认值
-        return 'com.xstream';
+        return 'plus.svc.xconnect';
       }
     }
 
     // 其他平台直接返回默认值
-    return 'com.xstream';
+    return 'plus.svc.xconnect';
   }
 
   /// 返回各平台下存放 Xray 配置文件的目录，末尾已包含分隔符
@@ -939,7 +994,7 @@ class GlobalApplicationConfig {
       case 'windows':
         final base =
             Platform.environment['ProgramFiles'] ?? 'C:\\Program Files';
-        return '$base\\Xstream\\';
+        return '$base\\XConnect\\';
       case 'linux':
         return '/opt/etc/';
       default:
@@ -956,16 +1011,16 @@ class GlobalApplicationConfig {
         return await getVpnNodesConfigPath();
 
       case 'windows':
-        final xstreamDir = Directory(windowsBasePath);
-        await xstreamDir.create(recursive: true);
-        return '${xstreamDir.path}\\vpn_nodes.json';
+        final xconnectDir = Directory(windowsBasePath);
+        await xconnectDir.create(recursive: true);
+        return '${xconnectDir.path}\\vpn_nodes.json';
 
       case 'linux':
         final home = Platform.environment['HOME'] ??
             (await getApplicationSupportDirectory()).path;
-        final xstreamDir = Directory('$home/.config/xstream');
-        await xstreamDir.create(recursive: true);
-        return '${xstreamDir.path}/vpn_nodes.json';
+        final xconnectDir = Directory('$home/.config/xconnect');
+        await xconnectDir.create(recursive: true);
+        return '${xconnectDir.path}/vpn_nodes.json';
 
       default:
         return await getVpnNodesConfigPath();

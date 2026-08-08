@@ -2,7 +2,7 @@
 
 ## 1. 目标与约束
 
-本设计用于 `xstream.svc.plus` 的隧道模式微调，明确如下边界：
+本设计用于 `xconnect.svc.plus` 的隧道模式微调，明确如下边界：
 
 1. 保持现有 UI 布局与交互不变，仅调整隧道控制面与数据面实现。
 2. 系统级网络入口在 Darwin 平台只使用 `NEPacketTunnelProvider`。
@@ -33,7 +33,7 @@
 ### 2.3 Android 已有更接近闭环的路径
 
 - Android 存在 `VpnService` + `tun fd` + `StartXrayTunnelWithFd`：
-  - `android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt`
+  - `android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt`
   - `go_core/bridge_android.go`
 - 这是当前仓库最接近 Xray TUN 数据面闭环的平台实现。
 
@@ -170,5 +170,5 @@ Dart 侧继续复用现有状态模型；各平台实现数据面差异。
 
 为保持 UI 不变并推进落地，配套文档如下：
 
-1. 迁移矩阵：`docs/onexray-xstream-migration-matrix.md`
+1. 迁移矩阵：`docs/onexray-xconnect-migration-matrix.md`
 2. 架构主文档：`docs/system-vpn-packet-tunnel-xray26.md`

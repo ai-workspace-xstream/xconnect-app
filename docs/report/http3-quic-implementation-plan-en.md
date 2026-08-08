@@ -14,9 +14,9 @@ OneXray treats UDP 443 / QUIC as a first-class citizen, providing three levers:
 2. **Mux XUDP Control**: `xudpProxyUDP443` under Mux config (takes `reject` / `allow` / `skip`) to control how XUDP handles UDP 443.
 3. **Routing Protocol Matching**: Matches `RoutingRuleProtocol.quic` + `RoutingRuleNetwork.{udp, tcp, udp}` to write specific rules for QUIC.
 
-### Key Constraints for XStream
+### Key Constraints for XConnect
 In Xray-core, XTLS Vision and Mux are mutually exclusive. Therefore:
-- For existing Vision deployments in XStream, the only usable lever is the flow suffix `-udp443`.
+- For existing Vision deployments in XConnect, the only usable lever is the flow suffix `-udp443`.
 - `xudpProxyUDP443` only takes effect in non-Vision (Mux/XUDP) outbound modes.
 - These represent different outbound configurations and cannot be simply combined.
 

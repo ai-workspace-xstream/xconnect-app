@@ -6,15 +6,15 @@
 
 ## 与当前代码对齐的说明
 
-- 文档目标仓库: `xstream.svc.plus`
+- 文档目标仓库: `xconnect.svc.plus`
 - 仓库类型: `flutter-app`
-- 构建与运行依据: pubspec.yaml (`xstream`)
+- 构建与运行依据: pubspec.yaml (`xconnect`)
 - 主要实现与运维目录: `scripts/`, `test/`, `lib/`, `ios/`, `android/`, `web/`
 - `package.json` 脚本快照: No package.json scripts were detected.
 
 ## 需要继续归并的现有文档
 
-- `xstream-mcp-server.md`
+- `xconnect-mcp-server.md`
 
 ## 本页下一步应补充的内容
 
