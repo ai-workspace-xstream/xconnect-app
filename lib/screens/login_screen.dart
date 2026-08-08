@@ -446,15 +446,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                       ),
 
-                      const SizedBox(height: 24),
-
-                      // Client-only note, kept below the form
-                      Text(
-                        context.l10n.get('connectorDisclaimer'),
-                        style: TextStyle(fontSize: 12, color: xc.mutedText),
-                        textAlign: TextAlign.center,
-                      ),
-
                       const SizedBox(height: 32),
                     ],
                   ),
