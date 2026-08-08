@@ -24,7 +24,7 @@ void main() {
 
     final service = AccountUsageService(httpClient: client);
     final summary = await service.fetchUsageSummary(
-      baseUrl: 'https://accounts.svc.plus',
+      baseUrl: 'https://accounts.example.com',
       sessionToken: 'session-token',
     );
 
