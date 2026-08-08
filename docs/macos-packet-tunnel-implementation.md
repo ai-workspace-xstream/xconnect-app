@@ -506,7 +506,7 @@ Both host app and extension read or write:
 
 App Group:
 
-- `group.plus.svc.xstream`
+- `group.plus.svc.xconnect`
 
 ### 7.2 Host-side status path
 
@@ -566,9 +566,9 @@ Relevant macOS targets:
 Bundle relationship:
 
 - host app bundle id:
-  - `plus.svc.xstream`
+  - `plus.svc.xconnect`
 - Packet Tunnel extension bundle id:
-  - `plus.svc.xstream.PacketTunnel`
+  - `plus.svc.xconnect.PacketTunnel`
 
 `macos/Runner/Info.plist` exposes:
 
@@ -579,7 +579,7 @@ Bundle relationship:
 `macos/PacketTunnel/PacketTunnel.entitlements` contains:
 
 - `com.apple.developer.networking.networkextension = packet-tunnel-provider`
-- `com.apple.security.application-groups = group.plus.svc.xstream`
+- `com.apple.security.application-groups = group.plus.svc.xconnect`
 
 These are required for:
 
@@ -742,7 +742,7 @@ For runtime validation, use:
 - `scutil --nc status "Xstream"`
 - `route -n get default`
 - `ps -axo pid,ppid,etime,command | rg 'PacketTunnel|xray'`
-- `/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "plus.svc.xstream" OR process CONTAINS "PacketTunnel" OR process == "nesessionmanager"'`
+- `/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "plus.svc.xconnect" OR process CONTAINS "PacketTunnel" OR process == "nesessionmanager"'`
 
 See also:
 

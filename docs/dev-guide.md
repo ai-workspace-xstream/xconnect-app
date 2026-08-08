@@ -94,7 +94,7 @@ flutter run -d macos
 macOS 下常见目录示例：
 
 ```text
-~/Library/Application Support/plus.svc.xstream/
+~/Library/Application Support/plus.svc.xconnect/
 ```
 
 关键文件与目录：
@@ -117,7 +117,7 @@ macOS 下常见目录示例：
 常用命令：
 
 ```zsh
-BASE="$HOME/Library/Application Support/plus.svc.xstream"
+BASE="$HOME/Library/Application Support/plus.svc.xconnect"
 
 sqlite3 "$BASE/app.db" \
   "select name,country_code,config_path,service_name,enabled from vpn_nodes order by updated_at desc, name asc;"

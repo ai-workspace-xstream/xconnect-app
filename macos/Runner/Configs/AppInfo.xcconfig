@@ -8,7 +8,7 @@
 PRODUCT_NAME = xstream
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = plus.svc.xstream
+PRODUCT_BUNDLE_IDENTIFIER = plus.svc.xconnect
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2025 svc.plus. All rights reserved.

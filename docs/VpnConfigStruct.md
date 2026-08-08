@@ -208,13 +208,13 @@ macOS 当前运行态日志文件名为：
 macOS 下，基础目录来自应用支持目录。当前常见路径示例：
 
 ```text
-~/Library/Application Support/plus.svc.xstream/
+~/Library/Application Support/plus.svc.xconnect/
 ```
 
 目录结构通常为：
 
 ```text
-plus.svc.xstream/
+plus.svc.xconnect/
 ├── app.db
 ├── vpn_nodes.json
 ├── bin/
@@ -234,7 +234,7 @@ plus.svc.xstream/
 先定义基础目录：
 
 ```zsh
-BASE="$HOME/Library/Application Support/plus.svc.xstream"
+BASE="$HOME/Library/Application Support/plus.svc.xconnect"
 ```
 
 查看导出/兼容节点快照：

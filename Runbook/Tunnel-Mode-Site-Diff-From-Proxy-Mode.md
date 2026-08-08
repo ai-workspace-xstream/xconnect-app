@@ -89,7 +89,7 @@ ps -axo pid,ppid,etime,command | rg 'PacketTunnel|xray'
 确认当前活跃配置与传输方式：
 
 ```zsh
-BASE="$HOME/Library/Application Support/plus.svc.xstream"
+BASE="$HOME/Library/Application Support/plus.svc.xconnect"
 cat "$BASE/configs/config.json"
 ```
 

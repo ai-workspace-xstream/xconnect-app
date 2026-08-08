@@ -1293,7 +1293,7 @@ func lastLines(content string, n int) string {
 func readBundleID(root string) string {
 	content, err := os.ReadFile(filepath.Join(root, "macos", "Runner", "Configs", "AppInfo.xcconfig"))
 	if err != nil {
-		return "xstream.svc.plus"
+		return "plus.svc.xconnect"
 	}
 	for _, line := range strings.Split(string(content), "\n") {
 		line = strings.TrimSpace(line)
@@ -1307,7 +1307,7 @@ func readBundleID(root string) string {
 			}
 		}
 	}
-	return "xstream.svc.plus"
+	return "plus.svc.xconnect"
 }
 
 func buildAppSupportCandidates(bundleID string) []string {
@@ -1321,7 +1321,7 @@ func buildAppSupportCandidates(bundleID string) []string {
 		unique[p] = true
 		out = append(out, p)
 	}
-	ids := []string{bundleID, "xstream.svc.plus", "com.xstream"}
+	ids := []string{bundleID, "plus.svc.xstream", "xstream.svc.plus", "com.xstream"}
 	for _, id := range ids {
 		add(filepath.Join(home, "Library", "Application Support", id))
 		add(filepath.Join(home, "Library", "Containers", id, "Data", "Library", "Application Support", id))
