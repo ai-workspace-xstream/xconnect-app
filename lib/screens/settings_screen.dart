@@ -19,6 +19,7 @@ import '../screens/help_screen.dart';
 import '../screens/logs_screen.dart';
 import '../widgets/permission_guide_dialog.dart';
 import '../widgets/settings_row.dart';
+import '../widgets/settings_tab_bar.dart';
 import '../widgets/log_console.dart' show LogLevel;
 
 class SettingsScreen extends StatefulWidget {
@@ -42,6 +43,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _mfaCodeController = TextEditingController();
   final TextEditingController _xhttpXmuxMaxConcurrencyController =
       TextEditingController();
+  // Held on the state rather than rebuilt in build(): a controller recreated
+  // every frame resets the selection and drops the cursor to the start.
+  final TextEditingController _socksPortController = TextEditingController();
+  final TextEditingController _httpPortController = TextEditingController();
+
+  /// Index into the tab list built by [_settingsTabs].
+  int _selectedTab = 0;
   String _draftXhttpMode = XhttpAdvancedConfig.mode.value;
   Set<String> _draftXhttpAlpn = <String>{...XhttpAdvancedConfig.alpn.value};
   String _draftXhttpXmuxMaxConcurrency =
@@ -59,6 +67,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _usernameController.text = _sessionManager.currentUser.value ?? '';
     _sessionManager.baseUrl.addListener(_syncBaseUrlFromSession);
     _sessionManager.currentUser.addListener(_syncUsernameFromSession);
+    _socksPortController.text = GlobalState.socksPort.value;
+    _httpPortController.text = GlobalState.httpPort.value;
     _refreshTunStatus();
     _runtimeMcpService.init();
   }
@@ -77,8 +87,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  String _formatTunStatusText(BuildContext context, PacketTunnelStatus status) {
-    final label = switch (status.status) {
+  /// Human-readable tunnel state.
+  ///
+  /// Deliberately omits `status.utunInterfaces`: that list is mostly made up of
+  /// interfaces owned by other software (iCloud Private Relay, other VPNs), so
+  /// showing it here implied we controlled all of them. It remains available in
+  /// the logs for diagnostics.
+  String _tunStatusLabel(BuildContext context, PacketTunnelStatus status) {
+    return switch (status.status) {
       'connected' => context.l10n.get('tunStatusConnected'),
       'connecting' => context.l10n.get('tunStatusConnecting'),
       'disconnected' => context.l10n.get('tunStatusDisconnected'),
@@ -89,10 +105,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'unsupported' => context.l10n.get('tunStatusUnsupported'),
       _ => context.l10n.get('tunStatusUnknown'),
     };
-    final utun = status.utunInterfaces.isNotEmpty
-        ? ' (${status.utunInterfaces.join(', ')})'
-        : '';
-    return '${context.l10n.get('tunStatus')}: $label$utun';
   }
 
   Future<void> _openHelpPage() async {
@@ -141,17 +153,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       addAppLog('✅ 已同步配置文件');
     } catch (e) {
       addAppLog('[错误] 同步失败: $e', level: LogLevel.error);
-    }
-  }
-
-  Future<void> _onSaveConfig() async {
-    addAppLog('开始保存配置...');
-    try {
-      final path = await VpnConfig.getConfigPath();
-      await VpnConfig.saveToFile();
-      addAppLog('✅ 配置已保存到: $path');
-    } catch (e) {
-      addAppLog('[错误] 保存失败: $e', level: LogLevel.error);
     }
   }
 
@@ -374,6 +375,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _onResetAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l10n.get('resetAllConfirmTitle')),
+        content: Text(context.l10n.get('resetAllConfirmBody')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.l10n.get('cancel')),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            // The verb, not "confirm" — the button should say what it does.
+            child: Text(context.l10n.get('reset')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     addAppLog('开始重置配置与文件...');
     try {
       final result = await NativeBridge.resetXrayAndConfig('');
@@ -536,16 +560,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: context.xColors.cardBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(color: context.xColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            context.l10n.get('xhttpAdvancedTitle'),
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.l10n.get('xhttpAdvancedTitle'),
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+              // This card is the one place on the page that does not apply
+              // immediately, so the pending state has to be visible.
+              if (_xhttpAdvancedDirty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: context.xColors.warningBannerBackground,
+                    borderRadius: BorderRadius.circular(999),
+                    border:
+                        Border.all(color: context.xColors.warningBannerBorder),
+                  ),
+                  child: Text(
+                    context.l10n.get('unsavedChanges'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: context.xColors.warningBannerText,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
@@ -654,47 +706,150 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// stretched to the window width.
   static const double _maxContentWidth = 720;
 
-  /// Spacing between groups.
+  /// Spacing between groups inside one tab.
   static const double _groupGap = 24;
 
+  /// One entry per tab: its chrome, and the blocks it owns.
+  ///
+  /// A tab whose blocks are all empty on this platform is dropped along with
+  /// its chip, so no tab can be opened onto a blank page.
+  List<({SettingsTab tab, List<Widget> blocks})> _settingsTabs(
+    BuildContext context, {
+    required bool isMobile,
+  }) {
+    final candidates = <({SettingsTab tab, List<Widget> blocks})>[
+      (
+        tab: SettingsTab(
+          icon: Icons.vpn_key_outlined,
+          label: context.l10n.get('settingsTabConnection'),
+        ),
+        blocks: [
+          _connectionGroup(context, isMobile: isMobile),
+          _proxyPortsCard(context, isMobile: isMobile),
+        ],
+      ),
+      (
+        tab: SettingsTab(
+          icon: Icons.dns_outlined,
+          label: context.l10n.get('settingsTabDns'),
+        ),
+        blocks: [_dnsGroup(context)],
+      ),
+      (
+        tab: SettingsTab(
+          icon: Icons.alt_route,
+          label: context.l10n.get('settingsTabRouting'),
+        ),
+        blocks: [_routingGroup(context, isMobile: isMobile)],
+      ),
+      (
+        tab: SettingsTab(
+          icon: Icons.swap_vert,
+          label: context.l10n.get('settingsTabTransport'),
+        ),
+        blocks: [_buildXhttpAdvancedConfig(context)],
+      ),
+      (
+        tab: SettingsTab(
+          icon: Icons.folder_outlined,
+          label: context.l10n.get('settingsTabConfig'),
+        ),
+        blocks: [
+          _configGroup(context, isMobile: isMobile),
+          _dangerZoneGroup(context),
+        ],
+      ),
+      (
+        tab: SettingsTab(
+          icon: Icons.tune,
+          label: context.l10n.get('settingsTabSystem'),
+        ),
+        blocks: [
+          _systemGroup(context),
+          _developerGroup(context, isMobile: isMobile),
+          _navigationGroup(context, isMobile: isMobile),
+        ],
+      ),
+    ];
+
+    bool renders(Widget block) {
+      if (block is SizedBox) return false;
+      // A group can also be empty from the inside out, when every row it was
+      // given is absent on this platform.
+      if (block is SettingsGroup) return !block.isEmpty;
+      return true;
+    }
+
+    return candidates
+        .map((entry) => (
+              tab: entry.tab,
+              blocks: entry.blocks.where(renders).toList(),
+            ))
+        .where((entry) => entry.blocks.isNotEmpty)
+        .toList();
+  }
+
   Widget _buildSettingsView(BuildContext context, {required bool isMobile}) {
-    final blocks = <Widget>[
-      _routingGroup(context, isMobile: isMobile),
-      _proxyPortsCard(context, isMobile: isMobile),
-      _configGroup(context, isMobile: isMobile),
-      _dnsGroup(context),
-      _buildXhttpAdvancedConfig(context),
-      _connectionGroup(context, isMobile: isMobile),
-      _developerGroup(context, isMobile: isMobile),
-      _navigationGroup(context, isMobile: isMobile),
-      _systemGroup(context),
-    ].where((block) => block is! SizedBox).toList();
+    final cs = Theme.of(context).colorScheme;
+    final xc = context.xColors;
+    final entries = _settingsTabs(context, isMobile: isMobile);
+    final index = _selectedTab.clamp(0, entries.length - 1);
+    final blocks = entries[index].blocks;
 
     return Container(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _maxContentWidth),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.l10n.get('settingsCenter'),
-                  style: TextStyle(
-                    fontSize: isMobile ? 22 : 18,
-                    fontWeight: FontWeight.bold,
+      color: cs.surfaceContainerLow,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The header and tab strip stay put; only the panel scrolls, so
+              // switching tabs never leaves you deep in a scrolled page.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.get('settingsCenter'),
+                      style: TextStyle(
+                        fontSize: isMobile ? 24 : 22,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      context.l10n.get('settingsSubtitle'),
+                      style: TextStyle(fontSize: 13, color: xc.mutedText),
+                    ),
+                    const SizedBox(height: 16),
+                    SettingsTabBar(
+                      tabs: entries.map((e) => e.tab).toList(),
+                      selectedIndex: index,
+                      onSelected: (i) => setState(() => _selectedTab = i),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  key: PageStorageKey<int>(index),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < blocks.length; i++) ...[
+                        if (i > 0) const SizedBox(height: _groupGap),
+                        blocks[i],
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                for (var i = 0; i < blocks.length; i++) ...[
-                  if (i > 0) const SizedBox(height: _groupGap),
-                  blocks[i],
-                ],
-                const SizedBox(height: 32),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -732,7 +887,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     return SettingsGroup(
-      title: context.l10n.get('advancedConfig'),
       children: [
         toggle(
           notifier: GlobalState.sniffingEnabled,
@@ -804,9 +958,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Expanded(
                 child: TextField(
-                  controller: TextEditingController(
-                    text: GlobalState.socksPort.value,
-                  ),
+                  controller: _socksPortController,
                   decoration: InputDecoration(
                     labelText: context.l10n.get('socksPort'),
                     border: OutlineInputBorder(
@@ -820,9 +972,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(width: 16),
               Expanded(
                 child: TextField(
-                  controller: TextEditingController(
-                    text: GlobalState.httpPort.value,
-                  ),
+                  controller: _httpPortController,
                   decoration: InputDecoration(
                     labelText: context.l10n.get('httpPort'),
                     border: OutlineInputBorder(
@@ -842,7 +992,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _configGroup(BuildContext context, {required bool isMobile}) {
     return SettingsGroup(
-      title: context.l10n.get(isMobile ? 'configMgmt' : 'xrayMgmt'),
       children: [
         SettingsRow(
           icon: Icons.sync,
@@ -860,22 +1009,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: context.l10n.get('exportConfig'),
           onTap: _onExportConfig,
         ),
-        // Desktop-only today; kept platform-conditional so this refactor does
-        // not change which controls each platform exposes.
-        if (!isMobile)
-          SettingsRow(
-            icon: Icons.save,
-            kind: SettingsRowKind.action,
-            title: context.l10n.get('saveConfig'),
-            onTap: _onSaveConfig,
-          )
-        else
-          SettingsRow.absent(),
+      ],
+    );
+  }
+
+  /// Irreversible actions, kept in their own group at the end of the tab so
+  /// they never sit in the same rhythm as everyday ones.
+  Widget _dangerZoneGroup(BuildContext context) {
+    return SettingsGroup(
+      title: context.l10n.get('dangerZone'),
+      children: [
         SettingsRow(
           icon: Icons.delete_forever,
           title: context.l10n.get('deleteConfig'),
+          description: context.l10n.get('deleteConfigMeaning'),
           destructive: true,
           onTap: _onDeleteConfig,
+        ),
+        SettingsRow(
+          icon: Icons.restore,
+          title: context.l10n.get('resetAll'),
+          description: context.l10n.get('resetAllMeaning'),
+          destructive: true,
+          onTap: _onResetAll,
         ),
       ],
     );
@@ -883,16 +1039,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _dnsGroup(BuildContext context) {
     return SettingsGroup(
-      title: context.l10n.get('advancedConfig'),
       children: [
         SettingsRow(
           icon: Icons.dns,
           title: context.l10n.get('proxyDnsConfig'),
+          value: DnsConfig.proxyDns1.value,
           onTap: _showProxyDnsDialog,
         ),
         SettingsRow(
           icon: Icons.dns_outlined,
           title: context.l10n.get('directDnsConfig'),
+          value: DnsConfig.directDns1.value,
           onTap: _showDirectDnsDialog,
         ),
         SettingsRow(
@@ -966,7 +1123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.vpn_key,
             kind: SettingsRowKind.toggle,
             title: '隧道模式',
-            description: '启用系统级网络隧道',
+            description: _tunnelRowDescription(context),
             switchValue: enabled,
             onSwitchChanged: (value) {
               setState(() => GlobalState.setTunnelModeEnabled(value));
@@ -978,27 +1135,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SettingsGroup(
-          title: context.l10n.get('configMgmt'),
-          children: [...localProxyRows, tunnelRow],
-        ),
-        // Desktop-only today.
-        if (!isMobile)
-          Padding(
-            padding: const EdgeInsets.only(left: 2, top: 6),
-            child: Text(
-              _formatTunStatusText(context, _tunStatus),
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-      ],
-    );
+    return SettingsGroup(children: [...localProxyRows, tunnelRow]);
+  }
+
+  String _tunnelRowDescription(BuildContext context) {
+    if (_tunStatus.status == 'connected') {
+      return context.l10n.get('tunnelActive');
+    }
+    if (_tunStatus.status == 'unknown') {
+      return '启用系统级网络隧道';
+    }
+    return '${context.l10n.get('tunStatus')}: '
+        '${_tunStatusLabel(context, _tunStatus)}';
   }
 
   Widget _developerGroup(BuildContext context, {required bool isMobile}) {
@@ -1092,12 +1240,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: context.l10n.get('permissionGuide'),
           onTap: _showPermissionGuide,
         ),
-        SettingsRow(
-          icon: Icons.restore,
-          title: context.l10n.get('resetAll'),
-          destructive: true,
-          onTap: _onResetAll,
-        ),
       ],
     );
   }
@@ -1123,6 +1265,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _passwordController.dispose();
     _mfaCodeController.dispose();
     _xhttpXmuxMaxConcurrencyController.dispose();
+    _socksPortController.dispose();
+    _httpPortController.dispose();
     super.dispose();
   }
 
