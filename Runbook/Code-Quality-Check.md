@@ -8,7 +8,7 @@
 ## Step 1：Flutter / Dart 静态分析
 
 ```bash
-cd /path/to/xstream.svc.plus
+cd /path/to/xconnect.svc.plus
 
 # 格式化（修改被格式化的文件）
 dart format .

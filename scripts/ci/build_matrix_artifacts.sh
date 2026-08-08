@@ -25,7 +25,7 @@ case "$platform" in
     pwsh -File ./build_scripts/package_windows_msi.ps1
     ;;
   macos)
-    XSTREAM_SKIP_MACOS_BUILD_LOCK=1 XSTREAM_MACOS_NO_CODESIGN=1 make "build-macos-${arch}"
+    XCONNECT_SKIP_MACOS_BUILD_LOCK=1 XCONNECT_MACOS_NO_CODESIGN=1 make "build-macos-${arch}"
     ;;
   android)
     ./build_scripts/build_android_apk.sh
@@ -34,8 +34,8 @@ case "$platform" in
     IOS_NO_CODESIGN=1 ./build_scripts/build_ios_ipa.sh
     (
       cd build/ios/iphoneos
-      rm -f XConnect.app.zip
-      zip -qry XConnect.app.zip Runner.app
+      rm -f xconnect.app.zip
+      zip -qry xconnect.app.zip Runner.app
     )
     ;;
   *)

@@ -67,8 +67,8 @@
 | _AppLocalizationsDelegate | class | lib/l10n/app_localizations.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | LocalizationExtension | extension | lib/l10n/app_localizations.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | AppColors | class | lib/utils/app_theme.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| XStreamColors | class | lib/utils/app_theme.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| XStreamThemeContext | extension | lib/utils/app_theme.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
+| XConnectColors | class | lib/utils/app_theme.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
+| XConnectThemeContext | extension | lib/utils/app_theme.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | AppTheme | class | lib/utils/app_theme.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 
 ## 函数与方法清单
@@ -309,8 +309,8 @@ Flutter 应用入口、全局初始化、主导航容器与二维码导入入口
 
 | 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
 | --- | --- | --- | --- | --- | --- | --- |
-| lerp | lib/utils/app_theme.dart / XStreamColors | XStreamColors? other, double t | XStreamColors | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 以当前文件职责为准。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| xColors | lib/utils/app_theme.dart / XStreamThemeContext | 无 | XStreamColors | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 以当前文件职责为准。 | 由 Flutter 业务层、页面或桥接层调用。 |
+| lerp | lib/utils/app_theme.dart / XConnectColors | XConnectColors? other, double t | XConnectColors | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 以当前文件职责为准。 | 由 Flutter 业务层、页面或桥接层调用。 |
+| xColors | lib/utils/app_theme.dart / XConnectThemeContext | 无 | XConnectColors | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 以当前文件职责为准。 | 由 Flutter 业务层、页面或桥接层调用。 |
 | _inputDecoration | lib/utils/app_theme.dart / AppTheme | ColorScheme cs | InputDecorationTheme | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 以当前文件职责为准。 | 由 Flutter 业务层、页面或桥接层调用。 |
 | _dialogTheme | lib/utils/app_theme.dart / AppTheme | ColorScheme cs | DialogThemeData | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 以当前文件职责为准。 | 由 Flutter 业务层、页面或桥接层调用。 |
 | _appBarTheme | lib/utils/app_theme.dart / AppTheme | ColorScheme cs | AppBarTheme | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 以当前文件职责为准。 | 由 Flutter 业务层、页面或桥接层调用。 |
@@ -328,7 +328,7 @@ Flutter 应用入口、全局初始化、主导航容器与二维码导入入口
 | `MainPage` -> `GlobalState` | 导航容器通过 `ValueNotifier` 和监听器驱动 UI、节点状态、连接模式与语言切换。 |
 | 页面 -> `NativeBridge` / 服务层 | 页面自身不直接管理 FFI 或平台 API，交互都经 `NativeBridge`、`VpnConfig`、`SessionManager`、`DesktopSyncService` 等服务完成。 |
 | 页面 -> `context.l10n` | 所有用户可见文案都应通过 `AppLocalizations` 的 key 查询，避免散落硬编码。 |
-| Widget -> Theme 扩展 | 自定义组件通过 `AppTheme` / `XStreamColors` 使用语义色，而不是直接耦合具体色值。 |
+| Widget -> Theme 扩展 | 自定义组件通过 `AppTheme` / `XConnectColors` 使用语义色，而不是直接耦合具体色值。 |
 
 
 ## 已知约束 / 副作用 / 线程与平台注意点

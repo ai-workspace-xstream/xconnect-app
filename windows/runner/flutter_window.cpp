@@ -58,7 +58,7 @@ bool FlutterWindow::OnCreate() {
   nid_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
   nid_.uCallbackMessage = kTrayMessage;
   nid_.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
-  lstrcpyW(nid_.szTip, L"xstream");
+  lstrcpyW(nid_.szTip, L"xconnect");
   Shell_NotifyIcon(NIM_ADD, &nid_);
 
   RECT frame = GetClientArea();
@@ -101,7 +101,7 @@ void FlutterWindow::OnDestroy() {
 void FlutterWindow::RegisterNativeChannel() {
   native_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-          flutter_controller_->engine()->messenger(), "com.xstream/native",
+          flutter_controller_->engine()->messenger(), "com.xconnect/native",
           &flutter::StandardMethodCodec::GetInstance());
   native_channel_->SetMethodCallHandler(
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,

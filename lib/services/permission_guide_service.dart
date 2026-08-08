@@ -86,7 +86,7 @@ class PermissionGuideService {
 
   static Future<PermissionCheckItem> _checkAppSupportWritable() async {
     try {
-      final dir = await Directory.systemTemp.createTemp('xstream-perm-check-');
+      final dir = await Directory.systemTemp.createTemp('xconnect-perm-check-');
       final file = File('${dir.path}/rw-check.txt');
       await file.writeAsString('ok');
       final readBack = await file.readAsString();
@@ -156,7 +156,7 @@ class PermissionGuideService {
           detail: detail,
           suggestion: status.privilegeReady
               ? ''
-              : 'Install xstream-net-helper with the Linux package and ensure pkexec/polkit are available in the desktop session.',
+              : 'Install xconnect-net-helper with the Linux package and ensure pkexec/polkit are available in the desktop session.',
         );
       } catch (e) {
         return PermissionCheckItem(
@@ -164,7 +164,7 @@ class PermissionGuideService {
           passed: false,
           detail: 'Linux tunnel privilege check failed: $e',
           suggestion:
-            'Install the desktop package, then verify pkexec and the xstream-net-helper helper are present.',
+            'Install the desktop package, then verify pkexec and the xconnect-net-helper helper are present.',
         );
       }
     }
@@ -217,8 +217,8 @@ class PermissionGuideService {
           detail: 'Packet Tunnel last error: $lastError',
           suggestion: permissionDenied
               ? (Platform.isAndroid
-                    ? 'Approve the Android VPN permission for Xstream, or reopen VPN settings and retry.'
-                    : 'Open Privacy & Security, approve System VPN permission for Xstream, then retry.')
+                    ? 'Approve the Android VPN permission for XConnect, or reopen VPN settings and retry.'
+                    : 'Open Privacy & Security, approve System VPN permission for XConnect, then retry.')
               : 'Review the Packet Tunnel error details, then retry after fixing authorization or configuration.',
         );
       }
@@ -310,7 +310,7 @@ class PermissionGuideService {
           '${Platform.environment['HOME'] ?? ''}/Library/LaunchAgents';
       final dir = Directory(launchAgentsDir);
       await dir.create(recursive: true);
-      final probe = File('${dir.path}/.xstream_perm_probe');
+      final probe = File('${dir.path}/.xconnect_perm_probe');
       await probe.writeAsString('probe');
       await probe.delete();
 

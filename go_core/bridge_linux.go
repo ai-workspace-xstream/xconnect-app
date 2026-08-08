@@ -160,18 +160,18 @@ func linuxConfigDir() string {
 	dir, err := os.UserConfigDir()
 	if err != nil || dir == "" {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", "xstream")
+		return filepath.Join(home, ".config", "xconnect")
 	}
-	return filepath.Join(dir, "xstream")
+	return filepath.Join(dir, "xconnect")
 }
 
 func linuxAutostartDesktopFile() string {
 	dir, err := os.UserConfigDir()
 	if err != nil || dir == "" {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", "autostart", "xstream.desktop")
+		return filepath.Join(home, ".config", "autostart", "xconnect.desktop")
 	}
-	return filepath.Join(dir, "autostart", "xstream.desktop")
+	return filepath.Join(dir, "autostart", "xconnect.desktop")
 }
 
 func linuxProxySnapshotPath() string {
@@ -180,10 +180,10 @@ func linuxProxySnapshotPath() string {
 
 func linuxTunnelHelperPath() string {
 	candidates := []string{
-		"/usr/libexec/xstream/xstream-net-helper",
-		filepath.Join(filepath.Dir(os.Args[0]), "xstream-net-helper"),
-		filepath.Join(filepath.Dir(os.Args[0]), "..", "libexec", "xstream", "xstream-net-helper"),
-		"scripts/linux/xstream-net-helper",
+		"/usr/libexec/xconnect/xconnect-net-helper",
+		filepath.Join(filepath.Dir(os.Args[0]), "xconnect-net-helper"),
+		filepath.Join(filepath.Dir(os.Args[0]), "..", "libexec", "xconnect", "xconnect-net-helper"),
+		"scripts/linux/xconnect-net-helper",
 	}
 	for _, candidate := range candidates {
 		if candidate == "" {
@@ -208,7 +208,7 @@ func setAutostartEnabled(enable bool, execPath string) error {
 	desktopFile := linuxAutostartDesktopFile()
 	if enable {
 		if execPath == "" {
-			execPath = "/opt/xstream/xstream"
+			execPath = "/opt/xconnect/xconnect"
 		}
 		if err := os.MkdirAll(filepath.Dir(desktopFile), 0755); err != nil {
 			return err
@@ -217,10 +217,10 @@ func setAutostartEnabled(enable bool, execPath string) error {
 			"[Desktop Entry]",
 			"Type=Application",
 			"Version=1.0",
-			"Name=Xstream",
-			"Comment=Xstream desktop launcher",
+			"Name=XConnect",
+			"Comment=XConnect desktop launcher",
 			"Exec=" + execPath,
-			"Icon=xstream",
+			"Icon=xconnect",
 			"Terminal=false",
 			"Categories=Network;Utility;",
 			"X-GNOME-Autostart-enabled=true",
@@ -427,7 +427,7 @@ func defaultIfEmpty(value string, fallback string) string {
 func handleTunnelHelper(action string, mode string) (string, error) {
 	helper := linuxTunnelHelperPath()
 	if helper == "" {
-		return "", errors.New("xstream-net-helper not found")
+		return "", errors.New("xconnect-net-helper not found")
 	}
 	if _, err := exec.LookPath("pkexec"); err != nil {
 		return helper, errors.New("pkexec not found")
@@ -491,7 +491,7 @@ func DesktopIntegrationCommand(requestC *C.char) *C.char {
 		resp.HelperPath = helper
 		if helper == "" {
 			resp.OK = false
-			resp.Message = "xstream-net-helper not found"
+			resp.Message = "xconnect-net-helper not found"
 			break
 		}
 		if _, err := exec.LookPath("pkexec"); err != nil {
@@ -521,7 +521,7 @@ func DesktopIntegrationCommand(requestC *C.char) *C.char {
 			resp.Message = "tunnel helper stopped"
 		}
 	case "notify":
-		if err := notifyDesktop(defaultIfEmpty(req.Title, "Xstream"), req.Body); err != nil {
+		if err := notifyDesktop(defaultIfEmpty(req.Title, "XConnect"), req.Body); err != nil {
 			resp.OK = false
 			resp.Message = err.Error()
 		} else {
@@ -685,7 +685,7 @@ var trayOnce sync.Once
 func monitorMinimize() {
 	for {
 		if C.getMainWin() == 0 {
-			cname := C.CString("xstream")
+			cname := C.CString("xconnect")
 			C.findWindow(cname)
 			C.free(unsafe.Pointer(cname))
 		}
@@ -715,7 +715,7 @@ func InitTray() {
 						select {
 						case <-mShow.ClickedCh:
 							if C.getMainWin() == 0 {
-								cname := C.CString("xstream")
+								cname := C.CString("xconnect")
 								C.findWindow(cname)
 								C.free(unsafe.Pointer(cname))
 							}

@@ -31,8 +31,8 @@ class AppColors {
 
 /// Theme extension to expose extra semantic colors through the theme.
 @immutable
-class XStreamColors extends ThemeExtension<XStreamColors> {
-  const XStreamColors({
+class XConnectColors extends ThemeExtension<XConnectColors> {
+  const XConnectColors({
     required this.brand,
     required this.success,
     required this.warning,
@@ -62,7 +62,7 @@ class XStreamColors extends ThemeExtension<XStreamColors> {
   final Color warningBannerBorder;
   final Color warningBannerText;
 
-  static const light = XStreamColors(
+  static const light = XConnectColors(
     brand: AppColors.brand,
     success: AppColors.success,
     warning: AppColors.warning,
@@ -78,7 +78,7 @@ class XStreamColors extends ThemeExtension<XStreamColors> {
     warningBannerText: Color(0xFF664D03),
   );
 
-  static const dark = XStreamColors(
+  static const dark = XConnectColors(
     brand: AppColors.brandDark,
     success: AppColors.successDark,
     warning: AppColors.warningDark,
@@ -95,7 +95,7 @@ class XStreamColors extends ThemeExtension<XStreamColors> {
   );
 
   @override
-  XStreamColors copyWith({
+  XConnectColors copyWith({
     Color? brand,
     Color? success,
     Color? warning,
@@ -110,7 +110,7 @@ class XStreamColors extends ThemeExtension<XStreamColors> {
     Color? warningBannerBorder,
     Color? warningBannerText,
   }) {
-    return XStreamColors(
+    return XConnectColors(
       brand: brand ?? this.brand,
       success: success ?? this.success,
       warning: warning ?? this.warning,
@@ -129,9 +129,9 @@ class XStreamColors extends ThemeExtension<XStreamColors> {
   }
 
   @override
-  XStreamColors lerp(XStreamColors? other, double t) {
-    if (other is! XStreamColors) return this;
-    return XStreamColors(
+  XConnectColors lerp(XConnectColors? other, double t) {
+    if (other is! XConnectColors) return this;
+    return XConnectColors(
       brand: Color.lerp(brand, other.brand, t)!,
       success: Color.lerp(success, other.success, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
@@ -153,9 +153,9 @@ class XStreamColors extends ThemeExtension<XStreamColors> {
 }
 
 /// Convenience extension so any widget can use `context.xColors`.
-extension XStreamThemeContext on BuildContext {
-  XStreamColors get xColors =>
-      Theme.of(this).extension<XStreamColors>() ?? XStreamColors.light;
+extension XConnectThemeContext on BuildContext {
+  XConnectColors get xColors =>
+      Theme.of(this).extension<XConnectColors>() ?? XConnectColors.light;
 }
 
 class AppTheme {
@@ -350,7 +350,7 @@ class AppTheme {
       color: _lightColorScheme.outlineVariant,
       thickness: 1,
     ),
-    extensions: const <ThemeExtension<dynamic>>[XStreamColors.light],
+    extensions: const <ThemeExtension<dynamic>>[XConnectColors.light],
   );
 
   // ── DARK THEME ────────────────────────────────────────────────
@@ -372,6 +372,6 @@ class AppTheme {
       color: _darkColorScheme.outlineVariant,
       thickness: 1,
     ),
-    extensions: const <ThemeExtension<dynamic>>[XStreamColors.dark],
+    extensions: const <ThemeExtension<dynamic>>[XConnectColors.dark],
   );
 }

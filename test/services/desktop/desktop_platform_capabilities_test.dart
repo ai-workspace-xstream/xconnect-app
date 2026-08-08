@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/desktop/desktop_platform_capabilities.dart';
+import 'package:xconnect/services/desktop/desktop_platform_capabilities.dart';
 
 void main() {
   group('DesktopPlatformCapabilities', () {

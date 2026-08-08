@@ -1,6 +1,6 @@
 # VpnConfig 与节点持久化说明
 
-本文对齐当前实现，说明 Xstream 的节点模型、多节点语义、持久化布局，以及运行时 `config.json` 的生成方式。
+本文对齐当前实现，说明 XConnect 的节点模型、多节点语义、持久化布局，以及运行时 `config.json` 的生成方式。
 
 适用范围：
 
@@ -11,13 +11,13 @@
 
 ## 1. 当前行为概览
 
-Xstream 当前支持：
+XConnect 当前支持：
 
 - 多节点保存
 - 多节点切换
 - 节点导入、导出、删除
 
-Xstream 当前不支持：
+XConnect 当前不支持：
 
 - 多节点同时运行
 - 多个并行活跃的 System VPN / Packet Tunnel 会话

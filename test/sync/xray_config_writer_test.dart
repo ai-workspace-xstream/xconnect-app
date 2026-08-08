@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/sync/xray_config_writer.dart';
+import 'package:xconnect/services/sync/xray_config_writer.dart';
 
 void main() {
   group('XrayConfigWriter.extractOutboundIdentity', () {

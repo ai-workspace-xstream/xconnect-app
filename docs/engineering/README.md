@@ -1,10 +1,10 @@
 # 工程实现参考总索引
 
-本目录补齐 Xstream 当前仓库的工程实现参考，目标是把“设计 → 模块 → 文件 → 类/函数/接口”串起来，作为开发、重构、排障和 AI 辅助编码时的第一入口。
+本目录补齐 XConnect 当前仓库的工程实现参考，目标是把“设计 → 模块 → 文件 → 类/函数/接口”串起来，作为开发、重构、排障和 AI 辅助编码时的第一入口。
 
 ## 系统设计概览
 
-Xstream 当前实现由 5 个层次构成：
+XConnect 当前实现由 5 个层次构成：
 
 1. Flutter 壳层与界面：`lib/main.dart`、`lib/screens/*`、`lib/widgets/*`、本地化与主题。
 2. Flutter 运行时服务：`lib/services/*`、`lib/utils/global_config.dart`、模板、日志和配置生成。

@@ -9,7 +9,7 @@ import '../../utils/tun_config_guard.dart';
 
 class XrayConfigWriter {
   static const _defaultNodeName = 'Desktop Sync';
-  static const _defaultServiceName = 'xstream.desktop.sync';
+  static const _defaultServiceName = 'xconnect.desktop.sync';
   static const _defaultCountryCode = 'SYNC';
 
   static Future<String> writeConfig(String json) async {

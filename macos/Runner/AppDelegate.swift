@@ -42,10 +42,10 @@ class AppDelegate: FlutterAppDelegate {
     if let window = mainFlutterWindow,
        let controller = window.contentViewController as? FlutterViewController {
 
-      let channel = FlutterMethodChannel(name: "com.xstream/native", binaryMessenger: controller.engine.binaryMessenger)
+      let channel = FlutterMethodChannel(name: "plus.svc.xconnect/native", binaryMessenger: controller.engine.binaryMessenger)
       nativeChannel = channel
 
-      let bundleId = Bundle.main.bundleIdentifier ?? "com.xstream"
+      let bundleId = Bundle.main.bundleIdentifier ?? "com.xconnect"
 
       channel.setMethodCallHandler { [self] call, result in
         switch call.method {
@@ -308,7 +308,7 @@ class AppDelegate: FlutterAppDelegate {
 
   private func resolveRulesFile() -> URL? {
     let fileManager = FileManager.default
-    let bundleId = Bundle.main.bundleIdentifier ?? "com.xstream"
+    let bundleId = Bundle.main.bundleIdentifier ?? "com.xconnect"
     guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
       return nil
     }

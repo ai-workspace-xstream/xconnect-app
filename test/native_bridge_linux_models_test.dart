@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/utils/native_bridge.dart';
+import 'package:xconnect/utils/native_bridge.dart';
 
 void main() {
   test('LinuxDesktopIntegrationStatus parses bridge payload', () {

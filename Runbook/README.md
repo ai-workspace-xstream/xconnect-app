@@ -1,6 +1,6 @@
 # Runbook 目录
 
-本目录包含 Xstream 项目的运维手册和故障排查文档。
+本目录包含 XConnect 项目的运维手册和故障排查文档。
 
 ---
 
@@ -48,6 +48,6 @@
 
 ## 🔗 相关参考
 
-- 开发约束规范：[`skills/xstream-dev-constraints/SKILL.md`](../skills/xstream-dev-constraints/SKILL.md)
+- 开发约束规范：[`skills/xconnect-dev-constraints/SKILL.md`](../skills/xconnect-dev-constraints/SKILL.md)
 - 分支策略：[`skills/release-branch-policy/SKILL.md`](../skills/release-branch-policy/SKILL.md)
 - 全局协作说明：[`AGENTS.md`](../AGENTS.md)

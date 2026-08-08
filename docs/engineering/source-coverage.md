@@ -76,10 +76,10 @@
 | macos/Runner/NativeBridge+SystemProxy.swift | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | macos/Runner/NativeBridge+XrayInit.swift | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | macos/PacketTunnel/PacketTunnelProvider.swift | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| android/app/src/main/kotlin/com/example/xstream/MainActivity.kt | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| android/app/src/main/kotlin/com/example/xstream/NativePacketTunnelBridge.kt | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| android/app/src/main/kotlin/com/example/xstream/PacketTunnelController.kt | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| android/app/src/main/kotlin/com/example/xstream/XstreamPacketTunnelService.kt | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
+| android/app/src/main/kotlin/com/example/xconnect/MainActivity.kt | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
+| android/app/src/main/kotlin/com/example/xconnect/NativePacketTunnelBridge.kt | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
+| android/app/src/main/kotlin/com/example/xconnect/PacketTunnelController.kt | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
+| android/app/src/main/kotlin/com/example/xconnect/XConnectPacketTunnelService.kt | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | android/app/src/main/cpp/packet_tunnel_jni.cpp | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | linux/main.cc | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | linux/my_application.cc | docs/engineering/native-platform-hosts.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |

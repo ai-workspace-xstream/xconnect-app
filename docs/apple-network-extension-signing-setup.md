@@ -2,12 +2,12 @@
 
 本文档说明以下环境变量对应的 Apple 能力申请与配置流程：
 
-- `XSTREAM_APPLE_TEAM_ID`
-- `XSTREAM_APP_GROUP_ID`
-- `XSTREAM_MACOS_BUNDLE_ID`
-- `XSTREAM_IOS_BUNDLE_ID`
-- `XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID`
-- `XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID`
+- `XCONNECT_APPLE_TEAM_ID`
+- `XCONNECT_APP_GROUP_ID`
+- `XCONNECT_MACOS_BUNDLE_ID`
+- `XCONNECT_IOS_BUNDLE_ID`
+- `XCONNECT_MACOS_PACKET_TUNNEL_BUNDLE_ID`
+- `XCONNECT_IOS_PACKET_TUNNEL_BUNDLE_ID`
 
 参考模板：项目根目录 `.env.example`。
 
@@ -22,22 +22,22 @@
 建议先在 `.env` 中完成标识规划，再进入 Apple 后台创建能力：
 
 ```dotenv
-XSTREAM_APPLE_TEAM_ID=YOUR_TEAM_ID
-XSTREAM_APP_GROUP_ID=group.plus.svc.xconnect
+XCONNECT_APPLE_TEAM_ID=YOUR_TEAM_ID
+XCONNECT_APP_GROUP_ID=group.plus.svc.xconnect
 
-XSTREAM_MACOS_BUNDLE_ID=plus.svc.xconnect
-XSTREAM_IOS_BUNDLE_ID=plus.svc.xconnect
+XCONNECT_MACOS_BUNDLE_ID=plus.svc.xconnect
+XCONNECT_IOS_BUNDLE_ID=plus.svc.xconnect
 
-XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
-XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
+XCONNECT_MACOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
+XCONNECT_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
 ```
 
 当前 iOS/macOS App Store Connect 记录：Apple ID `6794950499`，SKU `svc_xconnect_app_v1`，对应主 App Bundle ID `plus.svc.xconnect`。
 
 必须满足：
 
-1. 主 App 与 Packet Tunnel Extension 使用同一 `XSTREAM_APPLE_TEAM_ID`。
-2. 主 App 与 Packet Tunnel Extension 共享同一 `XSTREAM_APP_GROUP_ID`。
+1. 主 App 与 Packet Tunnel Extension 使用同一 `XCONNECT_APPLE_TEAM_ID`。
+2. 主 App 与 Packet Tunnel Extension 共享同一 `XCONNECT_APP_GROUP_ID`。
 3. `PacketTunnelProviderBundleId` 必须精确指向对应平台的 Packet Tunnel 扩展 Bundle ID。
 
 ## 3. 在 Apple Developer 申请能力
@@ -63,7 +63,7 @@ XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID=plus.svc.xconnect.PacketTunnel
 
 ### 3.3 创建并绑定 App Group
 
-1. 在 Developer 后台创建 App Group（如 `group.com.example.xstream`）。
+1. 在 Developer 后台创建 App Group（如 `group.com.example.xconnect`）。
 2. 将该 App Group 同时绑定到主 App ID 与 Packet Tunnel Extension App ID。
 
 ## 4. 证书与 Provisioning Profiles
@@ -101,7 +101,7 @@ open ios/Runner.xcworkspace
 
 ## 6. 运行时权限行为
 
-Xstream 运行时会通过 `NETunnelProviderManager` 注册并启动 Packet Tunnel 配置。需要注意：
+XConnect 运行时会通过 `NETunnelProviderManager` 注册并启动 Packet Tunnel 配置。需要注意：
 
 1. App 可以自动注册配置（`load/saveToPreferences`）。
 2. 系统授权由用户在系统弹窗中确认，不能由 App 静默放行。

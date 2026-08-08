@@ -12,7 +12,7 @@
 
 本案例适用于：
 
-- Xstream 已成功建立 System VPN / Secure Tunnel
+- XConnect 已成功建立 System VPN / Secure Tunnel
 - 用户反馈“代理模式正常，Tunnel 模式异常”
 - 怀疑是 Packet Tunnel、DNS、QUIC / HTTP3、站点 challenge 或上游传输差异
 
@@ -72,7 +72,7 @@
 
 ```zsh
 scutil --nc list
-scutil --nc status "Xstream"
+scutil --nc status "XConnect"
 route -n get default
 ps -axo pid,ppid,etime,command | rg 'PacketTunnel|xray'
 ```
@@ -153,7 +153,7 @@ tail -n 300 "$BASE/logs/xray-runtime.log"
 
 ## 5. 推荐使用 MCP 自检工具
 
-如果已启用 `xstream-mcp-server`，优先使用：
+如果已启用 `xconnect-mcp-server`，优先使用：
 
 - `runtime_config_check`
 - `runtime_log_check`

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xstream/services/vpn_config_service.dart';
-import 'package:xstream/utils/global_config.dart';
+import 'package:xconnect/services/vpn_config_service.dart';
+import 'package:xconnect/utils/global_config.dart';
 
 Map<String, dynamic> _proxyStreamSettingsFromConfig(String jsonText) {
   final obj = jsonDecode(jsonText) as Map<String, dynamic>;
@@ -167,7 +167,7 @@ void main() {
     test('rewrites a legacy xhttp node file', () async {
       XhttpAdvancedConfig.setXmuxMaxConcurrency('4-8');
       final tempDir = await Directory.systemTemp.createTemp(
-        'xstream-xhttp-migration-',
+        'xconnect-xhttp-migration-',
       );
       addTearDown(() => tempDir.delete(recursive: true));
       final configFile = File('${tempDir.path}/node-legacy-config.json');

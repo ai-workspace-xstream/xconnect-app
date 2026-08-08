@@ -34,11 +34,11 @@ Options:
   -h, --help                   Show this help
 
 Required .env fields:
-  XSTREAM_APPLE_TEAM_ID
-  XSTREAM_IOS_BUNDLE_ID
-  XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID
-  XSTREAM_MACOS_BUNDLE_ID
-  XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID
+  XCONNECT_APPLE_TEAM_ID
+  XCONNECT_IOS_BUNDLE_ID
+  XCONNECT_IOS_PACKET_TUNNEL_BUNDLE_ID
+  XCONNECT_MACOS_BUNDLE_ID
+  XCONNECT_MACOS_PACKET_TUNNEL_BUNDLE_ID
   ASC_KEY_ID
   ASC_ISSUER_ID
   ASC_KEY_PATH
@@ -135,10 +135,10 @@ validate_project_binding() {
   mac_main="$(sed -nE 's/^[[:space:]]*PRODUCT_BUNDLE_IDENTIFIER[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\1/p' "$ROOT_DIR/macos/Runner/Configs/AppInfo.xcconfig" | head -n1 || true)"
   mac_packet="$(sed -nE 's/^[[:space:]]*PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);/\1/p' "$ROOT_DIR/macos/Runner.xcodeproj/project.pbxproj" | grep -E '\.PacketTunnel$' | head -n1 || true)"
 
-  [[ "$ios_main" == "$XSTREAM_IOS_BUNDLE_ID" ]] || fail "iOS bundle id mismatch (project=$ios_main env=$XSTREAM_IOS_BUNDLE_ID)"
-  [[ "$ios_packet" == "$XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID" ]] || fail "iOS packet tunnel bundle id mismatch (project=$ios_packet env=$XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID)"
-  [[ "$mac_main" == "$XSTREAM_MACOS_BUNDLE_ID" ]] || fail "macOS bundle id mismatch (project=$mac_main env=$XSTREAM_MACOS_BUNDLE_ID)"
-  [[ "$mac_packet" == "$XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID" ]] || fail "macOS packet tunnel bundle id mismatch (project=$mac_packet env=$XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID)"
+  [[ "$ios_main" == "$XCONNECT_IOS_BUNDLE_ID" ]] || fail "iOS bundle id mismatch (project=$ios_main env=$XCONNECT_IOS_BUNDLE_ID)"
+  [[ "$ios_packet" == "$XCONNECT_IOS_PACKET_TUNNEL_BUNDLE_ID" ]] || fail "iOS packet tunnel bundle id mismatch (project=$ios_packet env=$XCONNECT_IOS_PACKET_TUNNEL_BUNDLE_ID)"
+  [[ "$mac_main" == "$XCONNECT_MACOS_BUNDLE_ID" ]] || fail "macOS bundle id mismatch (project=$mac_main env=$XCONNECT_MACOS_BUNDLE_ID)"
+  [[ "$mac_packet" == "$XCONNECT_MACOS_PACKET_TUNNEL_BUNDLE_ID" ]] || fail "macOS packet tunnel bundle id mismatch (project=$mac_packet env=$XCONNECT_MACOS_PACKET_TUNNEL_BUNDLE_ID)"
 }
 
 clean_artifacts() {
@@ -179,7 +179,7 @@ build_macos_archive_export() {
   <key>signingStyle</key>
   <string>automatic</string>
   <key>teamID</key>
-  <string>${XSTREAM_APPLE_TEAM_ID}</string>
+  <string>${XCONNECT_APPLE_TEAM_ID}</string>
   <key>uploadSymbols</key>
   <true/>
 </dict>
@@ -272,11 +272,11 @@ require_cmd xcrun
 require_cmd xcodebuild
 
 load_env_file
-require_env XSTREAM_APPLE_TEAM_ID
-require_env XSTREAM_IOS_BUNDLE_ID
-require_env XSTREAM_IOS_PACKET_TUNNEL_BUNDLE_ID
-require_env XSTREAM_MACOS_BUNDLE_ID
-require_env XSTREAM_MACOS_PACKET_TUNNEL_BUNDLE_ID
+require_env XCONNECT_APPLE_TEAM_ID
+require_env XCONNECT_IOS_BUNDLE_ID
+require_env XCONNECT_IOS_PACKET_TUNNEL_BUNDLE_ID
+require_env XCONNECT_MACOS_BUNDLE_ID
+require_env XCONNECT_MACOS_PACKET_TUNNEL_BUNDLE_ID
 require_env ASC_KEY_ID
 require_env ASC_ISSUER_ID
 require_env ASC_KEY_PATH

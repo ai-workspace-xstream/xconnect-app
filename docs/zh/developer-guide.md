@@ -6,21 +6,21 @@
 
 ## 与当前代码对齐的说明
 
-- 文档目标仓库: `xstream.svc.plus`
+- 文档目标仓库: `xconnect.svc.plus`
 - 仓库类型: `flutter-app`
-- 构建与运行依据: pubspec.yaml (`xstream`)
+- 构建与运行依据: pubspec.yaml (`xconnect`)
 - 主要实现与运维目录: `scripts/`, `test/`, `lib/`, `ios/`, `android/`, `web/`
 - `package.json` 脚本快照: No package.json scripts were detected.
 
 ## 工程实现参考入口
 
-- 总入口: [docs/engineering/README.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xstream-vpn/docs/engineering/README.md)
-- 覆盖矩阵: [docs/engineering/source-coverage.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xstream-vpn/docs/engineering/source-coverage.md)
-- Flutter 壳层与界面: [docs/engineering/flutter-shell-ui.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xstream-vpn/docs/engineering/flutter-shell-ui.md)
-- Flutter 运行时服务: [docs/engineering/flutter-runtime-services.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xstream-vpn/docs/engineering/flutter-runtime-services.md)
-- Flutter 桥接与契约: [docs/engineering/flutter-bridge-contracts.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xstream-vpn/docs/engineering/flutter-bridge-contracts.md)
-- Go Core FFI: [docs/engineering/go-core-ffi.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xstream-vpn/docs/engineering/go-core-ffi.md)
-- 原生宿主与 Packet Tunnel: [docs/engineering/native-platform-hosts.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xstream-vpn/docs/engineering/native-platform-hosts.md)
+- 总入口: [docs/engineering/README.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xconnect-vpn/docs/engineering/README.md)
+- 覆盖矩阵: [docs/engineering/source-coverage.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xconnect-vpn/docs/engineering/source-coverage.md)
+- Flutter 壳层与界面: [docs/engineering/flutter-shell-ui.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xconnect-vpn/docs/engineering/flutter-shell-ui.md)
+- Flutter 运行时服务: [docs/engineering/flutter-runtime-services.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xconnect-vpn/docs/engineering/flutter-runtime-services.md)
+- Flutter 桥接与契约: [docs/engineering/flutter-bridge-contracts.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xconnect-vpn/docs/engineering/flutter-bridge-contracts.md)
+- Go Core FFI: [docs/engineering/go-core-ffi.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xconnect-vpn/docs/engineering/go-core-ffi.md)
+- 原生宿主与 Packet Tunnel: [docs/engineering/native-platform-hosts.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xconnect-vpn/docs/engineering/native-platform-hosts.md)
 
 ## 需要继续归并的现有文档
 

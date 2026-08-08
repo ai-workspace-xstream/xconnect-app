@@ -87,7 +87,7 @@ class MyApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          title: 'XStream',
+          title: 'XConnect',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           home: const MainPage(),

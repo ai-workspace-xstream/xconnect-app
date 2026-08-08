@@ -7,10 +7,10 @@
 
 namespace {
 constexpr const wchar_t kSingleInstanceMutexName[] =
-    L"Local\\plus.svc.xstream.single-instance";
+    L"Local\\plus.svc.xconnect.single-instance";
 
 HWND FindExistingInstanceWindow() {
-  return ::FindWindowW(nullptr, L"xstream");
+  return ::FindWindowW(nullptr, L"xconnect");
 }
 
 void ActivateExistingInstance(HWND window) {
@@ -60,7 +60,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"xstream", origin, size)) {
+  if (!window.Create(L"xconnect", origin, size)) {
     ::CloseHandle(instance_mutex);
     ::CoUninitialize();
     return EXIT_FAILURE;

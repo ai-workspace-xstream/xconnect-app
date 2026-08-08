@@ -1,6 +1,6 @@
 # Agents Guidelines
 
-本文件为整个仓库的协作说明，适用于 `Xstream/` 下的所有文件与子目录。请在修改代码或文档前阅读并遵循以下约定。
+本文件为整个仓库的协作说明，适用于 `XConnect/` 下的所有文件与子目录。请在修改代码或文档前阅读并遵循以下约定。
 
 > **⚠️ AI-Critical:** Any AI-generated output that violates Section 5 (Compliance) must be treated as invalid and rejected.
 
@@ -113,7 +113,7 @@ make sync-macos-config
 
 ### 5.1 产品定位
 
-Xstream 是面向 **macOS App Store** 发行的 **合法系统级 VPN / Secure Network Tunnel**。
+XConnect 是面向 **macOS App Store** 发行的 **合法系统级 VPN / Secure Network Tunnel**。
 
 合法用途：网络安全 · 隐私保护 · 连接稳定性 · 网络加速
 

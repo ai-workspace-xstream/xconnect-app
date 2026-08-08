@@ -16,7 +16,7 @@ uname_m="${UNAME_M:-$(uname -m)}"
 branch="${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
 build_id="${BUILD_ID:-$(git rev-parse --short HEAD)}"
 build_date="${BUILD_DATE:-$(date '+%Y-%m-%d')}"
-macos_app_bundle="${MACOS_APP_BUNDLE:-build/macos/Build/Products/Release/XConnect.app}"
+macos_app_bundle="${MACOS_APP_BUNDLE:-build/macos/Build/Products/Release/xconnect.app}"
 macos_build_lock_dir="${MACOS_BUILD_LOCK_DIR:-build/.macos-build.lock}"
 macos_build_lock_pid_file="${MACOS_BUILD_LOCK_PID_FILE:-${macos_build_lock_dir}/pid}"
 dmg_name="${DMG_NAME:-xconnect-dev-${build_id}.dmg}"
@@ -35,7 +35,7 @@ run_macos_build() {
   local skip_msg="$6"
   local codesign_env=()
 
-  if [[ "${XSTREAM_MACOS_NO_CODESIGN:-0}" == "1" ]]; then
+  if [[ "${XCONNECT_MACOS_NO_CODESIGN:-0}" == "1" ]]; then
     # CI packaging builds should not require Apple provisioning profiles.
     # Disable Xcode signing so `flutter build macos` can succeed without profiles.
     codesign_env=(
@@ -53,12 +53,12 @@ run_macos_build() {
 
   echo "Building for macOS (${human_arch})..."
 
-  if [[ "${XSTREAM_SKIP_MACOS_BUILD_LOCK:-0}" == "1" ]]; then
+  if [[ "${XCONNECT_SKIP_MACOS_BUILD_LOCK:-0}" == "1" ]]; then
     echo "Skipping macOS build lock for CI execution."
   else
 
     if [[ "$(id -u)" == "0" ]]; then
-      if [[ "${XSTREAM_SUDO_DELEGATED:-0}" == "1" ]]; then
+      if [[ "${XCONNECT_SUDO_DELEGATED:-0}" == "1" ]]; then
         echo "❌ Failed to switch from root to regular user. Please run build as a regular user shell."
         return 1
       fi
@@ -75,7 +75,7 @@ run_macos_build() {
       done
 
       exec sudo -H -u "$SUDO_USER" env \
-        XSTREAM_SUDO_DELEGATED=1 \
+        XCONNECT_SUDO_DELEGATED=1 \
         PATH="$PATH" \
         FLUTTER="$flutter_bin" \
         UNAME_S="$uname_s" \
@@ -145,7 +145,7 @@ run_macos_build() {
   echo "Syncing Flutter build config (pubspec.yaml → Generated.xcconfig)..."
   env "${codesign_env[@]}" "$flutter_bin" build macos --config-only
 
-  if [[ "${XSTREAM_MACOS_NO_CODESIGN:-0}" == "1" ]]; then
+  if [[ "${XCONNECT_MACOS_NO_CODESIGN:-0}" == "1" ]]; then
     # `flutter build macos` still enforces provisioning profiles when the Xcode project has manual signing.
     # For CI packaging we invoke xcodebuild directly with signing disabled and a fixed build output dir.
     echo "Building macOS application via xcodebuild (codesign disabled)..."
@@ -379,7 +379,7 @@ case "$TARGET" in
     if [[ "$uname_s" == "Darwin" ]]; then
       echo "Building for iOS arm64..."
       "$flutter_bin" build ios --release --no-codesign "${common_dart_defines[@]}"
-      (cd build/ios/iphoneos && zip -r XConnect.app.zip Runner.app)
+      (cd build/ios/iphoneos && zip -r xconnect.app.zip Runner.app)
     else
       echo "iOS build only supported on macOS"
     fi
