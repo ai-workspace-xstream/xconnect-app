@@ -221,47 +221,35 @@ class DnsPreset {
   final String dohUrl;
   final String plainHost;
 
-  /// Answers correctly only from inside CN. Fine on the direct resolvers,
-  /// wrong on the proxy slot — those are queried from the exit node.
-  final bool cnOnly;
-
-  const DnsPreset(
-    this.label,
-    this.dohUrl,
-    this.plainHost, {
-    this.cnOnly = false,
-  });
+  const DnsPreset(this.label, this.dohUrl, this.plainHost);
 
   String get dohHost => Uri.parse(dohUrl).host.toLowerCase();
 }
 
 class DnsConfig {
-  static const _proxyDns1Key = 'dnsServer1';
-  static const _proxyDns2Key = 'dnsServer2';
+  static const _legacyProxyDns1Key = 'dnsServer1';
+  static const _legacyProxyDns2Key = 'dnsServer2';
   static const _directDns1Key = 'directDnsServer1';
   static const _directDns2Key = 'directDnsServer2';
   static const _transportModeKey = 'dnsTransportMode';
   static const _legacyDotEnabledKey = 'tunDnsOverTls';
-  static const _fakeDnsEnabledKey = 'fakeDnsEnabled';
   static const _tunnelDnsViaProxyKey = 'tunnelDnsViaProxy';
   static const _http3PassthroughKey = 'http3Passthrough';
   static const _schemaVersionKey = 'dnsSchemaVersion';
-  static const _currentSchemaVersion = 2;
+  static const _currentSchemaVersion = 3;
+
   // Proxy resolvers are routed through the `proxy` outbound (see
   // RoutePolicy.buildSecureDnsRules), so they are queried from the exit node's
   // vantage point. They must be IP-literal — a domain address adds a bootstrap
   // dependency on the very tunnel being brought up — and must answer correctly
-  // from anywhere. CN-domestic providers belong on the direct resolvers.
+  // from anywhere. That leaves so little room for a meaningful user choice
+  // that they are built in rather than configurable: every value a user could
+  // pick here was either one of these two or a misconfiguration. CN-domestic
+  // providers belong on the direct resolvers, which are configurable.
   static const _defaultDohDns1 = 'https://1.1.1.1/dns-query'; // Cloudflare
   static const _defaultDohDns2 = 'https://8.8.8.8/dns-query'; // Google
   static const _defaultPlainDns1 = '1.1.1.1';
   static const _defaultPlainDns2 = '8.8.8.8';
-
-  /// Providers no longer offered in the picker, kept as data so values
-  /// persisted by older builds are still recognised by the migration and by
-  /// [isCnOnlyResolver]. 360 was retired: doh.360.cn is CN-only and its plain
-  /// resolver (101.226.4.6) is unreliable from a foreign vantage point.
-  static const _retiredCnHosts = <String>['doh.360.cn', '101.226.4.6'];
 
   static const _defaultDirectDns6Servers = <String>[
     '2606:4700:4700::1111',
@@ -283,34 +271,16 @@ class DnsConfig {
     'full:msftncsi.com',
   ];
 
-  /// Preset DNS options for quick selection in settings UI
-  /// (label, dohUrl, plainHost)
+  /// Quick-select options for the direct resolvers. CN-domestic providers are
+  /// first because those are the ones worth switching to — the direct slot is
+  /// queried from the user's own vantage point, where they answer best.
   static const List<DnsPreset> dnsPresets = <DnsPreset>[
-    DnsPreset(
-      'DNSPod (CN)',
-      'https://doh.pub/dns-query',
-      '1.12.12.12',
-      cnOnly: true,
-    ),
-    DnsPreset(
-      'AliDNS (CN)',
-      'https://dns.alidns.com/dns-query',
-      '223.6.6.6',
-      cnOnly: true,
-    ),
+    DnsPreset('DNSPod (CN)', 'https://doh.pub/dns-query', '1.12.12.12'),
+    DnsPreset('AliDNS (CN)', 'https://dns.alidns.com/dns-query', '223.6.6.6'),
     DnsPreset('Cloudflare', 'https://1.1.1.1/dns-query', '1.1.1.1'),
     DnsPreset('Google', 'https://8.8.8.8/dns-query', '8.8.8.8'),
   ];
 
-  /// Every host/address that only answers correctly from inside CN, derived
-  /// from the presets so the picker stays the single source of truth.
-  static Set<String> get _cnOnlyHosts => <String>{
-        for (final preset in dnsPresets)
-          if (preset.cnOnly) ...<String>[preset.dohHost, preset.plainHost],
-        ..._retiredCnHosts,
-      };
-  static const _defaultProxyDomains = <String>[];
-  static const _defaultFakeDomains = <String>[];
   static const _defaultDirectIpCidrs = <String>[
     '10.0.0.0/8',
     '100.64.0.0/10',
@@ -323,21 +293,6 @@ class DnsConfig {
     'fe80::/10',
     'ff00::/8',
   ];
-  static const _fakeDnsPools = <Map<String, dynamic>>[
-    <String, dynamic>{'ipPool': '198.18.0.0/15', 'lruSize': 32768},
-    <String, dynamic>{'ipPool': 'fc00::/18', 'lruSize': 32768},
-  ];
-  static const _fakeDnsWarning =
-      'FakeDNS is disabled by default. When enabled, it should be limited '
-      'to explicit fake domains because stale fake mappings can affect '
-      'system DNS cache after the Secure Tunnel stops.';
-
-  static final ValueNotifier<String> proxyDns1 = ValueNotifier<String>(
-    _defaultDohDns1,
-  );
-  static final ValueNotifier<String> proxyDns2 = ValueNotifier<String>(
-    _defaultDohDns2,
-  );
   static final ValueNotifier<String> directDns1 = ValueNotifier<String>(
     _defaultPlainDns1,
   );
@@ -346,7 +301,6 @@ class DnsConfig {
   );
   static final ValueNotifier<DnsTransportMode> transportMode =
       ValueNotifier<DnsTransportMode>(DnsTransportMode.doh);
-  static final ValueNotifier<bool> fakeDnsEnabled = ValueNotifier<bool>(false);
 
   /// Force tunnel DNS queries through proxy resolver (recommended for CN users)
   static final ValueNotifier<bool> tunnelDnsViaProxy =
@@ -368,17 +322,11 @@ class DnsConfig {
     return primary ? _defaultPlainDns1 : _defaultPlainDns2;
   }
 
-  static String get proxyPrimaryDefault => _normalizeProxyEndpoint(
-        proxyDns1.value,
-        transportMode.value,
-        primary: true,
-      );
+  static String get proxyPrimaryDefault =>
+      _bootstrapProxyDefault(transportMode.value, primary: true);
 
-  static String get proxySecondaryDefault => _normalizeProxyEndpoint(
-        proxyDns2.value,
-        transportMode.value,
-        primary: false,
-      );
+  static String get proxySecondaryDefault =>
+      _bootstrapProxyDefault(transportMode.value, primary: false);
 
   static String get directPrimaryDefault =>
       _normalizeDirectEndpoint(directDns1.value, primary: true);
@@ -388,8 +336,8 @@ class DnsConfig {
 
   /// Host of an endpoint, whether it is written as a DoH URL or as a bare
   /// address. `Uri.host` alone is not enough: it returns empty for a bare
-  /// hostname, which is exactly the shape [setDohEnabled] leaves behind when
-  /// DoH is switched off.
+  /// hostname, which is the shape older builds persisted when DoH was
+  /// switched off.
   static String _hostOf(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -409,18 +357,13 @@ class DnsConfig {
     return host.isNotEmpty && InternetAddress.tryParse(host) != null;
   }
 
-  /// True when [value] names a resolver that only answers correctly from
-  /// inside CN — wrong on the proxy slot, which is queried from the exit node.
-  static bool isCnOnlyResolver(String value) =>
-      _cnOnlyHosts.contains(_hostOf(value));
-
   /// Resolve [value] to an address that can actually be dialled without DNS.
   ///
-  /// A plain resolver address is used before any name resolution exists, and
-  /// the direct ones are additionally handed to the OS as the tunnel's DNS
-  /// servers — both require an IP literal. A known provider's DoH host maps
-  /// onto its own plain IP; anything else unresolvable falls back to the
-  /// built-in default rather than being written out as an undialable name.
+  /// A direct resolver address is used before any name resolution exists, and
+  /// is additionally handed to the OS as the tunnel's DNS server — both
+  /// require an IP literal. A known provider's DoH host maps onto its own
+  /// plain IP; anything else unresolvable falls back to the built-in default
+  /// rather than being written out as an undialable name.
   static String _plainAddressFor(String value, String fallback) {
     final host = _hostOf(value);
     if (host.isEmpty) {
@@ -447,57 +390,29 @@ class DnsConfig {
     );
   }
 
-  /// One-shot migration of the proxy resolver slots.
+  /// One-shot cleanup of proxy resolver state older builds persisted.
   ///
-  /// v1: builds up to v1.1.0+5 defaulted the proxy DoH slot to CN-domestic
-  /// providers (doh.pub / dns.alidns.com). Those resolvers are routed through
-  /// the proxy outbound, so every lookup travelled to the overseas exit node
-  /// and back into CN — high RTT, frequent rate-limiting of foreign source
-  /// IPs, and CN-optimised answers then dialled from the wrong vantage point.
-  ///
-  /// v2: v1 matched on `Uri.host`, which is empty for a bare hostname, so it
-  /// only ever recognised full DoH URLs. Turning DoH off rewrites a stored
-  /// endpoint to its bare host (`dns.alidns.com`) — v1 read that as a non-CN
-  /// value and left it in place, and as a plain resolver it is not dialable
-  /// at all. Re-run with host-level matching to repair those.
-  ///
-  /// Any other user-chosen value is left untouched.
-  static Future<void> _migrateProxyResolvers(SharedPreferences prefs) async {
+  /// Builds up to v1.1.0+5 let the proxy slot be edited, defaulted it to
+  /// CN-domestic providers, and rewrote a stored DoH endpoint to its bare
+  /// host whenever DoH was switched off. All three produced resolvers that
+  /// are queried from the exit node's vantage point and, in the bare-host
+  /// case, cannot be dialled at all. The slot is built-in now, so the values
+  /// are simply dropped rather than repaired.
+  static Future<void> _dropLegacyProxyResolvers(
+    SharedPreferences prefs,
+  ) async {
     if ((prefs.getInt(_schemaVersionKey) ?? 0) >= _currentSchemaVersion) {
       return;
     }
-    final mode = _readTransportMode(prefs);
-    final storedPrimary = prefs.getString(_proxyDns1Key);
-    if (storedPrimary != null && isCnOnlyResolver(storedPrimary)) {
-      await prefs.setString(
-        _proxyDns1Key,
-        _bootstrapProxyDefault(mode, primary: true),
-      );
-    }
-    final storedSecondary = prefs.getString(_proxyDns2Key);
-    if (storedSecondary != null && isCnOnlyResolver(storedSecondary)) {
-      await prefs.setString(
-        _proxyDns2Key,
-        _bootstrapProxyDefault(mode, primary: false),
-      );
-    }
+    await prefs.remove(_legacyProxyDns1Key);
+    await prefs.remove(_legacyProxyDns2Key);
     await prefs.setInt(_schemaVersionKey, _currentSchemaVersion);
   }
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    await _migrateProxyResolvers(prefs);
+    await _dropLegacyProxyResolvers(prefs);
     transportMode.value = _readTransportMode(prefs);
-    proxyDns1.value = _normalizeProxyEndpoint(
-      prefs.getString(_proxyDns1Key),
-      transportMode.value,
-      primary: true,
-    );
-    proxyDns2.value = _normalizeProxyEndpoint(
-      prefs.getString(_proxyDns2Key),
-      transportMode.value,
-      primary: false,
-    );
     directDns1.value = _normalizeDirectEndpoint(
       prefs.getString(_directDns1Key),
       primary: true,
@@ -506,16 +421,9 @@ class DnsConfig {
       prefs.getString(_directDns2Key),
       primary: false,
     );
-    fakeDnsEnabled.value = prefs.getBool(_fakeDnsEnabledKey) ?? false;
     GlobalState.http3Passthrough.value =
         prefs.getBool(_http3PassthroughKey) ?? false;
 
-    proxyDns1.addListener(
-      () => prefs.setString(_proxyDns1Key, proxyDns1.value),
-    );
-    proxyDns2.addListener(
-      () => prefs.setString(_proxyDns2Key, proxyDns2.value),
-    );
     directDns1.addListener(
       () => prefs.setString(_directDns1Key, directDns1.value),
     );
@@ -524,9 +432,6 @@ class DnsConfig {
     );
     transportMode.addListener(() {
       prefs.setString(_transportModeKey, transportMode.value.storageValue);
-    });
-    fakeDnsEnabled.addListener(() {
-      prefs.setBool(_fakeDnsEnabledKey, fakeDnsEnabled.value);
     });
     GlobalState.http3Passthrough.addListener(() {
       prefs.setBool(
@@ -540,39 +445,11 @@ class DnsConfig {
     });
   }
 
+  /// Transport for the proxy resolvers. The addresses themselves are built in,
+  /// so this is the only thing the toggle changes.
   static void setDohEnabled(bool enabled) {
-    final nextMode = enabled ? DnsTransportMode.doh : DnsTransportMode.plain;
-    if (transportMode.value == nextMode) {
-      return;
-    }
-
-    transportMode.value = nextMode;
-    proxyDns1.value = _normalizeProxyEndpoint(
-      proxyDns1.value,
-      nextMode,
-      primary: true,
-    );
-    proxyDns2.value = _normalizeProxyEndpoint(
-      proxyDns2.value,
-      nextMode,
-      primary: false,
-    );
-  }
-
-  static void updateProxyServers({
-    required String primary,
-    required String secondary,
-  }) {
-    proxyDns1.value = _normalizeProxyEndpoint(
-      primary,
-      transportMode.value,
-      primary: true,
-    );
-    proxyDns2.value = _normalizeProxyEndpoint(
-      secondary,
-      transportMode.value,
-      primary: false,
-    );
+    transportMode.value =
+        enabled ? DnsTransportMode.doh : DnsTransportMode.plain;
   }
 
   static void updateDirectServers({
@@ -583,21 +460,8 @@ class DnsConfig {
     directDns2.value = _normalizeDirectEndpoint(secondary, primary: false);
   }
 
-  static List<String> proxyResolversForXray() {
-    final servers = <String>[
-      _normalizeProxyEndpoint(
-        proxyDns1.value,
-        transportMode.value,
-        primary: true,
-      ),
-      _normalizeProxyEndpoint(
-        proxyDns2.value,
-        transportMode.value,
-        primary: false,
-      ),
-    ].where((server) => server.isNotEmpty).toList();
-    return servers.toSet().toList();
-  }
+  static List<String> proxyResolversForXray() =>
+      <String>[proxyPrimaryDefault, proxySecondaryDefault];
 
   static List<String> directResolversForXray() {
     final servers = <String>[
@@ -641,12 +505,6 @@ class DnsConfig {
   static List<String> get directDomainSet =>
       List<String>.from(_defaultDirectDomains);
 
-  static List<String> get proxyDomainSet =>
-      List<String>.from(_defaultProxyDomains);
-
-  static List<String> get fakeDomainSet =>
-      List<String>.from(_defaultFakeDomains);
-
   static List<String> get directIpCidrs =>
       List<String>.from(_defaultDirectIpCidrs);
 
@@ -657,13 +515,9 @@ class DnsConfig {
     required String dnsProxySecondaryTag,
   }) {
     final directResolvers = directResolversForXray();
-    final proxyResolvers = proxyResolversForXray();
     final effectiveDirectResolvers = directResolvers.isNotEmpty
         ? directResolvers
         : <String>[directPrimaryDefault, directSecondaryDefault];
-    final effectiveProxyResolvers = proxyResolvers.isNotEmpty
-        ? proxyResolvers
-        : <String>[proxyPrimaryDefault, proxySecondaryDefault];
 
     final directPolicies = <ResolverServerPolicy>[
       ResolverServerPolicy(
@@ -688,14 +542,12 @@ class DnsConfig {
         dohEnabled ? ResolverTransport.doh : ResolverTransport.plain;
     final proxyPolicies = <ResolverServerPolicy>[
       ResolverServerPolicy(
-        address: effectiveProxyResolvers.first,
+        address: proxyPrimaryDefault,
         tag: dnsProxyPrimaryTag,
         transport: proxyTransport,
       ),
       ResolverServerPolicy(
-        address: effectiveProxyResolvers.length > 1
-            ? effectiveProxyResolvers[1]
-            : proxySecondaryDefault,
+        address: proxySecondaryDefault,
         tag: dnsProxySecondaryTag,
         transport: proxyTransport,
       ),
@@ -705,18 +557,10 @@ class DnsConfig {
       dnsPolicy: DnsPolicy(
         directResolvers: directPolicies,
         proxyResolvers: proxyPolicies,
-        fakeDns: FakeDnsPolicy(
-          enabled: fakeDnsEnabled.value && fakeDomainSet.isNotEmpty,
-          domains: fakeDomainSet,
-          pools: _fakeDnsPools,
-          warning: _fakeDnsWarning,
-        ),
       ),
       routePolicy: RoutePolicy(
         domainSets: DomainSets(
           direct: directDomainSet,
-          proxy: proxyDomainSet,
-          fake: fakeDomainSet,
           directIpCidrs: directIpCidrs,
         ),
         tunnelDnsServers4: systemTunnelDnsServers4(),
@@ -747,31 +591,6 @@ class DnsConfig {
           : 'xtls-rprx-vision';
     }
     return trimmed;
-  }
-
-  static String _normalizeProxyEndpoint(
-    String? rawValue,
-    DnsTransportMode mode, {
-    required bool primary,
-  }) {
-    final fallback = _bootstrapProxyDefault(mode, primary: primary);
-    final trimmed = rawValue?.trim() ?? '';
-    if (trimmed.isEmpty) {
-      return fallback;
-    }
-
-    final uri = Uri.tryParse(trimmed);
-    if (mode == DnsTransportMode.doh) {
-      if (uri != null && uri.hasScheme && uri.scheme == 'https') {
-        final normalizedPath =
-            uri.path.isEmpty || uri.path == '/' ? '/dns-query' : uri.path;
-        return uri.replace(path: normalizedPath).toString();
-      }
-      final host = uri != null && uri.host.isNotEmpty ? uri.host : trimmed;
-      return Uri(scheme: 'https', host: host, path: '/dns-query').toString();
-    }
-
-    return _plainAddressFor(trimmed, fallback);
   }
 
   static String _normalizeDirectEndpoint(
