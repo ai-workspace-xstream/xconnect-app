@@ -302,9 +302,11 @@ class DnsConfig {
   static final ValueNotifier<DnsTransportMode> transportMode =
       ValueNotifier<DnsTransportMode>(DnsTransportMode.doh);
 
-  /// Force tunnel DNS queries through proxy resolver (recommended for CN users)
+  /// Routes tunnel DNS queries through the proxy resolver. On by default:
+  /// this keeps resolution working when a local DoH endpoint is blocked,
+  /// which is the common case this app is built for.
   static final ValueNotifier<bool> tunnelDnsViaProxy =
-      ValueNotifier<bool>(false);
+      ValueNotifier<bool>(true);
 
   static bool get dohEnabled => transportMode.value == DnsTransportMode.doh;
 
@@ -439,7 +441,7 @@ class DnsConfig {
         GlobalState.http3Passthrough.value,
       );
     });
-    tunnelDnsViaProxy.value = prefs.getBool(_tunnelDnsViaProxyKey) ?? false;
+    tunnelDnsViaProxy.value = prefs.getBool(_tunnelDnsViaProxyKey) ?? true;
     tunnelDnsViaProxy.addListener(() {
       prefs.setBool(_tunnelDnsViaProxyKey, tunnelDnsViaProxy.value);
     });

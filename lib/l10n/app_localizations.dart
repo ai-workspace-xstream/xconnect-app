@@ -194,7 +194,7 @@ class AppLocalizations {
       'secondaryDns': 'Secondary DNS',
       'tunnelDnsViaProxy': 'Tunnel DNS via Proxy',
       'tunnelDnsViaProxyHint':
-          'Forces all TUN DNS queries through proxy resolver. Recommended for CN users when DoH is blocked locally.',
+          'Routes all TUN DNS queries through the proxy resolver, so resolution keeps working when a local DoH endpoint is unavailable. On by default.',
       'dnsDialogHintDirect':
           'Enter IP addresses, e.g. 1.1.1.1. Used for the Direct Resolver policy and as the system DNS on platforms that do not yet use the local Secure DNS endpoint, so a hostname will be replaced with an address that can be dialled.',
       'globalProxy': 'Global Proxy',
@@ -476,7 +476,8 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'primaryDns': '主 DNS',
       'secondaryDns': '备用 DNS',
       'tunnelDnsViaProxy': '隧道 DNS 走代理',
-      'tunnelDnsViaProxyHint': '强制所有 TUN DNS 查询经代理解析器处理。国内 DoH 被墙时建议开启。',
+      'tunnelDnsViaProxyHint':
+          '将所有 TUN DNS 查询交由代理解析器处理，本地 DoH 端点不可用时仍能正常解析。默认已开启。',
       'dnsDialogHintDirect': '请输入 IP 地址，例如 1.1.1.1。用于 Direct Resolver 策略，'
           '并作为尚未接入本地 Secure DNS 端点平台上的系统 DNS 来源，因此填入域名会被替换为可拨号的地址。',
       'globalProxy': '全局代理',
