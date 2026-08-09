@@ -736,7 +736,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.dns_outlined,
           label: context.l10n.get('settingsTabDns'),
         ),
-        blocks: [_dnsGroup(context)],
+        blocks: [_dnsGroup(context), _tunnelDnsGroup(context)],
       ),
       (
         tab: SettingsTab(
@@ -1048,18 +1048,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _dnsGroup(BuildContext context) {
     return SettingsGroup(
       children: [
-        // Listen rather than read once: confirming either dialog updates the
+        // Listen rather than read once: confirming the dialog updates the
         // notifier without rebuilding this screen, so a plain read leaves the
         // row showing the previous resolver.
-        ValueListenableBuilder<String>(
-          valueListenable: DnsConfig.proxyDns1,
-          builder: (context, proxyDns, _) => SettingsRow(
-            icon: Icons.dns,
-            title: context.l10n.get('proxyDnsConfig'),
-            value: proxyDns,
-            onTap: _showProxyDnsDialog,
-          ),
-        ),
         ValueListenableBuilder<String>(
           valueListenable: DnsConfig.directDns1,
           builder: (context, directDns, _) => SettingsRow(
@@ -1076,6 +1067,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
           description: context.l10n.get('dnsOverHttpsHint'),
           switchValue: DnsConfig.dohEnabled,
           onSwitchChanged: _onToggleDnsOverHttps,
+        ),
+      ],
+    );
+  }
+
+  /// Its own card, below the two resolver settings.
+  ///
+  /// This does not pick a resolver — it emits a routing rule that sends the
+  /// tunnel's port-53 traffic out through the proxy (see
+  /// `RoutePolicy.buildSecureDnsRules`, where it lives as
+  /// `forceTunnelDnsToProxy`). Keeping it out of the resolver card says so,
+  /// and gives its two-line explanation room to read.
+  Widget _tunnelDnsGroup(BuildContext context) {
+    return SettingsGroup(
+      children: [
+        ValueListenableBuilder<bool>(
+          valueListenable: DnsConfig.tunnelDnsViaProxy,
+          builder: (context, viaProxy, _) => SettingsRow(
+            icon: Icons.alt_route,
+            kind: SettingsRowKind.toggle,
+            title: context.l10n.get('tunnelDnsViaProxy'),
+            description: context.l10n.get('tunnelDnsViaProxyHint'),
+            switchValue: viaProxy,
+            onSwitchChanged: (value) {
+              DnsConfig.tunnelDnsViaProxy.value = value;
+              addAppLog('隧道 DNS 走代理: ${value ? "开启" : "关闭"}');
+            },
+          ),
         ),
       ],
     );
@@ -1287,66 +1306,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  void _showProxyDnsDialog() {
+  void _showDirectDnsDialog() {
     final dns1Controller = TextEditingController(
-      text: DnsConfig.proxyDns1.value,
+      text: DnsConfig.directDns1.value,
     );
     final dns2Controller = TextEditingController(
-      text: DnsConfig.proxyDns2.value,
+      text: DnsConfig.directDns2.value,
     );
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(context.l10n.get('proxyDnsConfig')),
+        title: Text(context.l10n.get('directDnsConfig')),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Rebuild on every edit: the chip highlight and the CN-only
-              // warning both track what is currently in the fields, and a
-              // controller change does not rebuild the dialog by itself.
+              // Chips fill the primary field only, so the secondary stays a
+              // deliberate choice. They rebuild on every edit — a controller
+              // change does not rebuild the dialog by itself, which used to
+              // freeze the highlight on whatever was selected when it opened.
               AnimatedBuilder(
-                animation: Listenable.merge([dns1Controller, dns2Controller]),
+                animation: dns1Controller,
                 builder: (context, _) {
                   final primary = dns1Controller.text.trim();
-                  final cnOnly = DnsConfig.isCnOnlyResolver(primary) ||
-                      DnsConfig.isCnOnlyResolver(dns2Controller.text.trim());
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Preset quick-select chips
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: DnsConfig.dnsPresets.map((preset) {
-                          final isSelected = primary == preset.dohUrl ||
-                              primary == preset.plainHost;
-                          return ActionChip(
-                            label: Text(preset.label),
-                            backgroundColor: isSelected
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : null,
-                            onPressed: () {
-                              dns1Controller.text = DnsConfig.dohEnabled
-                                  ? preset.dohUrl
-                                  : preset.plainHost;
-                            },
-                          );
-                        }).toList(),
-                      ),
-                      if (cnOnly) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          context.l10n.get('proxyDnsWarnCnOnly'),
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                        ),
-                      ],
-                    ],
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: DnsConfig.dnsPresets.map((preset) {
+                      final isSelected = primary == preset.plainHost;
+                      return ActionChip(
+                        label: Text(preset.label),
+                        backgroundColor: isSelected
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : null,
+                        // Direct resolvers are always plain — the DoH toggle
+                        // only governs the built-in proxy resolvers.
+                        onPressed: () =>
+                            dns1Controller.text = preset.plainHost,
+                      );
+                    }).toList(),
                   );
                 },
               ),
@@ -1354,9 +1353,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  DnsConfig.dohEnabled
-                      ? context.l10n.get('dnsDialogHintDoh')
-                      : context.l10n.get('dnsDialogHintPlain'),
+                  context.l10n.get('dnsDialogHintDirect'),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
@@ -1375,84 +1372,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   labelText: context.l10n.get('secondaryDns'),
                 ),
               ),
-              const SizedBox(height: 16),
-              // Tunnel DNS via proxy toggle
-              ValueListenableBuilder<bool>(
-                valueListenable: DnsConfig.tunnelDnsViaProxy,
-                builder: (context, viaProxy, _) => SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: viaProxy,
-                  onChanged: (val) => DnsConfig.tunnelDnsViaProxy.value = val,
-                  title: Text(context.l10n.get('tunnelDnsViaProxy')),
-                  subtitle: Text(
-                    context.l10n.get('tunnelDnsViaProxyHint'),
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-              ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(context.l10n.get('cancel')),
-          ),
-          TextButton(
-            onPressed: () {
-              DnsConfig.updateProxyServers(
-                primary: dns1Controller.text,
-                secondary: dns2Controller.text,
-              );
-              Navigator.pop(context);
-            },
-            child: Text(context.l10n.get('confirm')),
-          ),
-        ],
-      ),
-    ).whenComplete(() {
-      dns1Controller.dispose();
-      dns2Controller.dispose();
-    });
-  }
-
-  void _showDirectDnsDialog() {
-    final dns1Controller = TextEditingController(
-      text: DnsConfig.directDns1.value,
-    );
-    final dns2Controller = TextEditingController(
-      text: DnsConfig.directDns2.value,
-    );
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.l10n.get('directDnsConfig')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                context.l10n.get('dnsDialogHintDirect'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: dns1Controller,
-              decoration: InputDecoration(
-                labelText: context.l10n.get('primaryDns'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: dns2Controller,
-              decoration: InputDecoration(
-                labelText: context.l10n.get('secondaryDns'),
-              ),
-            ),
-          ],
         ),
         actions: [
           TextButton(

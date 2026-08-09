@@ -720,34 +720,18 @@ class VpnConfig {
         forceBlockQuic: !(supportsVisionFlow &&
             effectiveFlow.toLowerCase() == 'xtls-rprx-vision-udp443'),
       );
-      if (DnsConfig.fakeDnsEnabled.value) {
-        final fakeDnsConfig = _buildFakeDnsConfig();
-        if (fakeDnsConfig != null) {
-          jsonObj['fakeDns'] = fakeDnsConfig;
-        }
-      } else {
-        jsonObj.remove('fakeDns');
-      }
+      // FakeDNS is not part of the control plane. Strip any block an imported
+      // template carries, or Xray would answer from a fake pool this app no
+      // longer declares a resolver for.
+      jsonObj.remove('fakeDns');
 
       logMessage(
         'DNS control plane applied: '
         'direct=${DnsConfig.directResolversForXray().join(", ")} '
         'proxy=${DnsConfig.proxyResolversForXray().join(", ")} '
         'directDomains=${DnsConfig.directDomainSet.length} '
-        'darwinSystemDns=${DnsConfig.darwinSystemDnsMode} '
-        'fakeDns=${DnsConfig.fakeDnsEnabled.value ? "enabled" : "disabled"}',
+        'darwinSystemDns=${DnsConfig.darwinSystemDnsMode}',
       );
-      if (DnsConfig.fakeDnsEnabled.value) {
-        final controlPlane = DnsConfig.controlPlane(
-          dnsDirectPrimaryTag: _dnsDirectPrimaryTag,
-          dnsDirectSecondaryTag: _dnsDirectSecondaryTag,
-          dnsProxyPrimaryTag: _dnsProxyPrimaryTag,
-          dnsProxySecondaryTag: _dnsProxySecondaryTag,
-        );
-        if (controlPlane.fakeDns.warning.isNotEmpty) {
-          logMessage(controlPlane.fakeDns.warning);
-        }
-      }
 
       final formatted = const JsonEncoder.withIndent('  ').convert(jsonObj);
       logMessage('✅ XrayJson 配置内容生成完成');
@@ -1003,21 +987,6 @@ class VpnConfig {
     return controlPlane.dnsPolicy.toXrayDnsConfig();
   }
 
-  static List<Map<String, dynamic>>? _buildFakeDnsConfig() {
-    final controlPlane = DnsConfig.controlPlane(
-      dnsDirectPrimaryTag: _dnsDirectPrimaryTag,
-      dnsDirectSecondaryTag: _dnsDirectSecondaryTag,
-      dnsProxyPrimaryTag: _dnsProxyPrimaryTag,
-      dnsProxySecondaryTag: _dnsProxySecondaryTag,
-    );
-    if (!controlPlane.fakeDns.enabled || controlPlane.fakeDns.pools.isEmpty) {
-      return null;
-    }
-    return controlPlane.fakeDns.pools
-        .map((pool) => Map<String, dynamic>.from(pool))
-        .toList();
-  }
-
   static Map<String, dynamic> buildSecureDnsRoutingConfig(
     Object? existingRouting, {
     required bool enableTunnelMode,
@@ -1097,7 +1066,6 @@ class VpnConfig {
         _dnsProxyPrimaryTag,
         _dnsProxySecondaryTag,
       ],
-      fakeDnsEnabled: controlPlane.fakeDns.enabled,
     );
     routing['domainStrategy'] = 'AsIs';
     routing['rules'] = <dynamic>[

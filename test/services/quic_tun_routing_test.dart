@@ -39,8 +39,6 @@ bool _isProtocolQuicBlock(Map<String, dynamic> rule) =>
 const _routePolicy = RoutePolicy(
   domainSets: DomainSets(
     direct: <String>[],
-    proxy: <String>[],
-    fake: <String>[],
     directIpCidrs: <String>[],
   ),
   tunnelDnsServers4: <String>[],
@@ -59,7 +57,6 @@ List<Map<String, dynamic>> _secureRules(
       tunInboundTag: 'tun-in',
       directResolverInboundTags: const <String>['dns-direct'],
       proxyResolverInboundTags: const <String>['dns-proxy'],
-      fakeDnsEnabled: false,
     );
 
 String? _proxyFlow(Map<String, dynamic> config) {

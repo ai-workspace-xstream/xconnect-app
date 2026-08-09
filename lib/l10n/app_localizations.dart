@@ -177,7 +177,7 @@ class AppLocalizations {
       'tunSettings': 'TUN Settings',
       'dnsOverHttps': 'DNS over HTTPS',
       'dnsOverHttpsHint':
-          'Controls the Proxy Resolver transport for Xray Secure DNS. On macOS and iOS, Packet Tunnel DNS queries also enter the local Secure DNS path and then follow Direct Resolver or Proxy Resolver policy.',
+          'Encrypts the built-in proxy resolvers (Cloudflare and Google, queried from the exit node). Turn it off to query them over plain DNS instead. The Direct Resolver is always plain.',
       'tunStatus': 'TUN Status',
       'tunStatusConnected': 'Connected',
       'tunStatusConnecting': 'Connecting',
@@ -190,23 +190,13 @@ class AppLocalizations {
       'tunStatusUnknown': 'Unknown',
       'dnsConfig': 'DNS Settings',
       'directDnsConfig': 'Direct Resolver',
-      'proxyDnsConfig': 'Proxy Resolver',
       'primaryDns': 'Primary DNS',
       'secondaryDns': 'Secondary DNS',
       'tunnelDnsViaProxy': 'Tunnel DNS via Proxy',
       'tunnelDnsViaProxyHint':
           'Forces all TUN DNS queries through proxy resolver. Recommended for CN users when DoH is blocked locally.',
-      'proxyDnsWarnCnOnly':
-          'This resolver only answers correctly inside CN, but proxy DNS is '
-              'queried from the exit node. Move it to Direct DNS.',
-      'dnsDialogHintDoh':
-          'Enter DoH HTTPS endpoints. These are queried through the proxy '
-              'outbound, so use IP-literal resolvers that answer correctly '
-              'from the exit node (e.g. 1.1.1.1). CN-only providers belong '
-              'on Direct DNS.',
-      'dnsDialogHintPlain': 'Enter plain DNS server addresses, e.g. 1.1.1.1.',
       'dnsDialogHintDirect':
-          'Enter direct DNS server addresses for the Direct Resolver policy and for system DNS override on platforms that do not yet use the local Secure DNS endpoint.',
+          'Enter IP addresses, e.g. 1.1.1.1. Used for the Direct Resolver policy and as the system DNS on platforms that do not yet use the local Secure DNS endpoint, so a hostname will be replaced with an address that can be dialled.',
       'globalProxy': 'Global Proxy',
       'experimentalFeatures': 'Experimental Features',
       'tunnelProxyMode': 'Tunnel Mode',
@@ -470,7 +460,7 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'tunSettings': 'TUN 设置',
       'dnsOverHttps': 'DNS over HTTPS',
       'dnsOverHttpsHint':
-          '控制代理 DNS 的传输方式，用于 Xray Secure DNS。在 macOS 和 iOS 上，Packet Tunnel 内的系统 DNS 查询也会进入本地 Secure DNS 路径，再按直连 DNS 或代理 DNS 策略处理。',
+          '加密内置代理解析器（Cloudflare 与 Google，从出口节点发起查询）。关闭则改用明文 DNS 查询。直连 DNS 始终为明文。',
       'tunStatus': 'TUN 状态',
       'tunStatusConnected': '已连接',
       'tunStatusConnecting': '连接中',
@@ -483,17 +473,12 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'tunStatusUnknown': '未知',
       'dnsConfig': 'DNS 配置',
       'directDnsConfig': '直连 DNS',
-      'proxyDnsConfig': '代理 DNS',
       'primaryDns': '主 DNS',
       'secondaryDns': '备用 DNS',
       'tunnelDnsViaProxy': '隧道 DNS 走代理',
       'tunnelDnsViaProxyHint': '强制所有 TUN DNS 查询经代理解析器处理。国内 DoH 被墙时建议开启。',
-      'proxyDnsWarnCnOnly': '该服务商仅在国内可正常应答，但代理 DNS 是从出口节点发起查询的。请改配到直连 DNS。',
-      'dnsDialogHintDoh': '请输入 DoH HTTPS 端点。此处解析走代理出站，请使用出口节点可正常访问的 IP 字面量端点'
-          '（如 1.1.1.1）。国内专用服务商应配置在直连 DNS。',
-      'dnsDialogHintPlain': '请输入 DNS 服务器地址，例如 1.1.1.1。',
-      'dnsDialogHintDirect':
-          '请输入直连 DNS 服务器地址，用于 Direct Resolver 策略，并继续作为尚未接入本地 Secure DNS 端点平台上的系统 DNS 来源。',
+      'dnsDialogHintDirect': '请输入 IP 地址，例如 1.1.1.1。用于 Direct Resolver 策略，'
+          '并作为尚未接入本地 Secure DNS 端点平台上的系统 DNS 来源，因此填入域名会被替换为可拨号的地址。',
       'globalProxy': '全局代理',
       'experimentalFeatures': '实验特性',
       'tunnelProxyMode': '隧道模式',

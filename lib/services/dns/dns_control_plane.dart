@@ -1,7 +1,6 @@
 enum ResolverTransport {
   plain,
   doh,
-  fake,
 }
 
 class ResolverServerPolicy {
@@ -35,30 +34,12 @@ class ResolverServerPolicy {
   }
 }
 
-class FakeDnsPolicy {
-  final bool enabled;
-  final List<String> domains;
-  final List<Map<String, dynamic>> pools;
-  final String warning;
-
-  const FakeDnsPolicy({
-    required this.enabled,
-    this.domains = const <String>[],
-    this.pools = const <Map<String, dynamic>>[],
-    this.warning = '',
-  });
-}
-
 class DomainSets {
   final List<String> direct;
-  final List<String> proxy;
-  final List<String> fake;
   final List<String> directIpCidrs;
 
   const DomainSets({
     required this.direct,
-    required this.proxy,
-    required this.fake,
     required this.directIpCidrs,
   });
 }
@@ -66,27 +47,14 @@ class DomainSets {
 class DnsPolicy {
   final List<ResolverServerPolicy> directResolvers;
   final List<ResolverServerPolicy> proxyResolvers;
-  final FakeDnsPolicy fakeDns;
 
   const DnsPolicy({
     required this.directResolvers,
     required this.proxyResolvers,
-    required this.fakeDns,
   });
 
   List<Map<String, dynamic>> buildDnsServers() {
     final servers = <Map<String, dynamic>>[];
-    if (fakeDns.enabled && fakeDns.domains.isNotEmpty) {
-      servers.add(
-        const ResolverServerPolicy(
-          address: 'fakedns',
-          tag: 'dns-fake',
-          transport: ResolverTransport.fake,
-          skipFallback: true,
-        ).toXrayDnsServer()
-          ..['domains'] = fakeDns.domains,
-      );
-    }
     servers
         .addAll(directResolvers.map((resolver) => resolver.toXrayDnsServer()));
     servers
@@ -133,7 +101,6 @@ class RoutePolicy {
     required String tunInboundTag,
     required List<String> directResolverInboundTags,
     required List<String> proxyResolverInboundTags,
-    required bool fakeDnsEnabled,
   }) {
     return <Map<String, dynamic>>[
       if (enableTunnelMode && captureSystemDnsToBuiltInDns)
@@ -180,12 +147,6 @@ class RoutePolicy {
           'ip': domainSets.directIpCidrs,
           'outboundTag': 'direct',
         },
-      if (fakeDnsEnabled && domainSets.fake.isNotEmpty)
-        <String, dynamic>{
-          'type': 'field',
-          'domain': domainSets.fake,
-          'outboundTag': 'proxy',
-        },
       <String, dynamic>{
         'type': 'field',
         'inboundTag': directResolverInboundTags,
@@ -213,8 +174,6 @@ class DnsControlPlane {
 
   List<ResolverServerPolicy> get proxyResolvers => dnsPolicy.proxyResolvers;
 
-  FakeDnsPolicy get fakeDns => dnsPolicy.fakeDns;
-
   DomainSets get domainSets => routePolicy.domainSets;
 
   List<String> get tunnelDnsServers4 => routePolicy.tunnelDnsServers4;
@@ -229,11 +188,5 @@ class DnsControlPlane {
     return routePolicy.tunDnsCidrs();
   }
 
-  List<String> sniffingDestOverride() {
-    final overrides = <String>['http', 'tls', 'quic'];
-    if (fakeDns.enabled && fakeDns.domains.isNotEmpty) {
-      overrides.add('fakedns');
-    }
-    return overrides;
-  }
+  List<String> sniffingDestOverride() => <String>['http', 'tls', 'quic'];
 }
