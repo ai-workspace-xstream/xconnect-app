@@ -221,7 +221,18 @@ class DnsPreset {
   final String dohUrl;
   final String plainHost;
 
-  const DnsPreset(this.label, this.dohUrl, this.plainHost);
+  /// Answers correctly only from inside CN. Fine on the direct resolvers,
+  /// wrong on the proxy slot — those are queried from the exit node.
+  final bool cnOnly;
+
+  const DnsPreset(
+    this.label,
+    this.dohUrl,
+    this.plainHost, {
+    this.cnOnly = false,
+  });
+
+  String get dohHost => Uri.parse(dohUrl).host.toLowerCase();
 }
 
 class DnsConfig {
@@ -235,7 +246,7 @@ class DnsConfig {
   static const _tunnelDnsViaProxyKey = 'tunnelDnsViaProxy';
   static const _http3PassthroughKey = 'http3Passthrough';
   static const _schemaVersionKey = 'dnsSchemaVersion';
-  static const _currentSchemaVersion = 1;
+  static const _currentSchemaVersion = 2;
   // Proxy resolvers are routed through the `proxy` outbound (see
   // RoutePolicy.buildSecureDnsRules), so they are queried from the exit node's
   // vantage point. They must be IP-literal — a domain address adds a bootstrap
@@ -246,13 +257,12 @@ class DnsConfig {
   static const _defaultPlainDns1 = '1.1.1.1';
   static const _defaultPlainDns2 = '8.8.8.8';
 
-  /// DoH endpoints that only answer correctly from inside CN. Kept as data so
-  /// the schema migration can recognise values persisted by older builds.
-  static const _cnOnlyDohHosts = <String>[
-    'doh.pub',
-    'dns.alidns.com',
-    'doh.360.cn',
-  ];
+  /// Providers no longer offered in the picker, kept as data so values
+  /// persisted by older builds are still recognised by the migration and by
+  /// [isCnOnlyResolver]. 360 was retired: doh.360.cn is CN-only and its plain
+  /// resolver (101.226.4.6) is unreliable from a foreign vantage point.
+  static const _retiredCnHosts = <String>['doh.360.cn', '101.226.4.6'];
+
   static const _defaultDirectDns6Servers = <String>[
     '2606:4700:4700::1111',
     '2001:4860:4860::8888',
@@ -276,12 +286,29 @@ class DnsConfig {
   /// Preset DNS options for quick selection in settings UI
   /// (label, dohUrl, plainHost)
   static const List<DnsPreset> dnsPresets = <DnsPreset>[
-    DnsPreset('DNSPod (CN)', 'https://doh.pub/dns-query', '1.12.12.12'),
-    DnsPreset('AliDNS (CN)', 'https://dns.alidns.com/dns-query', '223.6.6.6'),
-    DnsPreset('360 (CN)', 'https://doh.360.cn/dns-query', '101.226.4.6'),
+    DnsPreset(
+      'DNSPod (CN)',
+      'https://doh.pub/dns-query',
+      '1.12.12.12',
+      cnOnly: true,
+    ),
+    DnsPreset(
+      'AliDNS (CN)',
+      'https://dns.alidns.com/dns-query',
+      '223.6.6.6',
+      cnOnly: true,
+    ),
     DnsPreset('Cloudflare', 'https://1.1.1.1/dns-query', '1.1.1.1'),
     DnsPreset('Google', 'https://8.8.8.8/dns-query', '8.8.8.8'),
   ];
+
+  /// Every host/address that only answers correctly from inside CN, derived
+  /// from the presets so the picker stays the single source of truth.
+  static Set<String> get _cnOnlyHosts => <String>{
+        for (final preset in dnsPresets)
+          if (preset.cnOnly) ...<String>[preset.dohHost, preset.plainHost],
+        ..._retiredCnHosts,
+      };
   static const _defaultProxyDomains = <String>[];
   static const _defaultFakeDomains = <String>[];
   static const _defaultDirectIpCidrs = <String>[
@@ -359,31 +386,100 @@ class DnsConfig {
   static String get directSecondaryDefault =>
       _normalizeDirectEndpoint(directDns2.value, primary: false);
 
-  static bool _isCnOnlyDohEndpoint(String value) {
-    final host = Uri.tryParse(value.trim())?.host.toLowerCase() ?? '';
-    return _cnOnlyDohHosts.contains(host);
+  /// Host of an endpoint, whether it is written as a DoH URL or as a bare
+  /// address. `Uri.host` alone is not enough: it returns empty for a bare
+  /// hostname, which is exactly the shape [setDohEnabled] leaves behind when
+  /// DoH is switched off.
+  static String _hostOf(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
+      return uri.host.toLowerCase();
+    }
+    return trimmed.toLowerCase();
   }
 
-  /// One-shot migration to schema v1.
+  static bool _isIpLiteral(String value) {
+    final host = value.startsWith('[') && value.endsWith(']')
+        ? value.substring(1, value.length - 1)
+        : value;
+    return host.isNotEmpty && InternetAddress.tryParse(host) != null;
+  }
+
+  /// True when [value] names a resolver that only answers correctly from
+  /// inside CN — wrong on the proxy slot, which is queried from the exit node.
+  static bool isCnOnlyResolver(String value) =>
+      _cnOnlyHosts.contains(_hostOf(value));
+
+  /// Resolve [value] to an address that can actually be dialled without DNS.
   ///
-  /// Builds up to v1.1.0+5 defaulted the proxy DoH slot to CN-domestic
+  /// A plain resolver address is used before any name resolution exists, and
+  /// the direct ones are additionally handed to the OS as the tunnel's DNS
+  /// servers — both require an IP literal. A known provider's DoH host maps
+  /// onto its own plain IP; anything else unresolvable falls back to the
+  /// built-in default rather than being written out as an undialable name.
+  static String _plainAddressFor(String value, String fallback) {
+    final host = _hostOf(value);
+    if (host.isEmpty) {
+      return fallback;
+    }
+    if (_isIpLiteral(host)) {
+      return host;
+    }
+    for (final preset in dnsPresets) {
+      if (preset.dohHost == host) {
+        return preset.plainHost;
+      }
+    }
+    return fallback;
+  }
+
+  static DnsTransportMode _readTransportMode(SharedPreferences prefs) {
+    final legacyDotEnabled = prefs.getBool(_legacyDotEnabledKey);
+    return DnsTransportMode.fromStorage(
+      prefs.getString(_transportModeKey) ??
+          ((legacyDotEnabled ?? true)
+              ? DnsTransportMode.doh.storageValue
+              : DnsTransportMode.plain.storageValue),
+    );
+  }
+
+  /// One-shot migration of the proxy resolver slots.
+  ///
+  /// v1: builds up to v1.1.0+5 defaulted the proxy DoH slot to CN-domestic
   /// providers (doh.pub / dns.alidns.com). Those resolvers are routed through
   /// the proxy outbound, so every lookup travelled to the overseas exit node
   /// and back into CN — high RTT, frequent rate-limiting of foreign source
   /// IPs, and CN-optimised answers then dialled from the wrong vantage point.
-  /// Rewrite them to the IP-literal defaults; any other user-chosen value is
-  /// left untouched.
+  ///
+  /// v2: v1 matched on `Uri.host`, which is empty for a bare hostname, so it
+  /// only ever recognised full DoH URLs. Turning DoH off rewrites a stored
+  /// endpoint to its bare host (`dns.alidns.com`) — v1 read that as a non-CN
+  /// value and left it in place, and as a plain resolver it is not dialable
+  /// at all. Re-run with host-level matching to repair those.
+  ///
+  /// Any other user-chosen value is left untouched.
   static Future<void> _migrateProxyResolvers(SharedPreferences prefs) async {
     if ((prefs.getInt(_schemaVersionKey) ?? 0) >= _currentSchemaVersion) {
       return;
     }
+    final mode = _readTransportMode(prefs);
     final storedPrimary = prefs.getString(_proxyDns1Key);
-    if (storedPrimary != null && _isCnOnlyDohEndpoint(storedPrimary)) {
-      await prefs.setString(_proxyDns1Key, _defaultDohDns1);
+    if (storedPrimary != null && isCnOnlyResolver(storedPrimary)) {
+      await prefs.setString(
+        _proxyDns1Key,
+        _bootstrapProxyDefault(mode, primary: true),
+      );
     }
     final storedSecondary = prefs.getString(_proxyDns2Key);
-    if (storedSecondary != null && _isCnOnlyDohEndpoint(storedSecondary)) {
-      await prefs.setString(_proxyDns2Key, _defaultDohDns2);
+    if (storedSecondary != null && isCnOnlyResolver(storedSecondary)) {
+      await prefs.setString(
+        _proxyDns2Key,
+        _bootstrapProxyDefault(mode, primary: false),
+      );
     }
     await prefs.setInt(_schemaVersionKey, _currentSchemaVersion);
   }
@@ -391,13 +487,7 @@ class DnsConfig {
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     await _migrateProxyResolvers(prefs);
-    final legacyDotEnabled = prefs.getBool(_legacyDotEnabledKey);
-    transportMode.value = DnsTransportMode.fromStorage(
-      prefs.getString(_transportModeKey) ??
-          ((legacyDotEnabled ?? true)
-              ? DnsTransportMode.doh.storageValue
-              : DnsTransportMode.plain.storageValue),
-    );
+    transportMode.value = _readTransportMode(prefs);
     proxyDns1.value = _normalizeProxyEndpoint(
       prefs.getString(_proxyDns1Key),
       transportMode.value,
@@ -508,15 +598,6 @@ class DnsConfig {
     ].where((server) => server.isNotEmpty).toList();
     return servers.toSet().toList();
   }
-
-  /// Proxy-slot resolvers that cannot answer correctly from the exit node.
-  ///
-  /// Proxy resolvers are queried through the `proxy` outbound, so a CN-only
-  /// provider here means every lookup crosses the tunnel and comes back with
-  /// answers optimised for the wrong vantage point. Surfaced in settings so
-  /// the misconfiguration is visible rather than silent.
-  static List<String> get misplacedProxyResolvers =>
-      proxyResolversForXray().where(_isCnOnlyDohEndpoint).toList();
 
   static List<String> directResolversForXray() {
     final servers = <String>[
@@ -690,29 +771,19 @@ class DnsConfig {
       return Uri(scheme: 'https', host: host, path: '/dns-query').toString();
     }
 
-    if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
-      return uri.host;
-    }
-    return trimmed;
+    return _plainAddressFor(trimmed, fallback);
   }
 
   static String _normalizeDirectEndpoint(
     String? endpoint, {
     required bool primary,
   }) {
+    final fallback = _bootstrapDirectDefault(primary: primary);
     final trimmed = endpoint?.trim() ?? '';
     if (trimmed.isEmpty) {
-      return _bootstrapDirectDefault(primary: primary);
+      return fallback;
     }
-
-    final uri = Uri.tryParse(trimmed);
-    if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
-      final host = uri.host;
-      if (host.isNotEmpty) {
-        return host;
-      }
-    }
-    return trimmed;
+    return _plainAddressFor(trimmed, fallback);
   }
 }
 

@@ -1048,17 +1048,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _dnsGroup(BuildContext context) {
     return SettingsGroup(
       children: [
-        SettingsRow(
-          icon: Icons.dns,
-          title: context.l10n.get('proxyDnsConfig'),
-          value: DnsConfig.proxyDns1.value,
-          onTap: _showProxyDnsDialog,
+        // Listen rather than read once: confirming either dialog updates the
+        // notifier without rebuilding this screen, so a plain read leaves the
+        // row showing the previous resolver.
+        ValueListenableBuilder<String>(
+          valueListenable: DnsConfig.proxyDns1,
+          builder: (context, proxyDns, _) => SettingsRow(
+            icon: Icons.dns,
+            title: context.l10n.get('proxyDnsConfig'),
+            value: proxyDns,
+            onTap: _showProxyDnsDialog,
+          ),
         ),
-        SettingsRow(
-          icon: Icons.dns_outlined,
-          title: context.l10n.get('directDnsConfig'),
-          value: DnsConfig.directDns1.value,
-          onTap: _showDirectDnsDialog,
+        ValueListenableBuilder<String>(
+          valueListenable: DnsConfig.directDns1,
+          builder: (context, directDns, _) => SettingsRow(
+            icon: Icons.dns_outlined,
+            title: context.l10n.get('directDnsConfig'),
+            value: directDns,
+            onTap: _showDirectDnsDialog,
+          ),
         ),
         SettingsRow(
           icon: Icons.vpn_lock,
@@ -1294,25 +1303,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Preset quick-select chips
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: DnsConfig.dnsPresets.map((preset) {
-                  final isSelected = dns1Controller.text == preset.dohUrl ||
-                      dns1Controller.text == preset.plainHost;
-                  return ActionChip(
-                    label: Text(preset.label),
-                    backgroundColor: isSelected
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : null,
-                    onPressed: () {
-                      dns1Controller.text = DnsConfig.dohEnabled
-                          ? preset.dohUrl
-                          : preset.plainHost;
-                    },
+              // Rebuild on every edit: the chip highlight and the CN-only
+              // warning both track what is currently in the fields, and a
+              // controller change does not rebuild the dialog by itself.
+              AnimatedBuilder(
+                animation: Listenable.merge([dns1Controller, dns2Controller]),
+                builder: (context, _) {
+                  final primary = dns1Controller.text.trim();
+                  final cnOnly = DnsConfig.isCnOnlyResolver(primary) ||
+                      DnsConfig.isCnOnlyResolver(dns2Controller.text.trim());
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Preset quick-select chips
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: DnsConfig.dnsPresets.map((preset) {
+                          final isSelected = primary == preset.dohUrl ||
+                              primary == preset.plainHost;
+                          return ActionChip(
+                            label: Text(preset.label),
+                            backgroundColor: isSelected
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : null,
+                            onPressed: () {
+                              dns1Controller.text = DnsConfig.dohEnabled
+                                  ? preset.dohUrl
+                                  : preset.plainHost;
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      if (cnOnly) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          context.l10n.get('proxyDnsWarnCnOnly'),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                        ),
+                      ],
+                    ],
                   );
-                }).toList(),
+                },
               ),
               const SizedBox(height: 16),
               Align(
@@ -1374,7 +1410,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-    );
+    ).whenComplete(() {
+      dns1Controller.dispose();
+      dns2Controller.dispose();
+    });
   }
 
   void _showDirectDnsDialog() {
@@ -1432,7 +1471,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-    );
+    ).whenComplete(() {
+      dns1Controller.dispose();
+      dns2Controller.dispose();
+    });
   }
 
   void _showTelemetryData() {
