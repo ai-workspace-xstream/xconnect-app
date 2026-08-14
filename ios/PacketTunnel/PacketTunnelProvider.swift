@@ -708,6 +708,7 @@ private final class PacketTunnelMetricsSampler {
   private var lastResourceSampleAt: TimeInterval?
   private var cachedCpuPercent: Double?
   private var cachedMemoryBytes: Int64?
+  private var cachedGoMemory: GoMemoryStats?
 
   func start(interfaceName: String?) {
     stop()
@@ -717,7 +718,8 @@ private final class PacketTunnelMetricsSampler {
         downloadBytesPerSecond: nil,
         uploadBytesPerSecond: nil,
         memoryBytes: cachedMemoryBytes,
-        cpuPercent: cachedCpuPercent
+        cpuPercent: cachedCpuPercent,
+        goMemory: cachedGoMemory
       )
       return
     }
@@ -729,7 +731,8 @@ private final class PacketTunnelMetricsSampler {
       downloadBytesPerSecond: 0,
       uploadBytesPerSecond: 0,
       memoryBytes: cachedMemoryBytes,
-      cpuPercent: cachedCpuPercent
+      cpuPercent: cachedCpuPercent,
+      goMemory: cachedGoMemory
     )
 
     let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -749,6 +752,7 @@ private final class PacketTunnelMetricsSampler {
     lastResourceSampleAt = nil
     cachedCpuPercent = nil
     cachedMemoryBytes = nil
+    cachedGoMemory = nil
     store.clear()
   }
 
@@ -760,7 +764,8 @@ private final class PacketTunnelMetricsSampler {
         downloadBytesPerSecond: nil,
         uploadBytesPerSecond: nil,
         memoryBytes: cachedMemoryBytes,
-        cpuPercent: cachedCpuPercent
+        cpuPercent: cachedCpuPercent,
+        goMemory: cachedGoMemory
       )
       lastSample = nil
       return
@@ -788,7 +793,8 @@ private final class PacketTunnelMetricsSampler {
       downloadBytesPerSecond: downloadBytesPerSecond,
       uploadBytesPerSecond: uploadBytesPerSecond,
       memoryBytes: cachedMemoryBytes,
-      cpuPercent: cachedCpuPercent
+      cpuPercent: cachedCpuPercent,
+      goMemory: cachedGoMemory
     )
   }
 
@@ -903,7 +909,39 @@ private final class PacketTunnelMetricsSampler {
     }
     cachedCpuPercent = currentCpuPercent()
     cachedMemoryBytes = currentMemoryBytes()
+    cachedGoMemory = readGoMemoryStats()
     lastResourceSampleAt = timestamp
+  }
+
+  /// Splits the process footprint into the Go runtime's share and everything
+  /// else, so footprint work can target whichever actually dominates instead
+  /// of guessing from resident size alone.
+  private func readGoMemoryStats() -> GoMemoryStats? {
+    guard let raw = XrayTunnelMemoryStats() else {
+      return nil
+    }
+    defer { FreeCString(raw) }
+    let json = String(cString: raw)
+    guard
+      let data = json.data(using: .utf8),
+      let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+      return nil
+    }
+    func number(_ key: String) -> Int64? {
+      (root[key] as? NSNumber)?.int64Value
+    }
+    guard let heapInUse = number("heapInUse"), let sys = number("sys") else {
+      return nil
+    }
+    return GoMemoryStats(
+      heapInUseBytes: heapInUse,
+      heapIdleBytes: number("heapIdle") ?? 0,
+      heapReleasedBytes: number("heapReleased") ?? 0,
+      sysBytes: sys,
+      numGC: number("numGC") ?? 0,
+      goroutines: number("goroutines") ?? 0
+    )
   }
 
   private struct InterfaceCounters {
@@ -914,6 +952,15 @@ private final class PacketTunnelMetricsSampler {
 
 }
 
+private struct GoMemoryStats {
+  let heapInUseBytes: Int64
+  let heapIdleBytes: Int64
+  let heapReleasedBytes: Int64
+  let sysBytes: Int64
+  let numGC: Int64
+  let goroutines: Int64
+}
+
 private final class PacketTunnelMetricsSnapshotStore {
   private let defaults = UserDefaults(suiteName: "group.plus.svc.xconnect") ?? .standard
   private let snapshotKey = "packet_tunnel_metrics_snapshot"
@@ -922,11 +969,20 @@ private final class PacketTunnelMetricsSnapshotStore {
     downloadBytesPerSecond: Int64?,
     uploadBytesPerSecond: Int64?,
     memoryBytes: Int64?,
-    cpuPercent: Double?
+    cpuPercent: Double?,
+    goMemory: GoMemoryStats? = nil
   ) {
     var snapshot: [String: Any] = [
       "updatedAt": Int64(Date().timeIntervalSince1970 * 1000)
     ]
+    if let goMemory {
+      snapshot["goHeapInUseBytes"] = NSNumber(value: goMemory.heapInUseBytes)
+      snapshot["goHeapIdleBytes"] = NSNumber(value: goMemory.heapIdleBytes)
+      snapshot["goHeapReleasedBytes"] = NSNumber(value: goMemory.heapReleasedBytes)
+      snapshot["goSysBytes"] = NSNumber(value: goMemory.sysBytes)
+      snapshot["goNumGC"] = NSNumber(value: goMemory.numGC)
+      snapshot["goGoroutines"] = NSNumber(value: goMemory.goroutines)
+    }
     if let downloadBytesPerSecond {
       snapshot["downloadBytesPerSecond"] = NSNumber(value: downloadBytesPerSecond)
     }

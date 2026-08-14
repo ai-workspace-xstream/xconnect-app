@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tunnel Mode now verifies the data plane after connecting, with a settle delay and retries instead of a single immediate lookup. The check is advisory: a failed probe reports the problem and leaves the tunnel running, so a connection whose DNS has not settled yet is no longer torn down.
+- Reduced the iOS Packet Tunnel extension's memory footprint by tightening Go GC pacing and returning idle heap to the system while a tunnel is up, and exposed Go runtime memory in the extension metrics snapshot so footprint work can target the right layer.
 - Reframed the primary connection flow around self-managed connections and optional workspace connectors.
 - Removed the standalone node configuration navigation tab; connection import remains available from the global connector action.
 - Updated user-facing copy toward neutral Secure Tunnel and connection terminology for international store distribution.

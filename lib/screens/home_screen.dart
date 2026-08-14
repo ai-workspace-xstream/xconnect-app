@@ -626,8 +626,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
         _showMessage(verifyMsg);
       } else {
-        // TUN mode: log the launch result
+        // TUN mode: log the launch result, then confirm the data plane in the
+        // background. The probe takes seconds to settle, so it must not hold
+        // the toggle disabled; it aborts on its own if the user disconnects.
         addAppLog('[tunnel] $msg');
+        unawaited(_verifyTunnelDataPlane());
       }
     } finally {
       if (mounted) {
@@ -636,6 +639,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _isSwitchingNode = false;
       }
     }
+  }
+
+  /// Confirm the tunnel carries traffic, and surface the result.
+  ///
+  /// This is diagnostic, not a gate: a failed probe leaves the tunnel running
+  /// and the node active. Tearing the tunnel down here is what previously
+  /// killed healthy connections whose DNS had simply not settled yet.
+  Future<void> _verifyTunnelDataPlane() async {
+    final report = await NativeBridge.verifyTunnelDataPlane();
+    if (!mounted) return;
+    if (report.ok) {
+      addAppLog('[tunnel] ${report.describe()}');
+      return;
+    }
+    if (!report.isConclusiveFailure) {
+      // Tunnel went away mid-probe: says nothing about data-plane health.
+      addAppLog('[tunnel] ${report.describe()}', level: LogLevel.info);
+      return;
+    }
+    addAppLog('[tunnel] ${report.describe()}', level: LogLevel.error);
+    _showMessage(report.describe());
   }
 
   Future<void> _maybeShowPacketTunnelPermissionGuide(
