@@ -234,6 +234,7 @@ class DnsConfig {
   static const _transportModeKey = 'dnsTransportMode';
   static const _legacyDotEnabledKey = 'tunDnsOverTls';
   static const _tunnelDnsViaProxyKey = 'tunnelDnsViaProxy';
+  static const _resolveProxyDomainDirectKey = 'resolveProxyDomainDirect';
   static const _http3PassthroughKey = 'http3Passthrough';
   static const _schemaVersionKey = 'dnsSchemaVersion';
   static const _currentSchemaVersion = 3;
@@ -307,6 +308,22 @@ class DnsConfig {
   /// which is the common case this app is built for.
   static final ValueNotifier<bool> tunnelDnsViaProxy =
       ValueNotifier<bool>(true);
+
+  /// Resolves the outbound server's own domain through the direct resolvers
+  /// instead of through the proxy.
+  ///
+  /// Complements pinning the server to a literal IP before the tunnel starts,
+  /// which is the primary defence against the resolution deadlock. This helps
+  /// when the engine still resolves the name itself. Off by default: it takes
+  /// the server domain outside the proxy path, which is a visibility trade-off
+  /// the user should opt into.
+  static final ValueNotifier<bool> resolveProxyDomainDirect =
+      ValueNotifier<bool>(false);
+
+  /// Outbound server domains for the config currently being built, supplied by
+  /// the tunnel start path. Only consulted when [resolveProxyDomainDirect] is
+  /// on.
+  static List<String> proxyServerDomains = const <String>[];
 
   static bool get dohEnabled => transportMode.value == DnsTransportMode.doh;
 
@@ -445,6 +462,14 @@ class DnsConfig {
     tunnelDnsViaProxy.addListener(() {
       prefs.setBool(_tunnelDnsViaProxyKey, tunnelDnsViaProxy.value);
     });
+    resolveProxyDomainDirect.value =
+        prefs.getBool(_resolveProxyDomainDirectKey) ?? false;
+    resolveProxyDomainDirect.addListener(() {
+      prefs.setBool(
+        _resolveProxyDomainDirectKey,
+        resolveProxyDomainDirect.value,
+      );
+    });
   }
 
   /// Transport for the proxy resolvers. The addresses themselves are built in,
@@ -504,8 +529,19 @@ class DnsConfig {
   static List<String> get darwinPacketTunnelDnsServers6 =>
       List<String>.from(_packetTunnelLocalDns6Servers);
 
-  static List<String> get directDomainSet =>
-      List<String>.from(_defaultDirectDomains);
+  static List<String> get directDomainSet {
+    final domains = List<String>.from(_defaultDirectDomains);
+    if (!resolveProxyDomainDirect.value) {
+      return domains;
+    }
+    for (final domain in proxyServerDomains) {
+      final entry = 'full:$domain';
+      if (!domains.contains(entry)) {
+        domains.add(entry);
+      }
+    }
+    return domains;
+  }
 
   static List<String> get directIpCidrs =>
       List<String>.from(_defaultDirectIpCidrs);

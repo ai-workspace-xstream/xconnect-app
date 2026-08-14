@@ -1096,6 +1096,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
         ),
+        ValueListenableBuilder<bool>(
+          valueListenable: DnsConfig.resolveProxyDomainDirect,
+          builder: (context, direct, _) => SettingsRow(
+            icon: Icons.dns_outlined,
+            kind: SettingsRowKind.toggle,
+            title: context.l10n.get('resolveProxyDomainDirect'),
+            description: context.l10n.get('resolveProxyDomainDirectHint'),
+            switchValue: direct,
+            onSwitchChanged: (value) {
+              DnsConfig.resolveProxyDomainDirect.value = value;
+              addAppLog('出站服务器域名直连解析: ${value ? "开启" : "关闭"}');
+            },
+          ),
+        ),
       ],
     );
   }
