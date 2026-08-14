@@ -5,6 +5,7 @@ import 'dart:ffi' as ffi;
 import 'package:flutter/services.dart';
 import 'package:ffi/ffi.dart';
 import '../../services/tunnel_data_plane_probe.dart';
+import '../../services/tunnel_endpoint_resolver.dart';
 import '../../services/vpn_config_service.dart'; // 引入新的 VpnConfig 类
 import '../bindings/bridge_bindings.dart';
 import '../app/darwin_host_api.g.dart' as darwin_host;
@@ -332,8 +333,12 @@ class NativeBridge {
       try {
         await _ensurePacketTunnelStoppedBeforeStart();
         _mobileActiveNodeName = null;
+        // Pin while the tunnel is down: once it is up, the system resolver is
+        // captured and this same lookup is the one that deadlocks.
+        final pinned = await _prepareRuntimeTunnelConfig(runtimeConfigPath);
         final profile = await _buildDefaultTunnelProfileMap(
-          configPath: runtimeConfigPath,
+          configPath: pinned.configPath,
+          excludedIpv4: pinned.excludedIpv4,
         );
         await _channel.invokeMethod<String>('savePacketTunnelProfile', profile);
         final result = await _channel.invokeMethod<String>(
@@ -357,8 +362,12 @@ class NativeBridge {
       try {
         await _ensurePacketTunnelStoppedBeforeStart();
         await _stopIosLocalEngineIfNeeded();
+        // Pin while the tunnel is down: once it is up, the system resolver is
+        // captured and this same lookup is the one that deadlocks.
+        final pinned = await _prepareRuntimeTunnelConfig(runtimeConfigPath);
         final profile = await _buildDefaultTunnelProfile(
-          configPath: runtimeConfigPath,
+          configPath: pinned.configPath,
+          excludedIpv4: pinned.excludedIpv4,
         );
         final saveResult = Platform.isIOS
             ? await _saveIosPacketTunnelProfileIfNeeded(profile)
@@ -831,13 +840,18 @@ class NativeBridge {
   /// lookup.
   ///
   /// Advisory only: it never stops the tunnel.
+  ///
+  /// [budget] deliberately has no default here. Declaring one a second time
+  /// silently shadowed the probe's own default, so raising the probe's budget
+  /// had no effect on the app at all.
   static Future<TunnelDataPlaneReport> verifyTunnelDataPlane({
-    Duration budget = const Duration(seconds: 12),
+    Duration? budget,
   }) {
-    return TunnelDataPlaneProbe(
-      readTunnelState: () async => (await getPacketTunnelStatus()).status,
-      budget: budget,
-    ).run();
+    Future<String> readState() async => (await getPacketTunnelStatus()).status;
+    final probe = budget == null
+        ? TunnelDataPlaneProbe(readTunnelState: readState)
+        : TunnelDataPlaneProbe(readTunnelState: readState, budget: budget);
+    return probe.run();
   }
 
   static Future<DesktopRuntimeSnapshot> getDesktopRuntimeSnapshot() async {
@@ -867,6 +881,7 @@ class NativeBridge {
 
   static Future<darwin_host.TunnelProfile> _buildDefaultTunnelProfile({
     required String configPath,
+    List<String> excludedIpv4 = const <String>[],
   }) async {
     return darwin_host.TunnelProfile(
       mtu: 1500,
@@ -882,7 +897,15 @@ class NativeBridge {
           subnetMask: '0.0.0.0',
         ),
       ],
-      ipv4ExcludedRoutes: <darwin_host.TunnelRouteV4>[],
+      // Host routes for the servers the engine dials, so its own packets never
+      // re-enter the tunnel they are building.
+      ipv4ExcludedRoutes: <darwin_host.TunnelRouteV4>[
+        for (final address in excludedIpv4)
+          darwin_host.TunnelRouteV4(
+            destinationAddress: address,
+            subnetMask: '255.255.255.255',
+          ),
+      ],
       ipv6Addresses: <String>[],
       ipv6NetworkPrefixLengths: <int>[],
       ipv6IncludedRoutes: <darwin_host.TunnelRouteV6>[],
@@ -893,6 +916,7 @@ class NativeBridge {
 
   static Future<Map<String, Object?>> _buildDefaultTunnelProfileMap({
     String? configPath,
+    List<String> excludedIpv4 = const <String>[],
   }) async {
     return <String, Object?>{
       'mtu': 1500,
@@ -908,7 +932,13 @@ class NativeBridge {
           'subnetMask': '0.0.0.0',
         },
       ],
-      'ipv4ExcludedRoutes': <Map<String, String>>[],
+      'ipv4ExcludedRoutes': <Map<String, String>>[
+        for (final address in excludedIpv4)
+          <String, String>{
+            'destinationAddress': address,
+            'subnetMask': '255.255.255.255',
+          },
+      ],
       'ipv6Addresses': <String>[],
       'ipv6NetworkPrefixLengths': <int>[],
       'ipv6IncludedRoutes': <Map<String, Object?>>[],
@@ -1037,6 +1067,11 @@ class NativeBridge {
       final effectiveBlockQuic =
           !GlobalState.http3Passthrough.value || !proxySupportsUdp443;
 
+      // Tell the DNS control plane which server domains belong to the outbound
+      // itself, so the optional direct-resolution rule has something to match.
+      DnsConfig.proxyServerDomains =
+          TunnelEndpointResolver.outboundServerDomains(sourceJson);
+
       sourceJson['dns'] = VpnConfig.buildSecureDnsConfig();
       sourceJson['routing'] = VpnConfig.buildSecureDnsRoutingConfig(
         sourceJson['routing'],
@@ -1057,6 +1092,70 @@ class NativeBridge {
     } catch (_) {
       return normalized;
     }
+  }
+
+  /// Pins the outbound server domains and writes the result to a runtime copy.
+  ///
+  /// Returns the path the Packet Tunnel should load and the literal IPv4
+  /// addresses to exclude from the tunnel routes.
+  ///
+  /// The copy matters: [_prepareCanonicalTunnelConfigPath] writes back to the
+  /// user's saved node file, so pinning in place would permanently replace
+  /// their server domain with whatever it resolved to once.
+  ///
+  /// Resolution failure is not fatal. The domain is left alone and the tunnel
+  /// starts exactly as it did before, which is no worse than the old
+  /// behaviour and keeps a working setup working while a resolver is flaky.
+  static Future<({String configPath, List<String> excludedIpv4})>
+      _prepareRuntimeTunnelConfig(String canonicalPath) async {
+    const unchanged = <String>[];
+    try {
+      final source = File(canonicalPath);
+      if (!await source.exists()) {
+        return (configPath: canonicalPath, excludedIpv4: unchanged);
+      }
+      final decoded = jsonDecode(await source.readAsString());
+      if (decoded is! Map<String, dynamic>) {
+        return (configPath: canonicalPath, excludedIpv4: unchanged);
+      }
+
+      final pinning =
+          await TunnelEndpointResolver().pinOutboundEndpoints(decoded);
+      for (final domain in pinning.failures) {
+        addAppLog(
+          '[tunnel] 出站服务器域名解析失败，仍按域名连接: $domain',
+          level: LogLevel.warning,
+        );
+      }
+      if (!pinning.changedAnything) {
+        return (configPath: canonicalPath, excludedIpv4: unchanged);
+      }
+
+      final runtimePath = _runtimeConfigPathFor(canonicalPath);
+      await File(runtimePath).writeAsString(
+        const JsonEncoder.withIndent('  ').convert(pinning.config),
+        flush: true,
+      );
+      pinning.pinned.forEach((domain, address) {
+        addAppLog('[tunnel] 出站服务器已固定: $domain -> $address');
+      });
+      return (configPath: runtimePath, excludedIpv4: pinning.pinnedIpv4);
+    } catch (e) {
+      addAppLog('[tunnel] 出站服务器固定失败，回退为域名连接: $e', level: LogLevel.warning);
+      return (configPath: canonicalPath, excludedIpv4: unchanged);
+    }
+  }
+
+  static String _runtimeConfigPathFor(String canonicalPath) {
+    const suffix = '.json';
+    if (canonicalPath.endsWith(suffix)) {
+      final stem = canonicalPath.substring(
+        0,
+        canonicalPath.length - suffix.length,
+      );
+      return '$stem.runtime$suffix';
+    }
+    return '$canonicalPath.runtime';
   }
 
   static Future<void> _removeLegacyCanonicalConfigIfNeeded({
@@ -1229,8 +1328,10 @@ class NativeBridge {
 
     _ensureDarwinFlutterApiReady();
     try {
+      final pinned = await _prepareRuntimeTunnelConfig(runtimeConfigPath);
       final profile = await _buildDefaultTunnelProfile(
-        configPath: runtimeConfigPath,
+        configPath: pinned.configPath,
+        excludedIpv4: pinned.excludedIpv4,
       );
       final saveResult = await _saveIosPacketTunnelProfileIfNeeded(profile);
       return saveResult == 'profile_saved' || saveResult == 'profile_unchanged'
@@ -1289,8 +1390,10 @@ class NativeBridge {
         );
         stopXray();
         _mobileActiveNodeName = null;
+        final pinned = await _prepareRuntimeTunnelConfig(canonicalPath);
         final profile = await _buildDefaultTunnelProfileMap(
-          configPath: canonicalPath,
+          configPath: pinned.configPath,
+          excludedIpv4: pinned.excludedIpv4,
         );
         await _channel.invokeMethod<String>('savePacketTunnelProfile', profile);
         final result = await _channel.invokeMethod<String>(
@@ -1320,8 +1423,10 @@ class NativeBridge {
         configPath,
         isTunMode: true,
       );
+      final pinned = await _prepareRuntimeTunnelConfig(canonicalPath);
       final profile = await _buildDefaultTunnelProfile(
-        configPath: canonicalPath,
+        configPath: pinned.configPath,
+        excludedIpv4: pinned.excludedIpv4,
       );
       final saveResult = Platform.isIOS
           ? await _saveIosPacketTunnelProfileIfNeeded(profile)
