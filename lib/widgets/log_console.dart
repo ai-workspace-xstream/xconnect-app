@@ -46,6 +46,13 @@ class LogConsoleState extends State<LogConsole> {
     final entry = LogEntry(level, message);
     setState(() {
       _logs.add(entry);
+      // Bounded like LogStore: the console is a live view, not the archive.
+      // The full record is on disk, so keeping every line here would just grow
+      // a second unbounded copy for the lifetime of the connection.
+      final overflow = _logs.length - LogStore.maxEntries;
+      if (overflow > 0) {
+        _logs.removeRange(0, overflow);
+      }
     });
     LogStore.add(entry); // ⬅️ 同步写入共享全局日志
   }

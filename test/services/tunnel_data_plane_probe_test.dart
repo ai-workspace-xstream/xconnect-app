@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xconnect/services/tunnel_data_plane_probe.dart';
+import 'package:xconnect/utils/app_log_file.dart';
 
 /// Drives the probe with a virtual clock so retry behaviour is tested without
 /// real waiting.
@@ -23,6 +24,8 @@ class _FakeClock {
 InternetAddress _address(String value) => InternetAddress(value);
 
 void main() {
+  setUpAll(() => AppLogFile.enabled = false);
+
   group('TunnelDataPlaneProbe', () {
     test('waits out the settle delay before the first attempt', () async {
       final clock = _FakeClock();
@@ -164,6 +167,63 @@ void main() {
       final report = await probe.run();
 
       expect(report.ok, isTrue);
+    });
+
+    test('never overruns the budget, even when every call burns its timeout',
+        () async {
+      final clock = _FakeClock();
+
+      final probe = TunnelDataPlaneProbe(
+        readTunnelState: () async => 'connected',
+        budget: const Duration(seconds: 12),
+        // Model a weak link: each call consumes its full timeout before
+        // failing. Before the deadline clamp this overran the budget by
+        // seconds, matching the 17.2s/16.1s seen on device against a 12s
+        // budget.
+        resolveHost: (host, timeout) async {
+          clock.advance(timeout);
+          throw const SocketException('Failed host lookup');
+        },
+        probeTransport: (host, port, timeout) async {
+          clock.advance(timeout);
+          throw const SocketException(
+            'Connection failed (OS Error: No route to host, errno = 65)',
+          );
+        },
+        sleep: clock.sleep,
+        now: clock.now,
+      );
+
+      final report = await probe.run();
+
+      expect(report.outcome, TunnelDataPlaneOutcome.transportUnreachable);
+      expect(report.elapsed, lessThanOrEqualTo(const Duration(seconds: 12)));
+    });
+
+    test('backs off so a long budget buys waiting, not more attempts',
+        () async {
+      final clock = _FakeClock();
+
+      final probe = TunnelDataPlaneProbe(
+        readTunnelState: () async => 'connected',
+        budget: const Duration(seconds: 20),
+        // An unreachable route fails instantly, which is what let the field
+        // run burn 19 attempts in 16s.
+        resolveHost: (host, timeout) async {
+          throw const SocketException('Failed host lookup');
+        },
+        probeTransport: (host, port, timeout) async {
+          throw const SocketException('No route to host');
+        },
+        sleep: clock.sleep,
+        now: clock.now,
+      );
+
+      final report = await probe.run();
+
+      expect(report.elapsed, lessThanOrEqualTo(const Duration(seconds: 20)));
+      expect(report.attempts, lessThan(15));
+      expect(clock.slept.last, greaterThan(clock.slept[1]));
     });
 
     test('stops retrying at the budget instead of running forever', () async {
