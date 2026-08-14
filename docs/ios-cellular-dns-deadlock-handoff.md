@@ -3,7 +3,9 @@
 **Date**: 2026-08-14
 **Device**: iPhone 16e (iPhone17,5), iOS 27.0, UDID `00008140-000E75903EF2801C`
 **Node under test**: `tky-proxy.svc.plus:443`, VLESS over XHTTP/TLS
-**Status**: root cause **confirmed with engine logs**; fix **not implemented**, awaiting a decision between two approaches.
+**Status**: root cause **confirmed with engine logs**; iOS endpoint pinning and DNS cleanup **implemented, merged, and verified on real 5G**.
+
+> This document started as the investigation handoff. The final end-to-end record is [XConnect iOS 蜂窝网络 DNS 死锁 Debug 完整记录](ios-cellular-dns-deadlock-debug-record-2026-08-14.md). This file keeps the concise root-cause and operational handoff view; the linked record contains the complete timeline, build-path mistake, clean-install evidence, soak results, and release details.
 
 ---
 
@@ -69,19 +71,26 @@ Note: IPv4 **is** hardcoded in three places (`queryStrategy: "UseIPv4"` in `lib/
 
 ---
 
-## 4. Proposed fix (not implemented)
+## 4. Implemented fix
 
 Break the cycle so the proxy dial never depends on in-tunnel DNS.
 
-**Option 1 — resolve before connecting, dial by IP (recommended).**
-Resolve the server domain in the app *before* starting the tunnel, write the literal IP into `vnext.address`, and add that IP to `ipv4ExcludedRoutes` so its packets never enter utun. Safe here because the config already sets `tlsSettings.serverName` and `xhttpSettings.host` to the domain explicitly, so SNI and TLS validation are unaffected by swapping the dial address.
-Trade-off: needs a resolution step and a refresh policy for when the server IP changes.
+**The selected implementation is Option 1: resolve before connecting and dial by IP.**
 
-**Option 2 — add the server domain to the direct-DNS rule.**
-The config already has `dns-direct-primary` / `dns-direct-secondary` with a `domains` allowlist (`apple.com`, `localhost`, connectivity-check hosts, …) routed to `direct`. The **proxy's own domain is missing from that list**.
-Caveat: the failing lookup in the log is `dial tcp: lookup …`, i.e. Go's **system** resolver, not xray's internal DNS. So this alone may not fix it unless outbound address resolution is also routed through xray's internal DNS. Treat as a complement to Option 1, not a replacement.
+The iOS path now resolves the server domain before starting Packet Tunnel, writes the literal address into a runtime config copy, and adds the address to `ipv4ExcludedRoutes`. `serverName` and XHTTP `host` remain the original domain, so TLS SNI, certificate validation, and virtual hosting are unchanged.
 
-Whichever is chosen, keep the app-side data-plane probe as the regression signal: it caught this correctly.
+The resolver order is:
+
+1. System resolver while DNS is still outside the new tunnel.
+2. Literal-IP UDP DNS fallback.
+3. Literal-IP DoH JSON fallback.
+4. Fail closed if no address can be obtained; the app no longer starts a tunnel that will silently fall back to the domain.
+
+The iOS startup path also waits for a previous Packet Tunnel to settle to `disconnected` before beginning endpoint resolution. This prevents an old tunnel from continuing to capture the resolver needed by the next startup.
+
+The former “server-domain direct resolution” switch was removed rather than retained as a second, weaker mechanism. The failing lookup was Go/system resolution, so putting the domain into an Xray DNS allowlist alone would not reliably break the cycle.
+
+The app-side data-plane probe remains a diagnostic regression signal. It no longer tears down a healthy tunnel when iOS suspends the app during the probe; suspended runs are reported as inconclusive.
 
 ---
 
@@ -125,35 +134,31 @@ plutil -p g.plist
 ### Soak harness
 `scripts/ios_packet_tunnel_soak.sh` (+ `Runbook/iOS-Packet-Tunnel-Soak.md`), merged in PR #48. Samples RSS/CPU/throughput/Go heap/GC/goroutines, flags session restarts and errors, summarises on exit, and re-summarises an existing CSV with `--report`.
 
+The final Debug run used the script for 6 samples over 52 seconds before the release operation interrupted it. It reported `restarts=0`, `error_samples=0`, RSS drift of `+0.1 MB`, and stable Go runtime memory. The interval had 0 B/s reported throughput, so this is a stability smoke result rather than a complete sustained-traffic benchmark. A full 120-minute run with real device traffic remains the recommended long soak.
+
 ### LLDB attach does not work on this device
 `flutter run --debug` fails on iOS 27.0: LLDB cannot find the on-disk shared cache, the Dart VM Service is not discovered within 60 s, and the process is SIGKILLed. **Do not rely on an attached debug session here** — use the persisted logs above.
 
 ---
 
-## 6. Repository state
+## 6. Repository and release state
 
 **Merged**
 - PR #48 — data-plane probe, Packet Tunnel footprint work (Go GC pacing + scavenger, Go memory exported into the metrics snapshot), soak script + runbook.
 - PR #49 — probe budget made a hard bound + exponential backoff; app logs persisted to `Library/Caches`; in-memory log buffers bounded to 300 entries.
 
-**Released**
-- `main` @ `1e8b7c0`, `release/v1.0` cut from it, tag `v2026.8.14` pushed.
-- Branch ruleset "Release Branch Protection (release/\*)" applied (blocks deletion, force-push, non-linear history).
-- `pubspec.yaml` was bumped to `1.0.0+6` on main, then changed to `1.0.0+1` in the working tree per "new software line" — **uncommitted**.
-  ⚠️ App Store Connect requires strictly increasing build numbers **within an app record**. `+1` will be rejected if that record already has a build 5. Fine only for a genuinely new record.
+**Merged and released**
 
-**Uncommitted working-tree changes** (branch `main`)
+- PR #50 — initial iOS endpoint pinning and cellular DNS deadlock fix.
+- PR #51 — iOS DNS strategy cleanup, stale setting removal, desktop behavior preservation, and startup hardening.
+- `main` @ `27a312d`.
+- Final tag: `v2026.08.14-1938`.
+- iOS Release build installed on the real iPhone and verified on 5G.
+- macOS Desktop Release build verified as a universal `arm64`/`x86_64` app.
+- `flutter analyze lib test`: clean.
+- `flutter test`: 103 tests passed.
 
-| File | What |
-|---|---|
-| `ios/PacketTunnel/PacketTunnelProvider.swift` | engine error log into App Group; egress address-family diagnostic |
-| `lib/services/tunnel_data_plane_probe.dart` | `suspended` outcome — an app suspended mid-probe is inconclusive, not a failure |
-| `lib/utils/native_bridge.dart` | removed the duplicate `budget` default that silently shadowed the probe's own |
-| `test/services/tunnel_data_plane_probe_test.dart` | +2 regression tests (suspension; slow-but-valid runs still judged) |
-| `pubspec.yaml` | `1.0.0+1` |
-| `docs/ios-design.md` | user's own edit (soak command line) |
-
-`flutter analyze lib test` clean; `flutter test` 89 passing.
+The only local untracked item is the user's `.claude/` directory; it was deliberately excluded from the release commits.
 
 ---
 
@@ -181,9 +186,10 @@ Expect `taking detour [proxy] for [udp:1.1.1.1:53]` followed immediately by `dia
 
 ---
 
-## 9. Open questions
+## 9. Remaining follow-ups
 
-- Which fix approach (§4). Option 1 changes config generation, which affects **all** platforms, and `release/v1.0` is already cut — so this needs a deliberate call on whether it lands on `main` only or is cherry-picked to the release line.
-- Should the diagnostic instrumentation (§5) ship in release builds, or be gated? It is currently unconditional. The engine log is `loglevel: info` and will be chatty — 98 KB in roughly one minute.
-- `defaultNicSupport6` is a hardcoded `false` that never detects anything. Separate from this bug, but it means IPv6 is off by construction on every platform.
-- The extension's egress selection reads `monitor.currentPath` immediately after `monitor.start()`, which is asynchronous — an earlier trace recorded `egress = "unavailable"`, so the race is real. Not implicated in this bug, but it is a latent one.
+- Run the full 120-minute soak with continuous real traffic if release-grade memory/leak evidence is required. The short final run had no restart or error, but 0 B/s reported throughput.
+- The first failed default-node attempt produced a Packet Tunnel settle warning after the fail-closed path. Tky then started successfully; cleanup latency can be investigated separately.
+- macOS still prints the existing CocoaPods/Swift Package migration notice. It does not block the Desktop Release build.
+- `defaultNicSupport6` remains a hardcoded `false` outside the scope of this fix. It should be audited separately if IPv6 support becomes a requirement.
+- Egress path selection reads `monitor.currentPath` immediately after `monitor.start()` and may deserve a separate race fix. It was not implicated in this DNS deadlock.

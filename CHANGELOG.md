@@ -1,30 +1,60 @@
 # XConnect v1.0.0
 
-_Release Date: 2026-08-14 — tag `v2026.8.14`, branch `release/v1.0`_
+_Release Date: 2026-08-14 — tag `v2026.08.14-1938`, merge commit `27a312d`, branch `main`_
 
-## ✨ Features
+This entry records the changes between the previous daily release tag `v2026.8.14` and `v2026.08.14-1938`.
+
+## Before this tag
+
+- iOS Packet Tunnel data-plane probing, persisted App logs, Xray engine logs, egress-family diagnostics, and bounded Go runtime metrics were already available from PRs #48 and #49.
+- PR #50 had identified the cellular DNS deadlock and introduced the first endpoint-pinning direction.
+- The remaining risk was stale DNS UI/state, an iOS bootstrap path that could still be confused by an old Packet Tunnel session, and redundant server-domain resolution configuration.
+
+## ✨ Features and fixes in this tag
+
+- Resolve the iOS outbound server before starting Packet Tunnel, with system DNS followed by literal-IP UDP DNS and literal-IP DoH fallback.
+- Write a runtime config with the resolved IP, preserve TLS SNI/XHTTP Host as the original domain, and add the IP as a `/32` excluded route.
+- Fail closed when iOS cannot resolve the outbound endpoint instead of starting a tunnel that will fall back to a domain and deadlock.
+- Wait for a previous Packet Tunnel to settle to `disconnected` before resolving the next endpoint.
+- Remove the retired “server-domain direct resolution” setting and its stale iOS preference path.
+- Keep Desktop/macOS Base DNS and tunnel-DNS controls while renaming the ambiguous “Direct DNS” label to “Base DNS / 基础 DNS”.
+- Keep proxy DNS resolvers IP-literal and built in; remove obsolete DNS control-plane forwarding and Darwin dead branches.
+- Make iOS DNS schema migration independent from the desktop tunnel-DNS preference migration.
+- Keep the data-plane probe bounded, backoff-aware, and suspension-aware; a suspended iOS probe is inconclusive rather than a false network failure.
+- Preserve XHTTP advanced configuration, QUIC/TUN routing behavior, and existing macOS DNS behavior.
+
+## ✅ Validation for this tag
+
+- `flutter analyze lib test`: no issues.
+- `flutter test`: 103 tests passed.
+- iOS Release `xcodebuild` and strict code-sign verification passed.
+- Clean-installed on iPhone 16e, Wi-Fi off, real 5G active, Tky selected.
+- `tky-proxy.svc.plus` fixed to `43.207.194.92` over `pdp_ip0`; Xray repeatedly dialed the literal IP with the domain retained for SNI/Host.
+- Successful session had no `no such host`, `仍按域名连接`, or `No route to host` bootstrap failure.
+- macOS Desktop Release built as universal `arm64`/`x86_64` and passed strict code-sign verification.
+- Official Packet Tunnel soak smoke run reported zero restarts and zero reported errors; a full 120-minute traffic soak remains a follow-up.
+
+## 📚 Documentation added after the tag
+
+The following documentation commit is intentionally after the release tag and records the investigation without changing the released binary:
+
+- `docs/ios-cellular-dns-deadlock-handoff.md`: reorganized historical handoff and final status.
+- `docs/ios-cellular-dns-deadlock-debug-record-2026-08-14.md`: complete timeline, root cause, stale-build diagnosis, code changes, device evidence, soak results, and release record.
+
+## Earlier v1.0.0 notes
+
 - Tunnel Mode verifies the data plane after connecting, with a settle delay and bounded retries. The check is advisory: a failed probe reports the problem and leaves the tunnel running.
 - iOS app logs are mirrored to a bounded, rotating file under `Library/Caches`, so a problem reported from a physical device can be diagnosed after the fact.
-
-## 🐛 Fixes
 - The data-plane check no longer overruns its time budget on a weak link, and backs off between attempts instead of retrying a refused route dozens of times.
 - Bounded the in-memory log buffers, which previously grew for the lifetime of a Packet Tunnel session.
-
-## ⚡ Performance
 - Reduced the iOS Packet Tunnel extension's memory footprint by tightening Go GC pacing and returning idle heap to the system while a tunnel is up.
 
-## Unreleased
+## Earlier Unreleased notes
 
-- Tunnel Mode now verifies the data plane after connecting, with a settle delay and retries instead of a single immediate lookup. The check is advisory: a failed probe reports the problem and leaves the tunnel running, so a connection whose DNS has not settled yet is no longer torn down.
-- Reduced the iOS Packet Tunnel extension's memory footprint by tightening Go GC pacing and returning idle heap to the system while a tunnel is up, and exposed Go runtime memory in the extension metrics snapshot so footprint work can target the right layer.
 - Reframed the primary connection flow around self-managed connections and optional workspace connectors.
 - Removed the standalone node configuration navigation tab; connection import remains available from the global connector action.
 - Updated user-facing copy toward neutral Secure Tunnel and connection terminology for international store distribution.
-
-## ✨ Features
 - Added an XHTTP advanced `XMUX maxConcurrency` setting, persisted by the app and emitted as `xhttpSettings.extra.xmux.maxConcurrency` for controlled connection reuse.
-
-## 🐛 Fixes
 - Applied XHTTP advanced settings to legacy node files before Packet Tunnel startup and rewrote the active node configuration on save, with a reconnect prompt when runtime settings changed.
 
 _Release Date: 2026-03-27_
