@@ -13,6 +13,15 @@ import '../widgets/log_console.dart' show LogLevel;
 import 'app_logger.dart';
 import 'global_config.dart';
 
+class _TunnelEndpointPinningException implements Exception {
+  const _TunnelEndpointPinningException(this.domains);
+
+  final List<String> domains;
+
+  @override
+  String toString() => '无法在启动 VPN 前解析节点地址: ${domains.join(', ')}';
+}
+
 class NativeBridge {
   static const MethodChannel _channel =
       MethodChannel('plus.svc.xconnect/native');
@@ -331,7 +340,9 @@ class NativeBridge {
     // ── Android: MethodChannel → savePacketTunnelProfile + startPacketTunnel
     if (Platform.isAndroid) {
       try {
-        await _ensurePacketTunnelStoppedBeforeStart();
+        if (!await _ensurePacketTunnelStoppedBeforeStart()) {
+          return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
+        }
         _mobileActiveNodeName = null;
         // Pin while the tunnel is down: once it is up, the system resolver is
         // captured and this same lookup is the one that deadlocks.
@@ -360,7 +371,9 @@ class NativeBridge {
     if (_isDarwin) {
       _ensureDarwinFlutterApiReady();
       try {
-        await _ensurePacketTunnelStoppedBeforeStart();
+        if (!await _ensurePacketTunnelStoppedBeforeStart()) {
+          return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
+        }
         await _stopIosLocalEngineIfNeeded();
         // Pin while the tunnel is down: once it is up, the system resolver is
         // captured and this same lookup is the one that deadlocks.
@@ -1067,11 +1080,6 @@ class NativeBridge {
       final effectiveBlockQuic =
           !GlobalState.http3Passthrough.value || !proxySupportsUdp443;
 
-      // Tell the DNS control plane which server domains belong to the outbound
-      // itself, so the optional direct-resolution rule has something to match.
-      DnsConfig.proxyServerDomains =
-          TunnelEndpointResolver.outboundServerDomains(sourceJson);
-
       sourceJson['dns'] = VpnConfig.buildSecureDnsConfig();
       sourceJson['routing'] = VpnConfig.buildSecureDnsRoutingConfig(
         sourceJson['routing'],
@@ -1103,9 +1111,10 @@ class NativeBridge {
   /// user's saved node file, so pinning in place would permanently replace
   /// their server domain with whatever it resolved to once.
   ///
-  /// Resolution failure is not fatal. The domain is left alone and the tunnel
-  /// starts exactly as it did before, which is no worse than the old
-  /// behaviour and keeps a working setup working while a resolver is flaky.
+  /// On iOS, resolution failure is fatal for Packet Tunnel startup. Starting
+  /// with the domain would recreate the DNS cycle this preparation step exists
+  /// to break and leave the UI falsely showing a connected tunnel with no data.
+  /// Other platforms retain the legacy domain fallback.
   static Future<({String configPath, List<String> excludedIpv4})>
       _prepareRuntimeTunnelConfig(String canonicalPath) async {
     const unchanged = <String>[];
@@ -1121,6 +1130,14 @@ class NativeBridge {
 
       final pinning =
           await TunnelEndpointResolver().pinOutboundEndpoints(decoded);
+      if (pinning.failures.isNotEmpty && Platform.isIOS) {
+        addAppLog(
+          '[tunnel] 出站服务器域名解析失败，取消 VPN 启动: '
+          '${pinning.failures.join(', ')}',
+          level: LogLevel.error,
+        );
+        throw _TunnelEndpointPinningException(pinning.failures);
+      }
       for (final domain in pinning.failures) {
         addAppLog(
           '[tunnel] 出站服务器域名解析失败，仍按域名连接: $domain',
@@ -1140,6 +1157,8 @@ class NativeBridge {
         addAppLog('[tunnel] 出站服务器已固定: $domain -> $address');
       });
       return (configPath: runtimePath, excludedIpv4: pinning.pinnedIpv4);
+    } on _TunnelEndpointPinningException {
+      rethrow;
     } catch (e) {
       addAppLog('[tunnel] 出站服务器固定失败，回退为域名连接: $e', level: LogLevel.warning);
       return (configPath: canonicalPath, excludedIpv4: unchanged);
@@ -1379,7 +1398,9 @@ class NativeBridge {
   static Future<String> _startPacketTunnelInternal() async {
     if (Platform.isAndroid) {
       try {
-        await _ensurePacketTunnelStoppedBeforeStart();
+        if (!await _ensurePacketTunnelStoppedBeforeStart()) {
+          return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
+        }
         final configPath = await _resolveTunnelConfigPath();
         if (configPath == null) {
           return '未找到可用的节点配置';
@@ -1413,7 +1434,9 @@ class NativeBridge {
     if (!_isDarwin) return '当前平台暂不支持';
     _ensureDarwinFlutterApiReady();
     try {
-      await _ensurePacketTunnelStoppedBeforeStart();
+      if (!await _ensurePacketTunnelStoppedBeforeStart()) {
+        return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
+      }
       await _stopIosLocalEngineIfNeeded();
       final configPath = await _resolveTunnelConfigPath();
       if (configPath == null) {
@@ -1480,29 +1503,78 @@ class NativeBridge {
     }
   }
 
-  static Future<void> _ensurePacketTunnelStoppedBeforeStart() async {
+  static Future<bool> _ensurePacketTunnelStoppedBeforeStart() async {
     if (Platform.isAndroid) {
       try {
         await _channel.invokeMethod<String>('stopPacketTunnel');
       } catch (_) {}
-      return;
+      return true;
     }
 
-    if (!_isDarwin) return;
+    if (!_isDarwin) return true;
     _ensureDarwinFlutterApiReady();
+    if (!Platform.isIOS) {
+      try {
+        final status = await _darwinHostApi.getPacketTunnelStatus();
+        const activeStates = <String>{
+          'connected',
+          'connecting',
+          'reasserting',
+          'disconnecting',
+        };
+        if (activeStates.contains(status.state)) {
+          await _darwinHostApi.stopPacketTunnel();
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
+      } catch (_) {}
+      return true;
+    }
     try {
-      final status = await _darwinHostApi.getPacketTunnelStatus();
       const activeStates = <String>{
         'connected',
         'connecting',
         'reasserting',
         'disconnecting',
       };
-      if (activeStates.contains(status.state)) {
-        await _darwinHostApi.stopPacketTunnel();
-        await Future<void>.delayed(const Duration(milliseconds: 300));
+      const terminalStates = <String>{'disconnected', 'invalid'};
+      final deadline = DateTime.now().add(const Duration(seconds: 35));
+      var stopRequested = false;
+
+      while (DateTime.now().isBefore(deadline)) {
+        final status = await _darwinHostApi.getPacketTunnelStatus();
+        if (terminalStates.contains(status.state)) {
+          // NEVPNStatus can report `disconnected` just before the old
+          // Packet Tunnel's DNS settings are removed. Require a second,
+          // settled observation before doing InternetAddress.lookup; a single
+          // optimistic status observation left a ~26ms race on the real 5G
+          // device and still routed the lookup through the stale tunnel.
+          await Future<void>.delayed(const Duration(seconds: 1));
+          final settled = await _darwinHostApi.getPacketTunnelStatus();
+          if (terminalStates.contains(settled.state)) {
+            return true;
+          }
+          continue;
+        }
+
+        if (activeStates.contains(status.state) && !stopRequested) {
+          await _darwinHostApi.stopPacketTunnel();
+          stopRequested = true;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 250));
       }
-    } catch (_) {}
+      addAppLog(
+        '[tunnel] Packet Tunnel did not settle to disconnected within 35s '
+        'before endpoint resolution',
+        level: LogLevel.error,
+      );
+      return false;
+    } catch (e) {
+      addAppLog(
+        '[tunnel] 无法确认 Packet Tunnel 已停止，取消节点地址解析: $e',
+        level: LogLevel.error,
+      );
+      return false;
+    }
   }
 
   /// Get Packet Tunnel status on Darwin platforms.

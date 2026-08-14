@@ -233,11 +233,15 @@ class DnsConfig {
   static const _directDns2Key = 'directDnsServer2';
   static const _transportModeKey = 'dnsTransportMode';
   static const _legacyDotEnabledKey = 'tunDnsOverTls';
+  // The server-domain toggle was retired in schema v4. The tunnel-DNS toggle
+  // remains desktop-only and is removed from iOS preferences separately.
   static const _tunnelDnsViaProxyKey = 'tunnelDnsViaProxy';
-  static const _resolveProxyDomainDirectKey = 'resolveProxyDomainDirect';
+  static const _retiredResolveProxyDomainDirectKey = 'resolveProxyDomainDirect';
+  static const _iosDnsSchemaVersionKey = 'iosDnsSchemaVersion';
   static const _http3PassthroughKey = 'http3Passthrough';
   static const _schemaVersionKey = 'dnsSchemaVersion';
-  static const _currentSchemaVersion = 3;
+  static const _currentSchemaVersion = 4;
+  static const _currentIosSchemaVersion = 1;
 
   // Proxy resolvers are routed through the `proxy` outbound (see
   // RoutePolicy.buildSecureDnsRules), so they are queried from the exit node's
@@ -252,13 +256,6 @@ class DnsConfig {
   static const _defaultPlainDns1 = '1.1.1.1';
   static const _defaultPlainDns2 = '8.8.8.8';
 
-  static const _defaultDirectDns6Servers = <String>[
-    '2606:4700:4700::1111',
-    '2001:4860:4860::8888',
-  ];
-  static const _packetTunnelLocalDns4Servers = <String>['10.0.0.53'];
-  static const _packetTunnelLocalDns6Servers = <String>['fd00::53'];
-  static const _darwinTunnelLocalDnsEnabled = false;
   static const _defaultDirectDomains = <String>[
     'full:localhost',
     r'regexp:^.*\.local$',
@@ -303,27 +300,10 @@ class DnsConfig {
   static final ValueNotifier<DnsTransportMode> transportMode =
       ValueNotifier<DnsTransportMode>(DnsTransportMode.doh);
 
-  /// Routes tunnel DNS queries through the proxy resolver. On by default:
-  /// this keeps resolution working when a local DoH endpoint is blocked,
-  /// which is the common case this app is built for.
+  /// Desktop-only preference retained unchanged. iOS ignores it and always
+  /// sends tunnel DNS through the proxy.
   static final ValueNotifier<bool> tunnelDnsViaProxy =
       ValueNotifier<bool>(true);
-
-  /// Resolves the outbound server's own domain through the direct resolvers
-  /// instead of through the proxy.
-  ///
-  /// Complements pinning the server to a literal IP before the tunnel starts,
-  /// which is the primary defence against the resolution deadlock. This helps
-  /// when the engine still resolves the name itself. Off by default: it takes
-  /// the server domain outside the proxy path, which is a visibility trade-off
-  /// the user should opt into.
-  static final ValueNotifier<bool> resolveProxyDomainDirect =
-      ValueNotifier<bool>(false);
-
-  /// Outbound server domains for the config currently being built, supplied by
-  /// the tunnel start path. Only consulted when [resolveProxyDomainDirect] is
-  /// on.
-  static List<String> proxyServerDomains = const <String>[];
 
   static bool get dohEnabled => transportMode.value == DnsTransportMode.doh;
 
@@ -417,20 +397,30 @@ class DnsConfig {
   /// are queried from the exit node's vantage point and, in the bare-host
   /// case, cannot be dialled at all. The slot is built-in now, so the values
   /// are simply dropped rather than repaired.
-  static Future<void> _dropLegacyProxyResolvers(
+  static Future<void> _migrateDnsPreferences(
     SharedPreferences prefs,
   ) async {
-    if ((prefs.getInt(_schemaVersionKey) ?? 0) >= _currentSchemaVersion) {
-      return;
+    if ((prefs.getInt(_schemaVersionKey) ?? 0) < _currentSchemaVersion) {
+      await prefs.remove(_legacyProxyDns1Key);
+      await prefs.remove(_legacyProxyDns2Key);
+      await prefs.remove(_retiredResolveProxyDomainDirectKey);
+      await prefs.setInt(_schemaVersionKey, _currentSchemaVersion);
     }
-    await prefs.remove(_legacyProxyDns1Key);
-    await prefs.remove(_legacyProxyDns2Key);
-    await prefs.setInt(_schemaVersionKey, _currentSchemaVersion);
+
+    if (Platform.isIOS &&
+        (prefs.getInt(_iosDnsSchemaVersionKey) ?? 0) <
+            _currentIosSchemaVersion) {
+      await prefs.remove(_tunnelDnsViaProxyKey);
+      await prefs.setInt(
+        _iosDnsSchemaVersionKey,
+        _currentIosSchemaVersion,
+      );
+    }
   }
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    await _dropLegacyProxyResolvers(prefs);
+    await _migrateDnsPreferences(prefs);
     transportMode.value = _readTransportMode(prefs);
     directDns1.value = _normalizeDirectEndpoint(
       prefs.getString(_directDns1Key),
@@ -458,18 +448,12 @@ class DnsConfig {
         GlobalState.http3Passthrough.value,
       );
     });
-    tunnelDnsViaProxy.value = prefs.getBool(_tunnelDnsViaProxyKey) ?? true;
-    tunnelDnsViaProxy.addListener(() {
-      prefs.setBool(_tunnelDnsViaProxyKey, tunnelDnsViaProxy.value);
-    });
-    resolveProxyDomainDirect.value =
-        prefs.getBool(_resolveProxyDomainDirectKey) ?? false;
-    resolveProxyDomainDirect.addListener(() {
-      prefs.setBool(
-        _resolveProxyDomainDirectKey,
-        resolveProxyDomainDirect.value,
-      );
-    });
+    if (!Platform.isIOS) {
+      tunnelDnsViaProxy.value = prefs.getBool(_tunnelDnsViaProxyKey) ?? true;
+      tunnelDnsViaProxy.addListener(() {
+        prefs.setBool(_tunnelDnsViaProxyKey, tunnelDnsViaProxy.value);
+      });
+    }
   }
 
   /// Transport for the proxy resolvers. The addresses themselves are built in,
@@ -498,50 +482,10 @@ class DnsConfig {
     return servers.toSet().toList();
   }
 
-  static List<String> effectiveTunnelDnsServers4() => directResolversForXray();
+  static List<String> systemTunnelDnsServers4() => directResolversForXray();
 
-  static List<String> get effectiveTunnelDnsServers6 =>
-      _defaultDirectDns6Servers;
-
-  static List<String> systemTunnelDnsServers4() {
-    if ((Platform.isMacOS || Platform.isIOS) && _darwinTunnelLocalDnsEnabled) {
-      return darwinPacketTunnelDnsServers4;
-    }
-    return effectiveTunnelDnsServers4();
-  }
-
-  static List<String> systemTunnelDnsServers6() {
-    if ((Platform.isMacOS || Platform.isIOS) && _darwinTunnelLocalDnsEnabled) {
-      return darwinPacketTunnelDnsServers6;
-    }
-    return effectiveTunnelDnsServers6;
-  }
-
-  static bool get shouldCaptureSystemDnsToBuiltInDns =>
-      Platform.isMacOS || Platform.isIOS ? _darwinTunnelLocalDnsEnabled : false;
-
-  static String get darwinSystemDnsMode =>
-      _darwinTunnelLocalDnsEnabled ? 'tunnel-local-endpoint' : 'resolver-ip';
-
-  static List<String> get darwinPacketTunnelDnsServers4 =>
-      List<String>.from(_packetTunnelLocalDns4Servers);
-
-  static List<String> get darwinPacketTunnelDnsServers6 =>
-      List<String>.from(_packetTunnelLocalDns6Servers);
-
-  static List<String> get directDomainSet {
-    final domains = List<String>.from(_defaultDirectDomains);
-    if (!resolveProxyDomainDirect.value) {
-      return domains;
-    }
-    for (final domain in proxyServerDomains) {
-      final entry = 'full:$domain';
-      if (!domains.contains(entry)) {
-        domains.add(entry);
-      }
-    }
-    return domains;
-  }
+  static List<String> get directDomainSet =>
+      List<String>.from(_defaultDirectDomains);
 
   static List<String> get directIpCidrs =>
       List<String>.from(_defaultDirectIpCidrs);
@@ -601,10 +545,7 @@ class DnsConfig {
           direct: directDomainSet,
           directIpCidrs: directIpCidrs,
         ),
-        tunnelDnsServers4: systemTunnelDnsServers4(),
-        tunnelDnsServers6: systemTunnelDnsServers6(),
-        captureSystemDnsToBuiltInDns: shouldCaptureSystemDnsToBuiltInDns,
-        forceTunnelDnsToProxy: tunnelDnsViaProxy.value,
+        forceTunnelDnsToProxy: Platform.isIOS || tunnelDnsViaProxy.value,
       ),
     );
   }

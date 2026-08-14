@@ -177,7 +177,7 @@ class AppLocalizations {
       'tunSettings': 'TUN Settings',
       'dnsOverHttps': 'DNS over HTTPS',
       'dnsOverHttpsHint':
-          'Encrypts the built-in proxy resolvers (Cloudflare and Google, queried from the exit node). Turn it off to query them over plain DNS instead. The Direct Resolver is always plain.',
+          'Encrypts the built-in proxy resolvers (Cloudflare and Google, queried from the exit node). Turn it off to query them over plain DNS instead. Base DNS always uses plain DNS.',
       'tunStatus': 'TUN Status',
       'tunStatusConnected': 'Connected',
       'tunStatusConnecting': 'Connecting',
@@ -189,17 +189,14 @@ class AppLocalizations {
       'tunStatusUnsupported': 'Unsupported',
       'tunStatusUnknown': 'Unknown',
       'dnsConfig': 'DNS Settings',
-      'directDnsConfig': 'Direct Resolver',
+      'directDnsConfig': 'Base DNS',
       'primaryDns': 'Primary DNS',
       'secondaryDns': 'Secondary DNS',
       'tunnelDnsViaProxy': 'Tunnel DNS via Proxy',
       'tunnelDnsViaProxyHint':
           'Routes all TUN DNS queries through the proxy resolver, so resolution keeps working when a local DoH endpoint is unavailable. On by default.',
-      'resolveProxyDomainDirect': 'Resolve Server Domain Directly',
-      'resolveProxyDomainDirectHint':
-          'Resolves the connection server\'s own domain through the direct resolver instead of through the proxy, so the engine never needs the tunnel in order to build it. The server address is already pinned before connecting; enable this only if resolution still fails. Off by default.',
       'dnsDialogHintDirect':
-          'Enter IP addresses, e.g. 1.1.1.1. Used for the Direct Resolver policy and as the system DNS on platforms that do not yet use the local Secure DNS endpoint, so a hostname will be replaced with an address that can be dialled.',
+          'Enter IP addresses, e.g. 1.1.1.1. Used to resolve local and direct-routed domains and as the VPN system DNS address. Hostnames are replaced with dialable IP addresses.',
       'globalProxy': 'Global Proxy',
       'experimentalFeatures': 'Experimental Features',
       'tunnelProxyMode': 'Tunnel Mode',
@@ -463,7 +460,7 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'tunSettings': 'TUN 设置',
       'dnsOverHttps': 'DNS over HTTPS',
       'dnsOverHttpsHint':
-          '加密内置代理解析器（Cloudflare 与 Google，从出口节点发起查询）。关闭则改用明文 DNS 查询。直连 DNS 始终为明文。',
+          '加密内置代理解析器（Cloudflare 与 Google，从出口节点发起查询）。关闭则改用明文 DNS 查询。基础 DNS 始终使用明文协议。',
       'tunStatus': 'TUN 状态',
       'tunStatusConnected': '已连接',
       'tunStatusConnecting': '连接中',
@@ -475,18 +472,14 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'tunStatusUnsupported': '不支持',
       'tunStatusUnknown': '未知',
       'dnsConfig': 'DNS 配置',
-      'directDnsConfig': '直连 DNS',
+      'directDnsConfig': '基础 DNS',
       'primaryDns': '主 DNS',
       'secondaryDns': '备用 DNS',
       'tunnelDnsViaProxy': '隧道 DNS 走代理',
       'tunnelDnsViaProxyHint':
           '将所有 TUN DNS 查询交由代理解析器处理，本地 DoH 端点不可用时仍能正常解析。默认已开启。',
-      'resolveProxyDomainDirect': '服务器域名直连解析',
-      'resolveProxyDomainDirectHint': '将连接服务器自身的域名交由直连解析器解析，而不经过代理，'
-          '使引擎无需先建好隧道才能建隧道。服务器地址在连接前已固定为字面地址，'
-          '仅在解析仍然失败时才需要开启。默认关闭。',
-      'dnsDialogHintDirect': '请输入 IP 地址，例如 1.1.1.1。用于 Direct Resolver 策略，'
-          '并作为尚未接入本地 Secure DNS 端点平台上的系统 DNS 来源，因此填入域名会被替换为可拨号的地址。',
+      'dnsDialogHintDirect': '请输入 IP 地址，例如 1.1.1.1。用于解析本地域名和直连域名，'
+          '并作为 VPN 的系统 DNS 地址；填入域名会被替换为可拨号的 IP 地址。',
       'globalProxy': '全局代理',
       'experimentalFeatures': '实验特性',
       'tunnelProxyMode': '隧道模式',
