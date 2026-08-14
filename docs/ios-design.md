@@ -165,6 +165,7 @@ PacketTunnelProvider
 2. `flutter build ios --release`
 3. 真机安装后的 `Runner.app/PlugIns/PacketTunnel.appex`
 4. `PacketTunnel` 启动后能进入 `StartXrayTunnelWithFd(...)`
+5. IOS_DEVICE=00008140-000E75903EF2801C scripts/ios_packet_tunnel_soak.sh 120 30
 
 ## App Store 相关能力
 

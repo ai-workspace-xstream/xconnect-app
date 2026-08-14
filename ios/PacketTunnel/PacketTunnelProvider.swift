@@ -60,10 +60,22 @@ public final class PacketTunnelProvider: NEPacketTunnelProvider {
           self.monitor?.currentPath.availableInterfaces.first(where: { !$0.name.contains("utun") })?
           .name ?? ""
 
+        // Record what the egress link actually offers. An IPv6-only carrier
+        // link is indistinguishable from a weak network at the socket layer --
+        // both surface as an immediate EHOSTUNREACH on an IPv4 destination --
+        // so the address families present on the egress interface are the only
+        // way to tell them apart after the fact.
+        self.statusStore.recordEgress(
+          interfaceName: egressInterface,
+          families: self.describeAddressFamilies(of: egressInterface)
+        )
+
         do {
-          let configData = self.sanitizeConfigForDarwinTun(
-            self.resolveConfigData(options: map),
-            tunnelInterfaceName: resolvedTun.interfaceName
+          let configData = self.attachEngineErrorLog(
+            self.sanitizeConfigForDarwinTun(
+              self.resolveConfigData(options: map),
+              tunnelInterfaceName: resolvedTun.interfaceName
+            )
           )
           try self.engine.start(
             config: configData,
@@ -194,6 +206,40 @@ public final class PacketTunnelProvider: NEPacketTunnelProvider {
     var patched = root
     patched["inbounds"] = inbounds
     return (try? JSONSerialization.data(withJSONObject: patched)) ?? data
+  }
+
+  /// Points the engine's error log at the shared App Group container.
+  ///
+  /// Without this the engine's own view of an outbound failure goes to stderr
+  /// and is lost, leaving only the socket error the app sees -- which cannot
+  /// distinguish a dial failure from a routing, TLS or transport problem.
+  private func attachEngineErrorLog(_ data: Data) -> Data {
+    guard
+      let container = FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: "group.plus.svc.xconnect"
+      ),
+      var root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+      return data
+    }
+
+    let logsDirectory = container.appendingPathComponent("logs", isDirectory: true)
+    try? FileManager.default.createDirectory(
+      at: logsDirectory, withIntermediateDirectories: true)
+    let logURL = logsDirectory.appendingPathComponent("xray-tunnel.log")
+
+    // Start each session from empty so a pulled log describes this run only.
+    try? FileManager.default.removeItem(at: logURL)
+
+    var logSettings = (root["log"] as? [String: Any]) ?? [:]
+    logSettings["loglevel"] = "info"
+    logSettings["error"] = logURL.path
+    root["log"] = logSettings
+
+    os_log(
+      "PacketTunnelProvider: engine error log at %{public}@", log: tunnelLog, type: .info,
+      logURL.path)
+    return (try? JSONSerialization.data(withJSONObject: root)) ?? data
   }
 
   private func shouldEnableIPv6(options: [String: NSObject], launchOptions: [String: NSObject]?)
@@ -569,6 +615,40 @@ public final class PacketTunnelProvider: NEPacketTunnelProvider {
     activeSettings = nil
     statusStore.markFailed(error.localizedDescription)
     completionHandler(error)
+  }
+
+  /// Counts the IPv4 and IPv6 addresses bound to an interface.
+  ///
+  /// `v4=0` on the egress interface means the link carries no IPv4 route at
+  /// all, so any IPv4 destination fails instantly with EHOSTUNREACH no matter
+  /// how healthy the radio is.
+  private func describeAddressFamilies(of interfaceName: String) -> String {
+    guard !interfaceName.isEmpty else {
+      return "interface=unavailable"
+    }
+    var addressPointer: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&addressPointer) == 0, let first = addressPointer else {
+      return "\(interfaceName): getifaddrs failed"
+    }
+    defer { freeifaddrs(addressPointer) }
+
+    var v4 = 0
+    var v6 = 0
+    var pointer: UnsafeMutablePointer<ifaddrs>? = first
+    while let current = pointer {
+      let entry = current.pointee
+      if String(cString: entry.ifa_name) == interfaceName,
+        let address = entry.ifa_addr
+      {
+        switch Int32(address.pointee.sa_family) {
+        case AF_INET: v4 += 1
+        case AF_INET6: v6 += 1
+        default: break
+        }
+      }
+      pointer = entry.ifa_next
+    }
+    return "\(interfaceName): v4=\(v4) v6=\(v6)"
   }
 
   private func ensurePathMonitor() {
@@ -1007,6 +1087,18 @@ private final class PacketTunnelStatusStore {
   private let defaults = UserDefaults(suiteName: "group.plus.svc.xconnect") ?? .standard
   private let errorKey = "packet_tunnel_last_error"
   private let startedAtKey = "packet_tunnel_started_at"
+  private let egressKey = "packet_tunnel_egress_info"
+
+  func recordEgress(interfaceName: String, families: String) {
+    defaults.set(
+      [
+        "interface": interfaceName,
+        "families": families,
+        "at": Int64(Date().timeIntervalSince1970),
+      ],
+      forKey: egressKey
+    )
+  }
 
   func markConnected() {
     defaults.removeObject(forKey: errorKey)
