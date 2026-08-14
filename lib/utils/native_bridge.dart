@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ffi' as ffi;
 import 'package:flutter/services.dart';
 import 'package:ffi/ffi.dart';
+import '../../services/tunnel_data_plane_probe.dart';
 import '../../services/vpn_config_service.dart'; // 引入新的 VpnConfig 类
 import '../bindings/bridge_bindings.dart';
 import '../app/darwin_host_api.g.dart' as darwin_host;
@@ -818,6 +819,25 @@ class NativeBridge {
     }
 
     return '当前平台暂不支持';
+  }
+
+  /// Verify that an established Packet Tunnel actually carries traffic.
+  ///
+  /// `NEVPNStatus == connected` only means the extension came up; the utun
+  /// interface's DNS and routes need a few hundred milliseconds more before
+  /// the app process can use them. The probe absorbs that with a settle delay
+  /// and retries, and reports an inconclusive result if the tunnel drops
+  /// mid-probe, so a healthy connection is never failed by a single early
+  /// lookup.
+  ///
+  /// Advisory only: it never stops the tunnel.
+  static Future<TunnelDataPlaneReport> verifyTunnelDataPlane({
+    Duration budget = const Duration(seconds: 12),
+  }) {
+    return TunnelDataPlaneProbe(
+      readTunnelState: () async => (await getPacketTunnelStatus()).status,
+      budget: budget,
+    ).run();
   }
 
   static Future<DesktopRuntimeSnapshot> getDesktopRuntimeSnapshot() async {
