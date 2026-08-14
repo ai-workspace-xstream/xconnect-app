@@ -1,4 +1,17 @@
-# XConnect v1.1.0
+# XConnect v1.0.0
+
+_Release Date: 2026-08-14 — tag `v2026.8.14`, branch `release/v1.0`_
+
+## ✨ Features
+- Tunnel Mode verifies the data plane after connecting, with a settle delay and bounded retries. The check is advisory: a failed probe reports the problem and leaves the tunnel running.
+- iOS app logs are mirrored to a bounded, rotating file under `Library/Caches`, so a problem reported from a physical device can be diagnosed after the fact.
+
+## 🐛 Fixes
+- The data-plane check no longer overruns its time budget on a weak link, and backs off between attempts instead of retrying a refused route dozens of times.
+- Bounded the in-memory log buffers, which previously grew for the lifetime of a Packet Tunnel session.
+
+## ⚡ Performance
+- Reduced the iOS Packet Tunnel extension's memory footprint by tightening Go GC pacing and returning idle heap to the system while a tunnel is up.
 
 ## Unreleased
 
