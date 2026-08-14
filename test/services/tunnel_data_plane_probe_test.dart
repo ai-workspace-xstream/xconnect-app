@@ -226,6 +226,65 @@ void main() {
       expect(clock.slept.last, greaterThan(clock.slept[1]));
     });
 
+    test('an app suspended mid-probe is inconclusive, not a failure', () async {
+      final clock = _FakeClock();
+      var attempts = 0;
+
+      final probe = TunnelDataPlaneProbe(
+        readTunnelState: () async => 'connected',
+        budget: const Duration(seconds: 12),
+        resolveHost: (host, timeout) async {
+          attempts++;
+          // iOS suspends the app after a few quick attempts: wall-clock time
+          // races ahead while the probe makes no progress. This is the
+          // "221.9s, 3 attempts against a 12s budget" field report.
+          if (attempts == 3) {
+            clock.advance(const Duration(seconds: 218));
+          }
+          throw const SocketException('Failed host lookup');
+        },
+        probeTransport: (host, port, timeout) async {
+          throw const SocketException(
+            'Connection failed (OS Error: No route to host, errno = 65)',
+          );
+        },
+        sleep: clock.sleep,
+        now: clock.now,
+      );
+
+      final report = await probe.run();
+
+      expect(report.outcome, TunnelDataPlaneOutcome.suspended);
+      expect(report.isConclusiveFailure, isFalse);
+      expect(report.attempts, 3);
+    });
+
+    test('a merely slow run is still judged, not written off as suspended',
+        () async {
+      final clock = _FakeClock();
+
+      final probe = TunnelDataPlaneProbe(
+        readTunnelState: () async => 'connected',
+        budget: const Duration(seconds: 12),
+        // Every call burns its full timeout: slow, but legitimately spent.
+        resolveHost: (host, timeout) async {
+          clock.advance(timeout);
+          throw const SocketException('Failed host lookup');
+        },
+        probeTransport: (host, port, timeout) async {
+          clock.advance(timeout);
+          throw const SocketException('No route to host');
+        },
+        sleep: clock.sleep,
+        now: clock.now,
+      );
+
+      final report = await probe.run();
+
+      expect(report.outcome, TunnelDataPlaneOutcome.transportUnreachable);
+      expect(report.isConclusiveFailure, isTrue);
+    });
+
     test('stops retrying at the budget instead of running forever', () async {
       final clock = _FakeClock();
       var attempts = 0;

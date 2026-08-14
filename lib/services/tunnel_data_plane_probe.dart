@@ -16,6 +16,12 @@ enum TunnelDataPlaneOutcome {
   /// The tunnel left the connected state while the probe was running, so the
   /// probe result says nothing about data-plane health.
   tunnelDropped,
+
+  /// The app was suspended mid-probe, so wall-clock time ran on while the
+  /// probe made no progress. The budget was never actually spent testing, and
+  /// whatever the network was doing on resume is minutes removed from the
+  /// samples that were taken.
+  suspended,
 }
 
 /// Outcome of a data-plane verification, including enough detail to tell a
@@ -43,8 +49,8 @@ class TunnelDataPlaneReport {
 
   /// Whether the caller should treat this as evidence the tunnel is broken.
   ///
-  /// A dropped tunnel is inconclusive: the probe never got a fair chance, so
-  /// callers must not report it as a data-plane failure.
+  /// A dropped tunnel or a suspended app is inconclusive: the probe never got
+  /// a fair chance, so callers must not report either as a data-plane failure.
   bool get isConclusiveFailure =>
       outcome == TunnelDataPlaneOutcome.dnsUnreachable ||
       outcome == TunnelDataPlaneOutcome.transportUnreachable;
@@ -66,6 +72,9 @@ class TunnelDataPlaneReport {
       case TunnelDataPlaneOutcome.tunnelDropped:
         return '探测中断: 隧道状态变为 ${tunnelState ?? "unknown"} '
             '($attempts次探测, ${seconds}s)';
+      case TunnelDataPlaneOutcome.suspended:
+        return '探测中断: App 在探测期间被系统挂起，结果不作数 '
+            '($attempts次探测, 跨越 ${seconds}s)';
     }
   }
 
@@ -127,6 +136,7 @@ class TunnelDataPlaneProbe {
     this.maxRetryInterval = const Duration(milliseconds: 2500),
     this.initialAttemptTimeout = const Duration(seconds: 2),
     this.maxAttemptTimeout = const Duration(seconds: 4),
+    this.suspensionTolerance = const Duration(seconds: 10),
     TunnelDnsResolver? resolveHost,
     TunnelTransportProbe? probeTransport,
     Future<void> Function(Duration)? sleep,
@@ -158,6 +168,10 @@ class TunnelDataPlaneProbe {
   final Duration maxRetryInterval;
   final Duration initialAttemptTimeout;
   final Duration maxAttemptTimeout;
+
+  /// How much longer than intended a step may take before the run is treated
+  /// as suspended rather than merely slow.
+  final Duration suspensionTolerance;
   final TunnelDnsResolver resolveHost;
   final TunnelTransportProbe probeTransport;
   final Future<void> Function(Duration) _sleep;
@@ -171,9 +185,23 @@ class TunnelDataPlaneProbe {
     String? transportError;
     var sawRoutableTransport = false;
 
+    // Wall-clock deadlines are not trustworthy on their own here: iOS suspends
+    // the containing app freely, and the user backgrounding the app right
+    // after tapping connect is the normal case. Time then runs on while the
+    // probe makes no progress, and the budget expires without a single extra
+    // sample -- observed in the field as "221.9s, 3 attempts" against a 12s
+    // budget. Track how long each step was *meant* to take, so a run that lost
+    // time to suspension is reported as inconclusive instead of as failure.
+    var intended = Duration.zero;
+
     await _sleep(settleDelay);
+    intended += settleDelay;
 
     while (true) {
+      if (_lostTime(startedAt, intended)) {
+        return _suspendedReport(startedAt, attempts, dnsError, transportError);
+      }
+
       final state = await _readStateSafely();
       if (state != 'connected') {
         return TunnelDataPlaneReport(
@@ -199,6 +227,7 @@ class TunnelDataPlaneProbe {
       final attemptTimeout = _clamp(_attemptTimeout(attempts), remaining);
       final host = dnsHosts[(attempts - 1) % dnsHosts.length];
 
+      intended += attemptTimeout;
       List<InternetAddress>? addresses;
       try {
         addresses = await resolveHost(host, attemptTimeout);
@@ -217,12 +246,10 @@ class TunnelDataPlaneProbe {
         final address = addresses.first;
         remaining = deadline.difference(_now());
         if (remaining > Duration.zero) {
+          final transportTimeout = _clamp(attemptTimeout, remaining);
+          intended += transportTimeout;
           try {
-            await probeTransport(
-              address.address,
-              443,
-              _clamp(attemptTimeout, remaining),
-            );
+            await probeTransport(address.address, 443, transportTimeout);
             return TunnelDataPlaneReport(
               outcome: TunnelDataPlaneOutcome.reachable,
               attempts: attempts,
@@ -240,12 +267,10 @@ class TunnelDataPlaneProbe {
           if (remaining <= Duration.zero) {
             break;
           }
+          final fallbackTimeout = _clamp(attemptTimeout, remaining);
+          intended += fallbackTimeout;
           try {
-            await probeTransport(
-              endpoint.host,
-              endpoint.port,
-              _clamp(attemptTimeout, remaining),
-            );
+            await probeTransport(endpoint.host, endpoint.port, fallbackTimeout);
             sawRoutableTransport = true;
             transportError = null;
             break;
@@ -264,6 +289,11 @@ class TunnelDataPlaneProbe {
         break;
       }
       await _sleep(backoff);
+      intended += backoff;
+    }
+
+    if (_lostTime(startedAt, intended)) {
+      return _suspendedReport(startedAt, attempts, dnsError, transportError);
     }
 
     return TunnelDataPlaneReport(
@@ -291,6 +321,26 @@ class TunnelDataPlaneProbe {
 
   static Duration _clamp(Duration value, Duration limit) =>
       value > limit ? limit : value;
+
+  /// True when far more wall-clock time has passed than the run could
+  /// legitimately have spent, which on iOS means the app was suspended.
+  bool _lostTime(DateTime startedAt, Duration intended) =>
+      _now().difference(startedAt) > intended + suspensionTolerance;
+
+  TunnelDataPlaneReport _suspendedReport(
+    DateTime startedAt,
+    int attempts,
+    String? dnsError,
+    String? transportError,
+  ) {
+    return TunnelDataPlaneReport(
+      outcome: TunnelDataPlaneOutcome.suspended,
+      attempts: attempts,
+      elapsed: _now().difference(startedAt),
+      dnsError: dnsError,
+      transportError: transportError,
+    );
+  }
 
   Future<String> _readStateSafely() async {
     try {
