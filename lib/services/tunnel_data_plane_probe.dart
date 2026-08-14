@@ -58,8 +58,11 @@ class TunnelDataPlaneReport {
         return '隧道已连接但 DNS 解析失败 ($attempts次探测, ${seconds}s): '
             '${dnsError ?? "无详情"}';
       case TunnelDataPlaneOutcome.transportUnreachable:
-        return '隧道已连接但外网不可达 ($attempts次探测, ${seconds}s): '
-            '${transportError ?? dnsError ?? "无详情"}';
+        // Nothing routed at all -- neither a resolved address nor a raw IP.
+        // With DNS routed through the proxy outbound, both legs exercise the
+        // same path, so this points at the outbound rather than the resolver.
+        return '隧道已连接但出站不可用，${seconds}s 内 $attempts 次探测均无法建立连接'
+            '（弱网或节点不可达）: ${transportError ?? dnsError ?? "无详情"}';
       case TunnelDataPlaneOutcome.tunnelDropped:
         return '探测中断: 隧道状态变为 ${tunnelState ?? "unknown"} '
             '($attempts次探测, ${seconds}s)';
@@ -119,8 +122,9 @@ class TunnelDataPlaneProbe {
     this.dnsHosts = defaultDnsHosts,
     this.fallbackEndpoints = defaultFallbackEndpoints,
     this.settleDelay = const Duration(milliseconds: 400),
-    this.budget = const Duration(seconds: 12),
+    this.budget = const Duration(seconds: 20),
     this.retryInterval = const Duration(milliseconds: 600),
+    this.maxRetryInterval = const Duration(milliseconds: 2500),
     this.initialAttemptTimeout = const Duration(seconds: 2),
     this.maxAttemptTimeout = const Duration(seconds: 4),
     TunnelDnsResolver? resolveHost,
@@ -151,6 +155,7 @@ class TunnelDataPlaneProbe {
   final Duration settleDelay;
   final Duration budget;
   final Duration retryInterval;
+  final Duration maxRetryInterval;
   final Duration initialAttemptTimeout;
   final Duration maxAttemptTimeout;
   final TunnelDnsResolver resolveHost;
@@ -181,8 +186,17 @@ class TunnelDataPlaneProbe {
         );
       }
 
+      // Clamp to what is left of the budget. Without this the budget is not a
+      // bound at all: on a weak link a stacked DNS timeout plus two fallback
+      // connect timeouts can overrun it by seconds, which is exactly what the
+      // 17.2s and 16.1s field reports against a 12s budget showed.
+      var remaining = deadline.difference(_now());
+      if (remaining <= Duration.zero) {
+        break;
+      }
+
       attempts++;
-      final attemptTimeout = _attemptTimeout(attempts);
+      final attemptTimeout = _clamp(_attemptTimeout(attempts), remaining);
       final host = dnsHosts[(attempts - 1) % dnsHosts.length];
 
       List<InternetAddress>? addresses;
@@ -201,22 +215,37 @@ class TunnelDataPlaneProbe {
 
       if (addresses != null) {
         final address = addresses.first;
-        try {
-          await probeTransport(address.address, 443, attemptTimeout);
-          return TunnelDataPlaneReport(
-            outcome: TunnelDataPlaneOutcome.reachable,
-            attempts: attempts,
-            elapsed: _now().difference(startedAt),
-          );
-        } catch (e) {
-          transportError = '${address.address}:443 ($host): $e';
+        remaining = deadline.difference(_now());
+        if (remaining > Duration.zero) {
+          try {
+            await probeTransport(
+              address.address,
+              443,
+              _clamp(attemptTimeout, remaining),
+            );
+            return TunnelDataPlaneReport(
+              outcome: TunnelDataPlaneOutcome.reachable,
+              attempts: attempts,
+              elapsed: _now().difference(startedAt),
+            );
+          } catch (e) {
+            transportError = '${address.address}:443 ($host): $e';
+          }
         }
       } else {
         // DNS is down. Prove whether anything routes at all, so the caller can
         // report a resolver problem instead of a dead tunnel.
         for (final endpoint in fallbackEndpoints) {
+          remaining = deadline.difference(_now());
+          if (remaining <= Duration.zero) {
+            break;
+          }
           try {
-            await probeTransport(endpoint.host, endpoint.port, attemptTimeout);
+            await probeTransport(
+              endpoint.host,
+              endpoint.port,
+              _clamp(attemptTimeout, remaining),
+            );
             sawRoutableTransport = true;
             transportError = null;
             break;
@@ -226,10 +255,15 @@ class TunnelDataPlaneProbe {
         }
       }
 
-      if (!_now().add(retryInterval).isBefore(deadline)) {
+      // Back off between attempts. A refused route fails instantly, so a fixed
+      // short interval just burns the budget on retries that cannot succeed --
+      // 19 attempts in 16s bought nothing in the field. Spacing them out gives
+      // a recovering link real time to come back within the same budget.
+      final backoff = _retryDelay(attempts);
+      if (!_now().add(backoff).isBefore(deadline)) {
         break;
       }
-      await _sleep(retryInterval);
+      await _sleep(backoff);
     }
 
     return TunnelDataPlaneReport(
@@ -247,6 +281,16 @@ class TunnelDataPlaneProbe {
     final scaled = initialAttemptTimeout * attempt;
     return scaled > maxAttemptTimeout ? maxAttemptTimeout : scaled;
   }
+
+  /// Exponential backoff, capped, so a long budget means longer waits rather
+  /// than more attempts.
+  Duration _retryDelay(int attempt) {
+    final scaled = retryInterval * (1 << (attempt - 1).clamp(0, 4));
+    return scaled > maxRetryInterval ? maxRetryInterval : scaled;
+  }
+
+  static Duration _clamp(Duration value, Duration limit) =>
+      value > limit ? limit : value;
 
   Future<String> _readStateSafely() async {
     try {
