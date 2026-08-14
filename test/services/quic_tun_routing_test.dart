@@ -41,9 +41,6 @@ const _routePolicy = RoutePolicy(
     direct: <String>[],
     directIpCidrs: <String>[],
   ),
-  tunnelDnsServers4: <String>[],
-  tunnelDnsServers6: <String>[],
-  captureSystemDnsToBuiltInDns: false,
   forceTunnelDnsToProxy: false,
 );
 
@@ -80,7 +77,10 @@ void main() {
       final blockIndex = rules.indexWhere(_isQuicBlock);
       final protocolBlockIndex = rules.indexWhere(_isProtocolQuicBlock);
       final proxyIndex = rules.indexWhere(
-        (rule) => rule['outboundTag'] == 'proxy',
+        (rule) =>
+            rule['outboundTag'] == 'proxy' &&
+            rule['inboundTag'] is List &&
+            (rule['inboundTag'] as List).contains('dns-proxy'),
       );
       expect(blockIndex, greaterThanOrEqualTo(0));
       expect(protocolBlockIndex, greaterThanOrEqualTo(0));

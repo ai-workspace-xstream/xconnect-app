@@ -729,8 +729,7 @@ class VpnConfig {
         'DNS control plane applied: '
         'direct=${DnsConfig.directResolversForXray().join(", ")} '
         'proxy=${DnsConfig.proxyResolversForXray().join(", ")} '
-        'directDomains=${DnsConfig.directDomainSet.length} '
-        'darwinSystemDns=${DnsConfig.darwinSystemDnsMode}',
+        'directDomains=${DnsConfig.directDomainSet.length}',
       );
 
       final formatted = const JsonEncoder.withIndent('  ').convert(jsonObj);
@@ -1187,12 +1186,6 @@ class VpnConfig {
 
     // Tunnel mode configuration
     if (enableTunnelMode) {
-      final controlPlane = DnsConfig.controlPlane(
-        dnsDirectPrimaryTag: _dnsDirectPrimaryTag,
-        dnsDirectSecondaryTag: _dnsDirectSecondaryTag,
-        dnsProxyPrimaryTag: _dnsProxyPrimaryTag,
-        dnsProxySecondaryTag: _dnsProxySecondaryTag,
-      );
       inbounds.add({
         "tag": _tunInboundTag,
         "protocol": "tun",
@@ -1200,7 +1193,7 @@ class VpnConfig {
         "sniffing": {
           "enabled": GlobalState.sniffingEnabled.value,
           "routeOnly": true,
-          "destOverride": controlPlane.sniffingDestOverride(),
+          "destOverride": <String>["http", "tls", "quic"],
         }
       });
     }

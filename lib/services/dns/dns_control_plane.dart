@@ -73,27 +73,15 @@ class DnsPolicy {
 
 class RoutePolicy {
   final DomainSets domainSets;
-  final List<String> tunnelDnsServers4;
-  final List<String> tunnelDnsServers6;
-  final bool captureSystemDnsToBuiltInDns;
 
-  /// When true, all TUN DNS queries are forced through proxy resolver
+  /// Desktop preference. iOS always supplies true because allowing DNS to
+  /// bypass the proxy recreates the cellular bootstrap failure.
   final bool forceTunnelDnsToProxy;
 
   const RoutePolicy({
     required this.domainSets,
-    required this.tunnelDnsServers4,
-    required this.tunnelDnsServers6,
-    required this.captureSystemDnsToBuiltInDns,
     required this.forceTunnelDnsToProxy,
   });
-
-  List<String> tunDnsCidrs() {
-    return <String>[
-      ...tunnelDnsServers4.map((value) => '$value/32'),
-      ...tunnelDnsServers6.map((value) => '$value/128'),
-    ];
-  }
 
   List<Map<String, dynamic>> buildSecureDnsRules({
     required bool enableTunnelMode,
@@ -103,15 +91,6 @@ class RoutePolicy {
     required List<String> proxyResolverInboundTags,
   }) {
     return <Map<String, dynamic>>[
-      if (enableTunnelMode && captureSystemDnsToBuiltInDns)
-        <String, dynamic>{
-          'type': 'field',
-          'inboundTag': <String>[tunInboundTag],
-          'network': 'tcp,udp',
-          'port': '53',
-          'ip': tunDnsCidrs(),
-          'outboundTag': 'dns',
-        },
       if (enableTunnelMode && forceTunnelDnsToProxy)
         <String, dynamic>{
           'type': 'field',
@@ -169,24 +148,4 @@ class DnsControlPlane {
     required this.dnsPolicy,
     required this.routePolicy,
   });
-
-  List<ResolverServerPolicy> get directResolvers => dnsPolicy.directResolvers;
-
-  List<ResolverServerPolicy> get proxyResolvers => dnsPolicy.proxyResolvers;
-
-  DomainSets get domainSets => routePolicy.domainSets;
-
-  List<String> get tunnelDnsServers4 => routePolicy.tunnelDnsServers4;
-
-  List<String> get tunnelDnsServers6 => routePolicy.tunnelDnsServers6;
-
-  List<Map<String, dynamic>> buildDnsServers() {
-    return dnsPolicy.buildDnsServers();
-  }
-
-  List<String> tunDnsCidrs() {
-    return routePolicy.tunDnsCidrs();
-  }
-
-  List<String> sniffingDestOverride() => <String>['http', 'tls', 'quic'];
 }

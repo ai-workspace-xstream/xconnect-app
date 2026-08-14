@@ -736,7 +736,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.dns_outlined,
           label: context.l10n.get('settingsTabDns'),
         ),
-        blocks: [_dnsGroup(context), _tunnelDnsGroup(context)],
+        blocks: [
+          _dnsGroup(context),
+          if (!Platform.isIOS) _desktopTunnelDnsGroup(context),
+        ],
       ),
       (
         tab: SettingsTab(
@@ -1072,14 +1075,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// Its own card, below the two resolver settings.
-  ///
-  /// This does not pick a resolver — it emits a routing rule that sends the
-  /// tunnel's port-53 traffic out through the proxy (see
-  /// `RoutePolicy.buildSecureDnsRules`, where it lives as
-  /// `forceTunnelDnsToProxy`). Keeping it out of the resolver card says so,
-  /// and gives its two-line explanation room to read.
-  Widget _tunnelDnsGroup(BuildContext context) {
+  /// Desktop keeps its established tunnel-DNS routing control. iOS omits it
+  /// because its DNS bootstrap policy is fixed and fail-closed.
+  Widget _desktopTunnelDnsGroup(BuildContext context) {
     return SettingsGroup(
       children: [
         ValueListenableBuilder<bool>(
@@ -1093,20 +1091,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onSwitchChanged: (value) {
               DnsConfig.tunnelDnsViaProxy.value = value;
               addAppLog('隧道 DNS 走代理: ${value ? "开启" : "关闭"}');
-            },
-          ),
-        ),
-        ValueListenableBuilder<bool>(
-          valueListenable: DnsConfig.resolveProxyDomainDirect,
-          builder: (context, direct, _) => SettingsRow(
-            icon: Icons.dns_outlined,
-            kind: SettingsRowKind.toggle,
-            title: context.l10n.get('resolveProxyDomainDirect'),
-            description: context.l10n.get('resolveProxyDomainDirectHint'),
-            switchValue: direct,
-            onSwitchChanged: (value) {
-              DnsConfig.resolveProxyDomainDirect.value = value;
-              addAppLog('出站服务器域名直连解析: ${value ? "开启" : "关闭"}');
             },
           ),
         ),
@@ -1356,8 +1340,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             : null,
                         // Direct resolvers are always plain — the DoH toggle
                         // only governs the built-in proxy resolvers.
-                        onPressed: () =>
-                            dns1Controller.text = preset.plainHost,
+                        onPressed: () => dns1Controller.text = preset.plainHost,
                       );
                     }).toList(),
                   );

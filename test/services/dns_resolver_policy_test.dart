@@ -40,7 +40,43 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('dnsServer1'), isNull);
       expect(prefs.getString('dnsServer2'), isNull);
-      expect(prefs.getInt('dnsSchemaVersion'), 3);
+      expect(prefs.getBool('resolveProxyDomainDirect'), isNull);
+      expect(prefs.getInt('dnsSchemaVersion'), 4);
+    });
+
+    test(
+        'desktop keeps its tunnel DNS choice while dropping server-domain mode',
+        () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'tunnelDnsViaProxy': false,
+        'resolveProxyDomainDirect': true,
+        'dnsSchemaVersion': 3,
+      });
+
+      await DnsConfig.init();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(DnsConfig.tunnelDnsViaProxy.value, isFalse);
+      expect(prefs.getBool('tunnelDnsViaProxy'), isFalse);
+      expect(prefs.getBool('resolveProxyDomainDirect'), isNull);
+
+      final controlPlane = DnsConfig.controlPlane(
+        dnsDirectPrimaryTag: 'dns-direct-primary',
+        dnsDirectSecondaryTag: 'dns-direct-secondary',
+        dnsProxyPrimaryTag: 'dns-proxy-primary',
+        dnsProxySecondaryTag: 'dns-proxy-secondary',
+      );
+      final rules = controlPlane.routePolicy.buildSecureDnsRules(
+        enableTunnelMode: true,
+        blockQuic: false,
+        tunInboundTag: 'tun-in',
+        directResolverInboundTags: const <String>['dns-direct'],
+        proxyResolverInboundTags: const <String>['dns-proxy'],
+      );
+      expect(
+        rules.where((rule) => rule['port'] == '53'),
+        isEmpty,
+      );
     });
 
     test('follow the transport toggle and stay IP-literal', () async {
@@ -138,7 +174,8 @@ void main() {
 
       await DnsConfig.init();
 
-      expect(DnsConfig.directResolversForXray(), <String>['1.1.1.1', '8.8.8.8']);
+      expect(
+          DnsConfig.directResolversForXray(), <String>['1.1.1.1', '8.8.8.8']);
     });
   });
 
