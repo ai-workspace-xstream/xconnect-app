@@ -11,9 +11,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/xtls/libxray/xray"
 )
@@ -23,6 +26,129 @@ var instMu sync.Mutex
 var tunnelSeq atomic.Int64
 var tunnelSession sync.Map
 var tunnelLastError atomic.Value
+
+// A NEPacketTunnelProvider runs under a jetsam footprint cap far tighter than
+// a normal app's, and Go's default GC pacing plus its lazy scavenger keep more
+// resident than the extension can afford. While a tunnel is up we therefore
+// pace the GC harder and hand idle spans back to the OS on a timer, then
+// restore the process defaults on stop.
+const (
+	// A backstop against unbounded drift, deliberately above the footprint
+	// observed on device: a soft limit below the live heap makes the collector
+	// run continuously, which costs more than it saves. The footprint is
+	// actually reduced by the GC pacing and the scavenger below; tighten this
+	// only once a soak has shown the Go runtime's real share of the process.
+	tunnelMemoryLimitBytesDefault int64 = 64 << 20
+	tunnelGCPercentDefault              = 40
+	tunnelScavengeInterval              = 20 * time.Second
+	// Below this much reclaimable idle heap a forced collection costs more CPU
+	// than the footprint it wins back.
+	tunnelScavengeMinIdleBytes uint64 = 4 << 20
+)
+
+var (
+	memoryGovernorMu       sync.Mutex
+	memoryGovernorStop     chan struct{}
+	memoryGovernorPrevGC   int
+	memoryGovernorPrevLim  int64
+	memoryGovernorRestores bool
+)
+
+// envInt reads an integer override, returning fallback when unset or invalid.
+func envInt(name string, fallback int64) int64 {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
+// startTunnelMemoryGovernor tightens GC pacing for the lifetime of a tunnel
+// session. It is idempotent: a second call while active is a no-op.
+func startTunnelMemoryGovernor() {
+	memoryGovernorMu.Lock()
+	defer memoryGovernorMu.Unlock()
+	if memoryGovernorStop != nil {
+		return
+	}
+
+	gcPercent := int(envInt("XCONNECT_TUNNEL_GC_PERCENT", tunnelGCPercentDefault))
+	if gcPercent <= 0 {
+		gcPercent = tunnelGCPercentDefault
+	}
+	memoryGovernorPrevGC = debug.SetGCPercent(gcPercent)
+
+	// A limit of 0 disables the soft cap, for when tightening it turns out to
+	// cost more in GC CPU than it saves in footprint.
+	limitMB := envInt("XCONNECT_TUNNEL_MEM_LIMIT_MB", tunnelMemoryLimitBytesDefault>>20)
+	if limitMB > 0 {
+		memoryGovernorPrevLim = debug.SetMemoryLimit(limitMB << 20)
+	} else {
+		memoryGovernorPrevLim = debug.SetMemoryLimit(-1)
+	}
+	memoryGovernorRestores = true
+
+	stop := make(chan struct{})
+	memoryGovernorStop = stop
+	go runTunnelScavenger(stop)
+}
+
+// stopTunnelMemoryGovernor restores the pacing the process had before the
+// tunnel started, so the governor never leaks into non-tunnel work.
+func stopTunnelMemoryGovernor() {
+	memoryGovernorMu.Lock()
+	defer memoryGovernorMu.Unlock()
+	if memoryGovernorStop == nil {
+		return
+	}
+	close(memoryGovernorStop)
+	memoryGovernorStop = nil
+	if memoryGovernorRestores {
+		debug.SetGCPercent(memoryGovernorPrevGC)
+		debug.SetMemoryLimit(memoryGovernorPrevLim)
+		memoryGovernorRestores = false
+	}
+}
+
+func runTunnelScavenger(stop <-chan struct{}) {
+	ticker := time.NewTicker(tunnelScavengeInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			var stats runtime.MemStats
+			runtime.ReadMemStats(&stats)
+			if stats.HeapIdle-stats.HeapReleased >= tunnelScavengeMinIdleBytes {
+				debug.FreeOSMemory()
+			}
+		}
+	}
+}
+
+//export XrayTunnelMemoryStats
+func XrayTunnelMemoryStats() *C.char {
+	var stats runtime.MemStats
+	runtime.ReadMemStats(&stats)
+	payload := map[string]interface{}{
+		"heapInUse":    stats.HeapInuse,
+		"heapIdle":     stats.HeapIdle,
+		"heapReleased": stats.HeapReleased,
+		"sys":          stats.Sys,
+		"numGC":        stats.NumGC,
+		"goroutines":   runtime.NumGoroutine(),
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return C.CString("{}")
+	}
+	return C.CString(string(encoded))
+}
 
 func setTunnelLastError(msg string) {
 	tunnelLastError.Store(msg)
@@ -229,7 +355,10 @@ func StartXrayTunnelWithFd(configC *C.char, fd C.int, interfaceC *C.char) C.long
 		}
 	}
 
+	startTunnelMemoryGovernor()
+
 	if err := startXrayInternal(cfgData); err != nil {
+		stopTunnelMemoryGovernor()
 		setTunnelLastError(err.Error())
 		return C.longlong(-1)
 	}
@@ -265,6 +394,10 @@ func StopXrayTunnel(handle C.longlong) *C.char {
 		}
 	}
 	clearNodeRegistry()
+	stopTunnelMemoryGovernor()
+	// The session's buffers are unreachable now; hand them back before the
+	// extension idles, rather than waiting for the next scavenge tick.
+	debug.FreeOSMemory()
 	return C.CString("success")
 }
 
