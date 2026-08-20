@@ -98,11 +98,11 @@ class _Tab extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   tab.label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    color: selected ? onSurface : muted,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.w500,
+                        color: selected ? onSurface : muted,
+                      ),
                 ),
               ],
             ),

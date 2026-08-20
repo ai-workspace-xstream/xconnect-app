@@ -571,8 +571,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Expanded(
                 child: Text(
                   context.l10n.get('xhttpAdvancedTitle'),
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               // This card is the one place on the page that does not apply
@@ -589,11 +591,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   child: Text(
                     context.l10n.get('unsavedChanges'),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: context.xColors.warningBannerText,
-                    ),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: context.xColors.warningBannerText,
+                        ),
                   ),
                 ),
             ],
@@ -601,9 +601,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 2),
           Text(
             context.l10n.get('xhttpAdvancedHint'),
-            style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -611,7 +611,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Expanded(
                 child: Text(
                   context.l10n.get('xhttpModeLabel'),
-                  style: const TextStyle(fontSize: 13),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                 ),
               ),
               DropdownButton<String>(
@@ -636,7 +638,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 8),
           Text(
             context.l10n.get('xhttpAlpnLabel'),
-            style: const TextStyle(fontSize: 13),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -796,7 +800,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSettingsView(BuildContext context, {required bool isMobile}) {
     final cs = Theme.of(context).colorScheme;
-    final xc = context.xColors;
     final entries = _settingsTabs(context, isMobile: isMobile);
     final index = _selectedTab.clamp(0, entries.length - 1);
     final blocks = entries[index].blocks;
@@ -832,7 +835,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 4),
                     Text(
                       context.l10n.get('settingsSubtitle'),
-                      style: TextStyle(fontSize: 13, color: xc.mutedText),
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 16),
                     SettingsTabBar(
@@ -949,12 +952,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.only(left: 2, bottom: 6),
           child: Text(
             context.l10n.get('proxySettings').toUpperCase(),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.1,
-              color: xc.subtleText,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(letterSpacing: 1.1),
           ),
         ),
         Container(

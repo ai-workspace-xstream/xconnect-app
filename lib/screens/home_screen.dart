@@ -854,29 +854,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) {
     final cs = Theme.of(context).colorScheme;
     final xc = context.xColors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            _buildMetricBadge(icon, color),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(color: xc.mutedText),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        _buildMetricValue(
-          value,
-          Theme.of(context).textTheme.displaySmall!.copyWith(
-                color: cs.onSurface,
+    return Semantics(
+      label: '$label $value',
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _buildMetricBadge(icon, color),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(color: xc.mutedText),
               ),
-        ),
-      ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildMetricValue(
+            value,
+            Theme.of(context).textTheme.displaySmall!.copyWith(
+                  color: cs.onSurface,
+                ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1058,13 +1062,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          _connectionStateLabel(context),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.headlineSmall?.copyWith(
-                                color: connectionColor,
-                              ),
+                        // Connecting/disconnecting is otherwise a silent
+                        // change for anyone not watching the colour.
+                        Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            _connectionStateLabel(context),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.headlineSmall?.copyWith(
+                                  color: connectionColor,
+                                ),
+                          ),
                         ),
                       ],
                     ),
@@ -1171,34 +1180,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       borderSide = BorderSide(color: xc.brandBorder);
     }
 
-    return ChoiceChip(
-      showCheckmark: false,
+    return Semantics(
+      button: true,
       selected: emphasized,
-      avatar: isActive
-          ? Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: xc.success,
-                shape: BoxShape.circle,
-              ),
-            )
-          : null,
-      label: Text(
-        latency == null ? node.name : '${node.name} · ${latency}ms',
-        overflow: TextOverflow.ellipsis,
+      label: isActive
+          ? '${node.name} ${context.l10n.get('tunStatusConnected')}'
+          : node.name,
+      child: ChoiceChip(
+        showCheckmark: false,
+        selected: emphasized,
+        avatar: isActive
+            ? ExcludeSemantics(
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: xc.success,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              )
+            : null,
+        label: Text(
+          latency == null ? node.name : '${node.name} · ${latency}ms',
+          overflow: TextOverflow.ellipsis,
+        ),
+        labelStyle: Theme.of(
+          context,
+        ).textTheme.labelLarge?.copyWith(
+              color: labelColor,
+            ),
+        backgroundColor: chipBg,
+        selectedColor: chipBg,
+        side: borderSide,
+        shape: const StadiumBorder(),
+        materialTapTargetSize: MaterialTapTargetSize.padded,
+        onSelected: (!_isSwitchingNode) ? (_) => _selectNode(node) : null,
       ),
-      labelStyle: Theme.of(
-        context,
-      ).textTheme.labelLarge?.copyWith(
-            color: labelColor,
-          ),
-      backgroundColor: chipBg,
-      selectedColor: chipBg,
-      side: borderSide,
-      shape: const StadiumBorder(),
-      materialTapTargetSize: MaterialTapTargetSize.padded,
-      onSelected: (!_isSwitchingNode) ? (_) => _selectNode(node) : null,
     );
   }
 

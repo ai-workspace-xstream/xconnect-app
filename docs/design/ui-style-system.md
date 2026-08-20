@@ -172,7 +172,12 @@ backgroundColor: _hasActiveConnection
 
 ### 3.1 颜色 —— Light
 
-`XConnectColors` 字段名保持不变，改取值并新增 4 个。所有新值已实测（§10.1）。
+`XConnectColors` 字段名保持不变，改取值并新增字段。
+
+> **实现说明（PR #54 之后）**：落地时主色由靛蓝收敛为**石板蓝** `#1F5499`，并把 `ink` 与
+> `brand` 统一为同一色值 —— 主行动因此是石板蓝实心块而不是墨黑块。R1「主行动是全屏对比
+> 最强的块」这一条不变，变的是它的色相。下表保留当时的提案值以说明推导过程；
+> **以代码与 §10.1 的实测表为准**。
 
 | Token | 现值 | **新值** | 对 card 比值 | 用途 |
 |---|---|---|---|---|
@@ -501,29 +506,40 @@ InkResponse(
 
 ## 10. 无障碍
 
-### 10.1 新 palette 对比度实测（WCAG 2.1）
+### 10.1 对比度实测（WCAG 2.1，对应已落地的石板蓝 palette）
 
-浅色，对 `cardBackground #F1F3F5`（主页所有卡片底色）与 `surface #FFFFFF` 双基准：
+浅色，对 `cardBackground #FFFFFF` 与 `surfaceSunken #E9EEF4` 双基准 —— 后者是 chip、
+输入框、按压态的底色，也是最容易被忽略的那一层：
 
-| Token | 新值 | 对 surface | 对 card | 判定 |
+| Token | 值 | 对 card | 对 sunken | 判定 |
 |---|---|---|---|---|
-| `onSurface` | `#1C1B1F` | 16.25 | 15.57 | AAA |
-| `mutedText` | `#4E5A65` | 7.06 | 6.35 | AAA |
-| `subtleText` | `#5B6874` | 5.71 | 5.13 | AA |
-| `brand` | `#3F4BA0` | 7.71 | 6.93 | AAA |
-| `success` | `#236B3F` | 6.47 | 5.82 | AA |
-| `warning` | `#8A5200` | 6.39 | 5.74 | AA |
-| `error` | `#B3261E` | 6.54 | 5.88 | AA |
-| `download` | `#1F5FBF` | 6.09 | 5.48 | AA |
-| `upload` | `#A83A57` | 6.16 | 5.54 | AA |
-| `onInk` 白 / `ink #111827` | — | 17.74 | — | AAA |
-| 白 / FAB 已连接 `#236B3F` | — | 6.47 | — | AA |
+| `mutedText` | `#526278` | 6.22 | 5.33 | AA |
+| `subtleText` | `#5B6A7D` | 5.52 | 4.73 | AA |
+| `brand` / `download` | `#1F5499` | 7.54 | 6.46 | AAA |
+| `success` | `#217346` | 5.82 | 4.99 | AA |
+| `successForeground` | `#175231` | 9.18 | 7.87 | AAA |
+| `warning` | `#A3580B` | 5.31 | 4.55 | AA |
+| `error` | `#C23B38` | 5.28 | 4.53 | AA |
+| `upload` | `#704CB6` | 6.18 | 5.30 | AA |
+| `onInk` 白 / `ink #1F5499` | — | 7.54 | — | AAA |
+| 白 / FAB 已连接 `#217346` | — | 5.82 | — | AA |
 
-深色（对 `cardBackground #191D21`）：`onSurface` 12.70、`mutedText` 8.23、`subtleText` 5.44、
-`brand` 7.10、`success` 6.77、`warning` 8.10、`error` 7.62、`download` 7.14、`upload` 7.74、
-`onInk #0B0E11` / `ink #E7E9EA` 15.89 —— **全部 AA 以上**。
+深色，对 `cardBackground #131A24` 与 `surfaceSunken #1A2433`：
 
-> **最小余量 5.13 对 4.5。** 改任何文本色前必须重跑校验。
+| Token | 值 | 对 card | 对 sunken | 判定 |
+|---|---|---|---|---|
+| `mutedText` | `#909EB2` | 6.43 | 5.74 | AA |
+| `subtleText` | `#8493A6` | 5.58 | 4.99 | AA |
+| `brand` / `download` | `#6B9ED8` | 6.25 | 5.59 | AA |
+| `success` | `#4EB87A` | 7.05 | 6.30 | AAA |
+| `warning` | `#E5A344` | 8.04 | 7.18 | AAA |
+| `error` | `#E57371` | 5.85 | 5.22 | AA |
+| `upload` | `#9E84DB` | 5.64 | 5.04 | AA |
+| `onInk #0F172A` / `ink #6B9ED8` | — | 6.38 | — | AA |
+
+> **最小余量 4.53 对 4.5。** 改任何文本色前必须重跑校验 —— 这不是提醒，是已经发生过一次的
+> 事故：石板蓝调色期间 `subtleText` 一度回落到浅色 3.01 / 深色 3.51，而它承载的是「未连接」
+> 状态文案和分组标签。
 
 ### 10.2 语义标注（纯代码，零布局影响）
 
@@ -569,20 +585,26 @@ InkResponse(
 
 ### 11.2 量化验收
 
-| 指标 | 现状 | 目标 |
-|---|---|---|
-| `BorderRadius.circular(字面量)` 调用点 | **34**（8 种取值） | 0（全走 `AppRadius`） |
-| `fontSize:` 字面量 | **53** | 0（全走 `TextTheme`） |
-| `Color(0x…)`（theme 外） | **3** | 0 |
-| `Colors.*` 字面量（theme 外） | **6** | 0 |
-| 浅色 WCAG AA 不合格组合 | **9** | 0 |
-| 单屏 `ink` 主行动数量 | 2（渐变按钮 + FAB） | **≤ 1** |
-| `LinearGradient` 使用 | 1 | 0 |
-| 卡片同时用「填充+描边+阴影」 | 2 处 | 0 |
-| `disableAnimations` 处理 | 0 | 主页 4 处动画全覆盖 |
-| `Semantics` 覆盖（主页交互元素） | 0 | 全部 |
-| `logo.png` 在 `pubspec.yaml` 注册 | **否**（违反 dev-constraints §5） | 是（mono 资产逐文件注册） |
-| **元素外框位移** | — | **0 px（§0 判据）** |
+| 指标 | 改造前 | 目标 | 当前 |
+|---|---|---|---|
+| `BorderRadius.circular(字面量)` 调用点 | **34**（8 种取值） | 0（全走 `AppRadius`） | ✅ 0 |
+| `fontSize:` 字面量（theme 外） | **53** | 0（全走 `TextTheme`） | ✅ 0 |
+| `Color(0x…)`（theme 外） | **3** | 0 | ✅ 0 |
+| `Colors.*` 字面量（theme 外） | **6** | 0 | ✅ 0 |
+| WCAG AA 不合格组合 | **9** | 0 | ✅ 0（浅色 + 深色双基准，见 §10.1） |
+| 单屏 `ink` 主行动数量 | 2（渐变按钮 + FAB） | **≤ 1** | ✅ 1（FAB） |
+| `LinearGradient` 使用 | 1 | 0 | ✅ 0 |
+| 卡片同时用「填充+描边+阴影」 | 2 处 | 0 | ✅ 0 |
+| `disableAnimations` 处理 | 0 | 主页动画全覆盖 | ✅ 全部走 `AppMotion.of` |
+| `Semantics` 覆盖（主页交互元素） | 0 | 全部 | ✅ FAB／节点卡／节点 chip／流量指标／状态 live region |
+| `logo.png` 在 `pubspec.yaml` 注册 | **否**（违反 dev-constraints §5） | 是（mono 资产逐文件注册） | ⚠️ 已注册 `logo.png`，但 §4 的 mono SVG 与三处落点仍未做 |
+| **元素外框位移** | — | **0 px（§0 判据）** | ⚠️ 见下方说明 |
+
+> **两处偏差要如实记下**：
+> 1. §4 的 logo 系统（mono SVG + 水印／品牌块／inline 小标）**未实施**，仍是 §13 待确认项。
+> 2. 「元素外框零位移」在字号 token 化阶段被**有意破例**：settings 分组标题 11→12、
+>    settings 行标题 13.5→13、行说明 11.5→12、login 账号名 22→24、连接器标题 28→30。
+>    这些是把游离值收进标度的代价，不是回归。其余站点全部尺寸未变。
 
 ### 11.3 PR 准入（沿用仓库既有 checklist）
 

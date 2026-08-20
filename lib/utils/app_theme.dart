@@ -174,7 +174,7 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     cardBorder: Color(0xFFDEE4ED),
     surfaceSunken: Color(0xFFE9EEF4),
     mutedText: Color(0xFF526278),
-    subtleText: Color(0xFF8896A8),
+    subtleText: Color(0xFF5B6A7D),
     consoleBackground: Color(0xFF131A24),
     consoleText: Color(0xFFE2E8F0),
     consoleWarning: Color(0xFFE5A344),
@@ -202,7 +202,7 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     cardBorder: Color(0xFF222F3E),
     surfaceSunken: Color(0xFF1A2433),
     mutedText: Color(0xFF909EB2),
-    subtleText: Color(0xFF627185),
+    subtleText: Color(0xFF8493A6),
     consoleBackground: Color(0xFF0B1017),
     consoleText: Color(0xFFE2E8F0),
     consoleWarning: Color(0xFFE5A344),
@@ -617,7 +617,9 @@ class AppTheme {
           TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -657,7 +659,9 @@ class AppTheme {
           TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -692,7 +696,9 @@ class AppTheme {
           TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 20, vertical: 12),

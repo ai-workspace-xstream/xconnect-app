@@ -97,27 +97,26 @@ Future<void> showPermissionGuideDialog(
                     children: [
                       Text(
                         context.l10n.get('permissionGuideFailureIntro'),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: xc.warningBannerText,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: xc.warningBannerText),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         context.l10n.get('permissionGuideLastError'),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: xc.warningBannerText,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelSmall
+                            ?.copyWith(color: xc.warningBannerText),
                       ),
                       const SizedBox(height: 4),
                       SelectableText(
                         normalizedFailure,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: xc.warningBannerText,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelMedium
+                            ?.copyWith(color: xc.warningBannerText),
                       ),
                     ],
                   ),
@@ -146,28 +145,27 @@ Future<void> showPermissionGuideDialog(
                     children: [
                       Text(
                         '${titleForCheck(item.id)}: $statusText',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: statusColor,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(color: statusColor),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         item.detail,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelMedium
+                            ?.copyWith(color: cs.onSurface),
                       ),
                       if (!item.passed) ...[
                         const SizedBox(height: 2),
                         Text(
                           item.suggestion,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: xc.warning,
-                          ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(color: xc.warning),
                         ),
                       ],
                     ],
@@ -177,7 +175,9 @@ Future<void> showPermissionGuideDialog(
               if (!report.allPassed) ...[
                 Text(
                   context.l10n.get('permissionBootstrapHint'),
-                  style: TextStyle(fontSize: 12, color: xc.warning),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: xc.warning),
                 ),
                 const SizedBox(height: 4),
               ],
@@ -187,7 +187,9 @@ Future<void> showPermissionGuideDialog(
                   ))
                 Text(
                   context.l10n.get('permissionGuideTunnelDeniedHint'),
-                  style: TextStyle(fontSize: 12, color: xc.warning),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: xc.warning),
                 ),
               const SizedBox(height: 12),
               ElevatedButton(
