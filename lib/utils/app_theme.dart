@@ -15,48 +15,48 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Brand primary – Refined Tech Blue (科技简约蓝 #1D5BD8 / #1E4FB8), calm and sophisticated.
-  static const Color brand = Color(0xFF1D5BD8);
-  static const Color brandHover = Color(0xFF1548B0);
-  static const Color brandMuted = Color(0xFFF0F5FF);
-  static const Color brandBorder = Color(0xFFD6E4FA);
-  static const Color brandVivid = Color(0xFF3B82F6);
-  static const Color brandDark = Color(0xFF60A5FA);
-  static const Color brandDarkMuted = Color(0xFF172554);
+  // Brand & Button – Refined Slate-Blue with gentle grey undertone (#1F5499), calm and non-glaring.
+  static const Color brand = Color(0xFF1F5499);
+  static const Color brandHover = Color(0xFF163E73);
+  static const Color brandMuted = Color(0xFFEEF3F9);
+  static const Color brandBorder = Color(0xFFD2DFEE);
+  static const Color brandVivid = Color(0xFF3872B8);
+  static const Color brandDark = Color(0xFF6B9ED8);
+  static const Color brandDarkMuted = Color(0xFF16263B);
 
-  // Ink – primary-action surface (Tech Blue in light, Sky in dark).
-  static const Color ink = Color(0xFF1D5BD8);
-  static const Color inkPressed = Color(0xFF1548B0);
+  // Ink – primary-action surface (Muted Slate-Blue in light, Sky-Slate in dark).
+  static const Color ink = Color(0xFF1F5499);
+  static const Color inkPressed = Color(0xFF163E73);
   static const Color onInk = Color(0xFFFFFFFF);
-  static const Color inkDark = Color(0xFF60A5FA);
-  static const Color inkPressedDark = Color(0xFF3B82F6);
+  static const Color inkDark = Color(0xFF6B9ED8);
+  static const Color inkPressedDark = Color(0xFF4C82C0);
   static const Color onInkDark = Color(0xFF0F172A);
 
-  // Status semantics – calm, natural, non-glaring tones
-  // Success / Connected: Refined Emerald / Forest Green (#15803D)
-  static const Color success = Color(0xFF15803D);
-  static const Color successMuted = Color(0xFFEBFDF3);
-  static const Color successForeground = Color(0xFF14532D);
-  static const Color successDark = Color(0xFF4ADE80);
-  static const Color successDarkMuted = Color(0xFF133E26);
+  // Status semantics – gentle, natural, eye-friendly tones (no piercing neon)
+  // Success / Connected: Natural Forest Green (#217346) with soft mist tint (#E8F4EC)
+  static const Color success = Color(0xFF217346);
+  static const Color successMuted = Color(0xFFE8F4EC);
+  static const Color successForeground = Color(0xFF175231);
+  static const Color successDark = Color(0xFF4EB87A);
+  static const Color successDarkMuted = Color(0xFF143322);
 
-  // Warning: Low-saturation Amber (#B45309) with soft tint (#FEF3C7)
-  static const Color warning = Color(0xFFB45309);
-  static const Color warningMuted = Color(0xFFFEF3C7);
-  static const Color warningForeground = Color(0xFF78350F);
-  static const Color warningDark = Color(0xFFFBBF24);
+  // Warning: Warm Earth-Amber (#A3580B) with soft tint (#FDF4E7)
+  static const Color warning = Color(0xFFA3580B);
+  static const Color warningMuted = Color(0xFFFDF4E7);
+  static const Color warningForeground = Color(0xFF6E3905);
+  static const Color warningDark = Color(0xFFE5A344);
 
-  // Error: Muted Crimson (#DC2626) with soft tint (#FEE2E2)
-  static const Color error = Color(0xFFDC2626);
-  static const Color errorMuted = Color(0xFFFEE2E2);
-  static const Color errorForeground = Color(0xFF991B1B);
-  static const Color errorDark = Color(0xFFF87171);
+  // Error: Muted Brick Red (#C23B38) with soft tint (#FDEBEA)
+  static const Color error = Color(0xFFC23B38);
+  static const Color errorMuted = Color(0xFFFDEBEA);
+  static const Color errorForeground = Color(0xFF7D1F1C);
+  static const Color errorDark = Color(0xFFE57371);
 
-  // Metric accent colors (download = Tech Blue, upload = Refined Violet)
-  static const Color download = Color(0xFF1D5BD8);
-  static const Color downloadDark = Color(0xFF60A5FA);
-  static const Color upload = Color(0xFF7C3AED);
-  static const Color uploadDark = Color(0xFFA78BFA);
+  // Metric accent colors (download = Slate-Blue, upload = Muted Violet)
+  static const Color download = Color(0xFF1F5499);
+  static const Color downloadDark = Color(0xFF6B9ED8);
+  static const Color upload = Color(0xFF704CB6);
+  static const Color uploadDark = Color(0xFF9E84DB);
 }
 
 /// Corner radius scale.  Two container steps plus a pill – nothing else.
@@ -171,23 +171,23 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     onInk: AppColors.onInk,
     inkPressed: AppColors.inkPressed,
     cardBackground: Color(0xFFFFFFFF),
-    cardBorder: Color(0xFFE2E8F0),
-    surfaceSunken: Color(0xFFF1F5F9),
-    mutedText: Color(0xFF475569),
-    subtleText: Color(0xFF94A3B8),
-    consoleBackground: Color(0xFF0F172A),
+    cardBorder: Color(0xFFDEE4ED),
+    surfaceSunken: Color(0xFFE9EEF4),
+    mutedText: Color(0xFF526278),
+    subtleText: Color(0xFF8896A8),
+    consoleBackground: Color(0xFF131A24),
     consoleText: Color(0xFFE2E8F0),
-    consoleWarning: Color(0xFFFBBF24),
-    consoleError: Color(0xFFF87171),
-    warningBannerBackground: Color(0xFFFEF3C7),
-    warningBannerBorder: Color(0xFFFDE68A),
-    warningBannerText: Color(0xFF78350F),
+    consoleWarning: Color(0xFFE5A344),
+    consoleError: Color(0xFFE57371),
+    warningBannerBackground: Color(0xFFFDF4E7),
+    warningBannerBorder: Color(0xFFF6DEBA),
+    warningBannerText: Color(0xFF6E3905),
   );
 
   static const dark = XConnectColors(
     brand: AppColors.brandDark,
     brandMuted: AppColors.brandDarkMuted,
-    brandBorder: Color(0xFF1E3A5F),
+    brandBorder: Color(0xFF22354E),
     success: AppColors.successDark,
     successMuted: AppColors.successDarkMuted,
     successForeground: Color(0xFF86EFAC),
@@ -198,18 +198,18 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     ink: AppColors.inkDark,
     onInk: AppColors.onInkDark,
     inkPressed: AppColors.inkPressedDark,
-    cardBackground: Color(0xFF131B26),
-    cardBorder: Color(0xFF243042),
+    cardBackground: Color(0xFF131A24),
+    cardBorder: Color(0xFF222F3E),
     surfaceSunken: Color(0xFF1A2433),
-    mutedText: Color(0xFF94A3B8),
-    subtleText: Color(0xFF64748B),
-    consoleBackground: Color(0xFF0B0F17),
+    mutedText: Color(0xFF909EB2),
+    subtleText: Color(0xFF627185),
+    consoleBackground: Color(0xFF0B1017),
     consoleText: Color(0xFFE2E8F0),
-    consoleWarning: Color(0xFFFBBF24),
-    consoleError: Color(0xFFF87171),
-    warningBannerBackground: Color(0xFF332A18),
-    warningBannerBorder: Color(0xFF524220),
-    warningBannerText: Color(0xFFFDE68A),
+    consoleWarning: Color(0xFFE5A344),
+    consoleError: Color(0xFFE57371),
+    warningBannerBackground: Color(0xFF2E2416),
+    warningBannerBorder: Color(0xFF4A381E),
+    warningBannerText: Color(0xFFF6DEBA),
   );
 
   @override
@@ -327,14 +327,14 @@ class AppTheme {
     secondary: AppColors.brandVivid,
     onSecondary: Colors.white,
     secondaryContainer: AppColors.brandMuted,
-    onSecondaryContainer: Color(0xFF1E3A8A),
-    surface: Color(0xFFF8FAFC),
-    onSurface: Color(0xFF0F172A),
-    onSurfaceVariant: Color(0xFF475569),
+    onSecondaryContainer: Color(0xFF163E73),
+    surface: Color(0xFFF3F5F8),
+    onSurface: Color(0xFF1E293B),
+    onSurfaceVariant: Color(0xFF526278),
     error: AppColors.error,
     onError: Colors.white,
-    outline: Color(0xFF94A3B8),
-    outlineVariant: Color(0xFFE2E8F0),
+    outline: Color(0xFF8896A8),
+    outlineVariant: Color(0xFFDEE4ED),
     shadow: Color(0x0A0F172A),
   );
 
@@ -616,7 +616,9 @@ class AppTheme {
         textStyle: const WidgetStatePropertyAll(
           TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        shape: const WidgetStatePropertyAll(StadiumBorder()),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         ),
@@ -654,7 +656,9 @@ class AppTheme {
         textStyle: const WidgetStatePropertyAll(
           TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        shape: const WidgetStatePropertyAll(StadiumBorder()),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         ),
@@ -687,7 +691,9 @@ class AppTheme {
         textStyle: const WidgetStatePropertyAll(
           TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        shape: const WidgetStatePropertyAll(StadiumBorder()),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         ),
