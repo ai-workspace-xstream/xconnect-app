@@ -15,47 +15,47 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Brand primary – Modern Cobalt / Royal Blue (#0058BD) from website console.
-  static const Color brand = Color(0xFF0058BD);
-  static const Color brandHover = Color(0xFF0B4F9A);
-  static const Color brandMuted = Color(0xFFE8F0FB);
-  static const Color brandBorder = Color(0xFFD7E4F7);
-  static const Color brandVivid = Color(0xFF5B8DEF);
-  static const Color brandDark = Color(0xFF5B8DEF);
-  static const Color brandDarkMuted = Color(0xFF14375F);
+  // Brand primary – Refined Tech Blue (科技简约蓝 #1D5BD8 / #1E4FB8), calm and sophisticated.
+  static const Color brand = Color(0xFF1D5BD8);
+  static const Color brandHover = Color(0xFF1548B0);
+  static const Color brandMuted = Color(0xFFF0F5FF);
+  static const Color brandBorder = Color(0xFFD6E4FA);
+  static const Color brandVivid = Color(0xFF3B82F6);
+  static const Color brandDark = Color(0xFF60A5FA);
+  static const Color brandDarkMuted = Color(0xFF172554);
 
-  // Ink – primary-action surface (Blue #0058BD in light, #5B8DEF in dark).
-  static const Color ink = Color(0xFF0058BD);
-  static const Color inkPressed = Color(0xFF0B4F9A);
+  // Ink – primary-action surface (Tech Blue in light, Sky in dark).
+  static const Color ink = Color(0xFF1D5BD8);
+  static const Color inkPressed = Color(0xFF1548B0);
   static const Color onInk = Color(0xFFFFFFFF);
-  static const Color inkDark = Color(0xFF5B8DEF);
-  static const Color inkPressedDark = Color(0xFF4375D6);
-  static const Color onInkDark = Color(0xFFFFFFFF);
+  static const Color inkDark = Color(0xFF60A5FA);
+  static const Color inkPressedDark = Color(0xFF3B82F6);
+  static const Color onInkDark = Color(0xFF0F172A);
 
-  // Status semantics – aligned with website and console
-  // Success / Connected: Green (#16A34A) with soft muted tint (#DCFCE7)
-  static const Color success = Color(0xFF16A34A);
-  static const Color successMuted = Color(0xFFDCFCE7);
-  static const Color successForeground = Color(0xFF166534);
+  // Status semantics – calm, natural, non-glaring tones
+  // Success / Connected: Refined Emerald / Forest Green (#15803D)
+  static const Color success = Color(0xFF15803D);
+  static const Color successMuted = Color(0xFFEBFDF3);
+  static const Color successForeground = Color(0xFF14532D);
   static const Color successDark = Color(0xFF4ADE80);
   static const Color successDarkMuted = Color(0xFF133E26);
 
-  // Warning: Amber (#D97706 / #B45309) with muted tint (#FFF3CD)
-  static const Color warning = Color(0xFFD97706);
-  static const Color warningMuted = Color(0xFFFFF3CD);
-  static const Color warningForeground = Color(0xFF664D03);
+  // Warning: Low-saturation Amber (#B45309) with soft tint (#FEF3C7)
+  static const Color warning = Color(0xFFB45309);
+  static const Color warningMuted = Color(0xFFFEF3C7);
+  static const Color warningForeground = Color(0xFF78350F);
   static const Color warningDark = Color(0xFFFBBF24);
 
-  // Error: Red (#DC2626) with muted tint (#FEE2E2)
+  // Error: Muted Crimson (#DC2626) with soft tint (#FEE2E2)
   static const Color error = Color(0xFFDC2626);
   static const Color errorMuted = Color(0xFFFEE2E2);
-  static const Color errorForeground = Color(0xFF7F1D1D);
+  static const Color errorForeground = Color(0xFF991B1B);
   static const Color errorDark = Color(0xFFF87171);
 
-  // Metric accent colors (download = Blue, upload = Berry/Purple)
-  static const Color download = Color(0xFF0058BD);
-  static const Color downloadDark = Color(0xFF5B8DEF);
-  static const Color upload = Color(0xFF8B5CF6);
+  // Metric accent colors (download = Tech Blue, upload = Refined Violet)
+  static const Color download = Color(0xFF1D5BD8);
+  static const Color downloadDark = Color(0xFF60A5FA);
+  static const Color upload = Color(0xFF7C3AED);
   static const Color uploadDark = Color(0xFFA78BFA);
 }
 
@@ -172,16 +172,16 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     inkPressed: AppColors.inkPressed,
     cardBackground: Color(0xFFFFFFFF),
     cardBorder: Color(0xFFE2E8F0),
-    surfaceSunken: Color(0xFFF2F5F8),
-    mutedText: Color(0xFF667085),
-    subtleText: Color(0xFF98A1B2),
-    consoleBackground: Color(0xFF111827),
-    consoleText: Color(0xFFE7E9EA),
-    consoleWarning: Color(0xFFE5B15C),
-    consoleError: Color(0xFFF2857F),
-    warningBannerBackground: Color(0xFFFFF3CD),
-    warningBannerBorder: Color(0xFFFFE69C),
-    warningBannerText: Color(0xFF664D03),
+    surfaceSunken: Color(0xFFF1F5F9),
+    mutedText: Color(0xFF475569),
+    subtleText: Color(0xFF94A3B8),
+    consoleBackground: Color(0xFF0F172A),
+    consoleText: Color(0xFFE2E8F0),
+    consoleWarning: Color(0xFFFBBF24),
+    consoleError: Color(0xFFF87171),
+    warningBannerBackground: Color(0xFFFEF3C7),
+    warningBannerBorder: Color(0xFFFDE68A),
+    warningBannerText: Color(0xFF78350F),
   );
 
   static const dark = XConnectColors(
@@ -198,18 +198,18 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     ink: AppColors.inkDark,
     onInk: AppColors.onInkDark,
     inkPressed: AppColors.inkPressedDark,
-    cardBackground: Color(0xFF171E28),
-    cardBorder: Color(0xFF2B3648),
-    surfaceSunken: Color(0xFF202937),
+    cardBackground: Color(0xFF131B26),
+    cardBorder: Color(0xFF243042),
+    surfaceSunken: Color(0xFF1A2433),
     mutedText: Color(0xFF94A3B8),
     subtleText: Color(0xFF64748B),
-    consoleBackground: Color(0xFF0B0E11),
-    consoleText: Color(0xFFE7E9EA),
-    consoleWarning: Color(0xFFE5B15C),
-    consoleError: Color(0xFFF2857F),
-    warningBannerBackground: Color(0xFF3D3520),
-    warningBannerBorder: Color(0xFF5C5030),
-    warningBannerText: Color(0xFFFFE082),
+    consoleBackground: Color(0xFF0B0F17),
+    consoleText: Color(0xFFE2E8F0),
+    consoleWarning: Color(0xFFFBBF24),
+    consoleError: Color(0xFFF87171),
+    warningBannerBackground: Color(0xFF332A18),
+    warningBannerBorder: Color(0xFF524220),
+    warningBannerText: Color(0xFFFDE68A),
   );
 
   @override
@@ -323,39 +323,39 @@ class AppTheme {
     primary: AppColors.brand,
     onPrimary: Colors.white,
     primaryContainer: AppColors.brandMuted,
-    onPrimaryContainer: AppColors.brandHover,
+    onPrimaryContainer: AppColors.brand,
     secondary: AppColors.brandVivid,
     onSecondary: Colors.white,
     secondaryContainer: AppColors.brandMuted,
-    onSecondaryContainer: Color(0xFF14375F),
-    surface: Color(0xFFF8F9FA),
-    onSurface: Color(0xFF1C1B1F),
-    onSurfaceVariant: Color(0xFF667085),
+    onSecondaryContainer: Color(0xFF1E3A8A),
+    surface: Color(0xFFF8FAFC),
+    onSurface: Color(0xFF0F172A),
+    onSurfaceVariant: Color(0xFF475569),
     error: AppColors.error,
     onError: Colors.white,
-    outline: Color(0xFF98A1B2),
+    outline: Color(0xFF94A3B8),
     outlineVariant: Color(0xFFE2E8F0),
-    shadow: Color(0x0F5A6C84),
+    shadow: Color(0x0A0F172A),
   );
 
   // ── Dark ColorScheme ──────────────────────────────────────────
   static const _darkColorScheme = ColorScheme(
     brightness: Brightness.dark,
     primary: AppColors.brandDark,
-    onPrimary: Color(0xFF0F141C),
-    primaryContainer: Color(0xFF14375F),
+    onPrimary: Color(0xFF0B0F17),
+    primaryContainer: Color(0xFF172554),
     onPrimaryContainer: Color(0xFFD6E4FF),
     secondary: AppColors.brandVivid,
     onSecondary: Color(0xFF0D2147),
     secondaryContainer: Color(0xFF1A3A6B),
     onSecondaryContainer: Color(0xFFD6E4FF),
-    surface: Color(0xFF0F141C),
+    surface: Color(0xFF0B0F17),
     onSurface: Color(0xFFF1F5F9),
     onSurfaceVariant: Color(0xFF94A3B8),
     error: Color(0xFFF87171),
     onError: Color(0xFF601410),
     outline: Color(0xFF64748B),
-    outlineVariant: Color(0xFF2B3648),
+    outlineVariant: Color(0xFF243042),
     shadow: Color(0x40000000),
   );
 
