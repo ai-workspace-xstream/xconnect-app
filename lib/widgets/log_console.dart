@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/log_store.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/app_theme.dart';
 
 enum LogLevel { info, warning, error }
 
@@ -96,7 +97,7 @@ class LogConsoleState extends State<LogConsole> {
                   textScaler: TextScaler.noScaling,
                 ),
               ),
-              ElevatedButton(
+              OutlinedButton(
                 onPressed: exportLogs,
                 child: Text(
                   context.l10n.get('exportLogs'),
@@ -109,8 +110,8 @@ class LogConsoleState extends State<LogConsole> {
           Expanded(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(12),
+                color: context.xColors.consoleBackground,
+                borderRadius: BorderRadius.circular(AppRadius.card),
               ),
               child: ListView.separated(
                 padding:
@@ -125,7 +126,7 @@ class LogConsoleState extends State<LogConsole> {
                       log.formatted,
                       textScaler: TextScaler.noScaling,
                       style: TextStyle(
-                        color: _getColor(log.level),
+                        color: _getColor(context, log.level),
                         fontFamily: 'monospace',
                         fontSize: 13,
                         height: 1.35,
@@ -141,14 +142,15 @@ class LogConsoleState extends State<LogConsole> {
     );
   }
 
-  Color _getColor(LogLevel level) {
+  Color _getColor(BuildContext context, LogLevel level) {
+    final xc = context.xColors;
     switch (level) {
       case LogLevel.info:
-        return Colors.white;
+        return xc.consoleText;
       case LogLevel.warning:
-        return Colors.orange;
+        return xc.consoleWarning;
       case LogLevel.error:
-        return Colors.redAccent;
+        return xc.consoleError;
     }
   }
 }

@@ -89,7 +89,7 @@ Future<void> showPermissionGuideDialog(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: xc.warningBannerBackground,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     border: Border.all(color: xc.warningBannerBorder),
                   ),
                   child: Column(
@@ -195,7 +195,7 @@ Future<void> showPermissionGuideDialog(
                 child: Text(context.l10n.get('openPrivacy')),
               ),
               const SizedBox(height: 8),
-              ElevatedButton(
+              OutlinedButton(
                 onPressed: () {
                   Navigator.pop(dialogContext);
                   showPermissionGuideDialog(

@@ -74,15 +74,16 @@ class _Tab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final xc = context.xColors;
     return Semantics(
       selected: selected,
       button: true,
       child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        color: selected ? xc.surfaceSunken : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
           hoverColor: accent.withValues(alpha: 0.08),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

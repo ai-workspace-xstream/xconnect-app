@@ -191,7 +191,7 @@ class SettingsRow extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: busy
                   ? Padding(
