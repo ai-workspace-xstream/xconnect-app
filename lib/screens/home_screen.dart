@@ -762,7 +762,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     TextAlign textAlign = TextAlign.left,
   }) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
+      duration: AppMotion.of(context, AppMotion.standard),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
@@ -790,19 +790,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) {
     final xc = context.xColors;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
+      duration: AppMotion.of(context, AppMotion.standard),
       padding: padding,
+      // Fill only. Depth comes from the surface ramp, not from a border and
+      // a shadow stacked on top of the same fill.
       decoration: BoxDecoration(
         color: xc.cardBackground,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: xc.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.shadow,
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: child,
     );
@@ -814,7 +808,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       height: 34,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(17),
+        shape: BoxShape.circle,
       ),
       child: Icon(icon, size: 18, color: color),
     );
@@ -870,24 +864,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(width: 10),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: xc.mutedText,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: xc.mutedText),
             ),
           ],
         ),
         const SizedBox(height: 14),
         _buildMetricValue(
           value,
-          TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w700,
-            color: cs.onSurface,
-            letterSpacing: -0.8,
-            height: 1.0,
-          ),
+          Theme.of(context).textTheme.displaySmall!.copyWith(
+                color: cs.onSurface,
+              ),
         ),
       ],
     );
@@ -900,11 +888,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) {
     final xc = context.xColors;
     final isEmpty = latency.value == _emptyMetricValue;
-    final textStyle = TextStyle(
-      fontSize: compact ? 12 : 13,
-      fontWeight: FontWeight.w600,
-      color: isEmpty ? xc.mutedText : latency.color,
-    );
+    final theme = Theme.of(context);
+    final textStyle =
+        (compact ? theme.textTheme.labelSmall : theme.textTheme.labelLarge)
+            ?.copyWith(color: isEmpty ? xc.mutedText : latency.color);
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -913,12 +900,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       decoration: BoxDecoration(
         color:
-            isEmpty ? xc.cardBackground : latency.color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color:
-              isEmpty ? xc.cardBorder : latency.color.withValues(alpha: 0.18),
-        ),
+            isEmpty ? xc.cardBackground : latency.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -940,10 +923,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             SizedBox(width: compact ? 4 : 6),
             Text(
               latency.label,
-              style: TextStyle(
+              style: theme.textTheme.labelMedium?.copyWith(
                 fontSize: compact ? 11 : 12,
                 color: xc.mutedText,
-                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -972,19 +954,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               children: [
                 TextSpan(
                   text: '$label ',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: xc.subtleText,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: xc.subtleText),
                 ),
                 TextSpan(
                   text: value,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: effectiveColor,
-                  ),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: effectiveColor,
+                      ),
                 ),
               ],
             ),
@@ -1007,9 +986,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1022,11 +1000,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           const SizedBox(width: 6),
           Text(
             _connectionStateLabel(context),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: color),
           ),
         ],
       ),
@@ -1058,23 +1034,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     Row(
                       children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: connectionColor,
-                            shape: BoxShape.circle,
+                        ExcludeSemantics(
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: connectionColor,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           _connectionStateLabel(context),
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: connectionColor,
-                            letterSpacing: -0.4,
-                          ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.headlineSmall?.copyWith(
+                                color: connectionColor,
+                              ),
                         ),
                       ],
                     ),
@@ -1083,21 +1060,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       nodeName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                     if (metaLine.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(
                         metaLine,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.xColors.mutedText,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: Theme.of(context).textTheme.labelMedium,
                       ),
                     ],
                   ],
@@ -1192,22 +1161,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         latency == null ? node.name : '${node.name} · ${latency}ms',
         overflow: TextOverflow.ellipsis,
       ),
-      labelStyle: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: isActive ? xc.success : cs.onSurface,
-      ),
-      backgroundColor: cs.surface,
+      labelStyle: Theme.of(
+        context,
+      ).textTheme.labelLarge?.copyWith(
+            color: isActive ? xc.success : cs.onSurface,
+          ),
+      backgroundColor: xc.cardBackground,
       selectedColor:
-          isActive ? xc.success.withValues(alpha: 0.12) : xc.cardBackground,
-      side: BorderSide(
-        color: isActive
-            ? xc.success
-            : emphasized
-                ? xc.cardBorder
-                : cs.outlineVariant,
-      ),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          isActive ? xc.success.withValues(alpha: 0.12) : xc.surfaceSunken,
+      // A border here means "this node is running", not "this is a box".
+      side: isActive ? BorderSide(color: xc.success) : BorderSide.none,
+      shape: const StadiumBorder(),
+      materialTapTargetSize: MaterialTapTargetSize.padded,
       onSelected: (!_isSwitchingNode) ? (_) => _selectNode(node) : null,
     );
   }
@@ -1220,66 +1185,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Column(
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: hasNodes
-                ? () => setState(() => _showNodeOptions = !_showNodeOptions)
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.dns_outlined,
-                    size: 20,
-                    color: context.xColors.mutedText,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.l10n.get('nodeList'),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: context.xColors.subtleText,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          node?.name ?? context.l10n.get('noNodes'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
+          Semantics(
+            button: hasNodes,
+            enabled: hasNodes,
+            expanded: hasNodes ? _showNodeOptions : null,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              onTap: hasNodes
+                  ? () => setState(() => _showNodeOptions = !_showNodeOptions)
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.dns_outlined,
+                      size: 20,
+                      color: context.xColors.mutedText,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  _buildSummaryStatusChip(context, node),
-                  if (hasNodes) ...[
-                    const SizedBox(width: 8),
-                    AnimatedRotation(
-                      turns: _showNodeOptions ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 220),
-                      child: Icon(
-                        Icons.expand_more_rounded,
-                        color: context.xColors.subtleText,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.l10n.get('nodeList'),
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            node?.name ?? context.l10n.get('noNodes'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ],
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    _buildSummaryStatusChip(context, node),
+                    if (hasNodes) ...[
+                      const SizedBox(width: 8),
+                      AnimatedRotation(
+                        turns: _showNodeOptions ? 0.5 : 0,
+                        duration: AppMotion.of(context, AppMotion.standard),
+                        child: Icon(
+                          Icons.expand_more_rounded,
+                          color: context.xColors.subtleText,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
           AnimatedSize(
-            duration: const Duration(milliseconds: 220),
+            duration: AppMotion.of(context, AppMotion.standard),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
             child: !hasNodes || !_showNodeOptions
@@ -1313,6 +1275,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final xc = context.xColors;
     return LayoutBuilder(
       builder: (context, constraints) {
         return Stack(
@@ -1336,33 +1299,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             Positioned(
               right: 20,
               bottom: 20,
-              child: FloatingActionButton.extended(
-                heroTag: 'home_connection_control',
-                backgroundColor: _hasActiveConnection
-                    ? const Color(0xFF3E8F5A)
-                    : const Color(0xFF1F2937),
-                foregroundColor: Colors.white,
-                onPressed: _isSwitchingNode ? null : _toggleFromFloatingButton,
-                icon: _isSwitchingNode
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+              // The one ink block on this screen. Everything else on the home
+              // surface is a fill; this is the only element allowed to carry
+              // full contrast, because it is the primary action.
+              child: Semantics(
+                button: true,
+                enabled: !_isSwitchingNode,
+                child: FloatingActionButton.extended(
+                  heroTag: 'home_connection_control',
+                  backgroundColor: _hasActiveConnection ? xc.success : xc.ink,
+                  foregroundColor: xc.onInk,
+                  onPressed:
+                      _isSwitchingNode ? null : _toggleFromFloatingButton,
+                  icon: _isSwitchingNode
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: xc.onInk,
+                          ),
+                        )
+                      : Icon(
+                          _hasActiveConnection
+                              ? Icons.stop_rounded
+                              : Icons.play_arrow_rounded,
                         ),
-                      )
-                    : Icon(
-                        _hasActiveConnection
-                            ? Icons.stop_rounded
-                            : Icons.play_arrow_rounded,
-                      ),
-                label: Text(
-                  _isSwitchingNode
-                      ? _connectionStateLabel(context)
-                      : (_hasActiveConnection
-                          ? context.l10n.get('stopAcceleration')
-                          : context.l10n.get('startAcceleration')),
+                  label: Text(
+                    _isSwitchingNode
+                        ? _connectionStateLabel(context)
+                        : (_hasActiveConnection
+                            ? context.l10n.get('stopAcceleration')
+                            : context.l10n.get('startAcceleration')),
+                  ),
                 ),
               ),
             ),

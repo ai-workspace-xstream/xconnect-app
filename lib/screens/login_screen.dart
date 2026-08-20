@@ -150,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: cs.onPrimary,
+                                  color: xc.onInk,
                                 ),
                               )
                             : const Icon(Icons.sync),
@@ -158,13 +158,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? context.l10n.get('syncInProgress')
                             : context.l10n.get('syncNow')),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: xc.brand,
-                          foregroundColor: cs.onPrimary,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
                         ),
                       );
                     },
@@ -175,13 +170,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     icon: const Icon(Icons.logout),
                     label: Text(context.l10n.get('logout')),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: cs.error,
-                      side: BorderSide(color: cs.error),
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: xc.error,
+                      side: BorderSide.none,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
                     ),
                   ),
                 ],
@@ -210,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: xc.cardBackground,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: xc.cardBorder),
           ),
           child: Column(
@@ -324,7 +317,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           hintText: context.l10n.get('serverAddressHint'),
                           prefixIcon: const Icon(Icons.dns_outlined),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                           ),
                         ),
                         onSubmitted: (_) =>
@@ -345,7 +338,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           labelText: context.l10n.get('accountOrEmail'),
                           prefixIcon: const Icon(Icons.person_outline),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                           ),
                         ),
                       ),
@@ -361,7 +354,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           labelText: context.l10n.get('password'),
                           prefixIcon: const Icon(Icons.lock_outline),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                           ),
                         ),
                         onSubmitted: (_) => _handleLogin(),
@@ -383,7 +376,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             prefixIcon:
                                 const Icon(Icons.verified_user_outlined),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.card),
                             ),
                           ),
                           onSubmitted: (_) => _handleLogin(),
@@ -399,12 +393,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           return ElevatedButton(
                             onPressed: loading ? null : _handleLogin,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: xc.brand,
-                              foregroundColor: cs.onPrimary,
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
                             ),
                             child: loading
                                 ? SizedBox(

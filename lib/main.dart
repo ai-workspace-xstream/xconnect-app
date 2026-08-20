@@ -445,23 +445,28 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   List<NavigationRailDestination> _buildDestinations(BuildContext context) {
     return [
       NavigationRailDestination(
-        icon: const Icon(Icons.home),
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home),
         label: Text(context.l10n.get('home')),
       ),
       NavigationRailDestination(
         icon: const Icon(Icons.extension_outlined),
+        selectedIcon: const Icon(Icons.extension),
         label: Text(context.l10n.get('connectors')),
       ),
       NavigationRailDestination(
-        icon: const Icon(Icons.settings),
+        icon: const Icon(Icons.settings_outlined),
+        selectedIcon: const Icon(Icons.settings),
         label: Text(context.l10n.get('settings')),
       ),
       NavigationRailDestination(
-        icon: const Icon(Icons.help),
+        icon: const Icon(Icons.help_outline),
+        selectedIcon: const Icon(Icons.help),
         label: Text(context.l10n.get('help')),
       ),
       NavigationRailDestination(
-        icon: const Icon(Icons.info),
+        icon: const Icon(Icons.info_outline),
+        selectedIcon: const Icon(Icons.info),
         label: Text(context.l10n.get('about')),
       ),
     ];
@@ -470,15 +475,18 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   List<_NavigationDestination> _buildMobileDestinations(BuildContext context) {
     return [
       _NavigationDestination(
-        icon: const Icon(Icons.home),
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home),
         label: Text(context.l10n.get('home')),
       ),
       _NavigationDestination(
         icon: const Icon(Icons.extension_outlined),
+        selectedIcon: const Icon(Icons.extension),
         label: Text(context.l10n.get('connectors')),
       ),
       _NavigationDestination(
-        icon: const Icon(Icons.settings),
+        icon: const Icon(Icons.settings_outlined),
+        selectedIcon: const Icon(Icons.settings),
         label: Text(context.l10n.get('settings')),
       ),
     ];
@@ -532,7 +540,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                     .colorScheme
                     .primary
                     .withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Icon(icon,
                   size: 20, color: Theme.of(context).colorScheme.primary),
@@ -586,16 +594,20 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                 valueListenable: GlobalState.locale,
                 builder: (context, locale, _) {
                   final label = locale.languageCode == 'zh' ? '中' : 'EN';
-                  return IconButton(
-                    tooltip: context.l10n.get('language'),
-                    icon: Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                  return Semantics(
+                    button: true,
+                    child: IconButton(
+                      tooltip: context.l10n.get('language'),
+                      icon: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: context.xColors.mutedText,
+                        ),
                       ),
+                      onPressed: _toggleLanguage,
                     ),
-                    onPressed: _toggleLanguage,
                   );
                 },
               ),
@@ -607,7 +619,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   position: PopupMenuPosition.under,
                   offset: const Offset(0, 8),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
                   ),
                   elevation: 8,
                   color: Theme.of(context).colorScheme.surface,
@@ -639,32 +651,18 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF5B8DEF), Color(0xFF6C63FF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF5B8DEF,
-                          ).withValues(alpha: 0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                      color: context.xColors.cardBackground,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.add_rounded,
-                            color: Theme.of(context).colorScheme.onPrimary,
+                            color: Theme.of(context).colorScheme.onSurface,
                             size: 20),
                         const SizedBox(width: 4),
                         Icon(Icons.dns_rounded,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            size: 16),
+                            color: context.xColors.mutedText, size: 16),
                       ],
                     ),
                   ),
@@ -686,6 +684,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   destinations: _buildMobileDestinations(context).map((d) {
                     return NavigationDestination(
                       icon: d.icon,
+                      selectedIcon: d.selectedIcon,
                       label: (d.label as Text).data ?? '',
                     );
                   }).toList(),
@@ -740,9 +739,14 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
 class _NavigationDestination {
   final Widget icon;
+  final Widget selectedIcon;
   final Widget label;
 
-  _NavigationDestination({required this.icon, required this.label});
+  _NavigationDestination({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
 }
 
 enum _AddNodeMenuAction { manualInput, scanQr, readClipboard }

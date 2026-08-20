@@ -561,8 +561,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
         color: context.xColors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.xColors.cardBorder),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -584,7 +583,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: context.xColors.warningBannerBackground,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
                     border:
                         Border.all(color: context.xColors.warningBannerBorder),
                   ),
@@ -962,8 +961,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: xc.cardBackground,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: xc.cardBorder),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           child: Row(
             children: [
@@ -973,7 +971,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: InputDecoration(
                     labelText: context.l10n.get('socksPort'),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                     ),
                   ),
                   keyboardType: TextInputType.number,
@@ -987,7 +985,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: InputDecoration(
                     labelText: context.l10n.get('httpPort'),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                     ),
                   ),
                   keyboardType: TextInputType.number,
