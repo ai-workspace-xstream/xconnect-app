@@ -548,11 +548,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
             const SizedBox(width: 14),
             Text(
               text,
-              style: TextStyle(
-                fontSize: 15,
-                color: Theme.of(context).colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
             ),
           ],
         ),
@@ -600,11 +598,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                       tooltip: context.l10n.get('language'),
                       icon: Text(
                         label,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: context.xColors.mutedText,
-                        ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: context.xColors.mutedText,
+                            ),
                       ),
                       onPressed: _toggleLanguage,
                     ),

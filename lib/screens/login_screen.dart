@@ -117,16 +117,14 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 16),
               Text(
                 _sessionManager.currentUser.value ?? '',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(color: cs.onSurface),
               ),
               const SizedBox(height: 4),
               Text(
                 _sessionManager.baseUrl.value,
-                style: TextStyle(fontSize: 13, color: xc.mutedText),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 24),
 
@@ -215,11 +213,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(width: 8),
                   Text(
                     context.l10n.get('desktopSync'),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleSmall?.copyWith(color: cs.onSurface),
                   ),
                 ],
               ),
@@ -237,10 +233,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 Text(
                   summary.lastError!,
-                  style: TextStyle(
-                    color: cs.error,
-                    fontSize: 12,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: cs.error),
                 ),
               ],
             ],
@@ -251,7 +246,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _infoRow(BuildContext context, String label, String value) {
-    final xc = context.xColors;
     final cs = Theme.of(context).colorScheme;
 
     return Row(
@@ -259,12 +253,14 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Text(
           '$label: ',
-          style: TextStyle(fontSize: 13, color: xc.mutedText),
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         Expanded(
           child: Text(
             value,
-            style: TextStyle(fontSize: 13, color: cs.onSurface),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: cs.onSurface),
           ),
         ),
       ],
@@ -294,17 +290,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 16),
                       Text(
                         context.l10n.get('selfHostedConnector'),
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: cs.onSurface,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.displaySmall?.copyWith(color: cs.onSurface),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 8),
                       Text(
                         context.l10n.get('connectorIntro'),
-                        style: TextStyle(fontSize: 14, color: xc.mutedText),
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(color: xc.mutedText),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 32),
@@ -407,10 +404,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : Text(
                                     context.l10n.get(
                                         isMfaRequired ? 'verifyMfa' : 'login'),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
                                   ),
                           );
                         },
@@ -425,10 +418,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             padding: const EdgeInsets.only(top: 12),
                             child: Text(
                               error,
-                              style: TextStyle(
-                                color: cs.error,
-                                fontSize: 13,
-                              ),
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(color: cs.error),
                               textAlign: TextAlign.center,
                             ),
                           );

@@ -59,12 +59,9 @@ class SettingsGroup extends StatelessWidget {
             padding: const EdgeInsets.only(left: 2, bottom: 6),
             child: Text(
               title!.toUpperCase(),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.1,
-                color: xc.subtleText,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(letterSpacing: 1.1),
             ),
           ),
         ],
@@ -212,16 +209,14 @@ class SettingsRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: destructive ? xc.error : cs.onSurface,
-                  ),
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: destructive ? xc.error : cs.onSurface,
+                      ),
                 ),
                 if (description != null && description!.isNotEmpty)
                   Text(
                     description!,
-                    style: TextStyle(fontSize: 11.5, color: xc.mutedText),
+                    style: Theme.of(context).textTheme.labelMedium,
                   ),
               ],
             ),
@@ -230,8 +225,7 @@ class SettingsRow extends StatelessWidget {
             const SizedBox(width: _gap),
             Text(
               value!,
-              style: TextStyle(
-                fontSize: 12,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
                 color: xc.subtleText,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),

@@ -125,12 +125,11 @@ class LogConsoleState extends State<LogConsole> {
                     child: SelectableText(
                       log.formatted,
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        color: _getColor(context, log.level),
-                        fontFamily: 'monospace',
-                        fontSize: 13,
-                        height: 1.35,
-                      ),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: _getColor(context, log.level),
+                            fontFamily: 'monospace',
+                            height: 1.35,
+                          ),
                     ),
                   );
                 },
