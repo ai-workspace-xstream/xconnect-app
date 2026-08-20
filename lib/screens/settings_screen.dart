@@ -802,7 +802,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final blocks = entries[index].blocks;
 
     return Container(
-      color: cs.surfaceContainerLow,
+      color: cs.surface,
       // Anchored left rather than centred: the breadcrumb and the navigation
       // rail are both hard against the left edge, so centring the column left
       // the title floating in the middle of a maximised window with nothing

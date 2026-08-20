@@ -15,40 +15,48 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Brand accent – used for links, selection indicators and focus rings.
-  // `brandVivid` keeps the original lighter indigo for non-text usage
-  // (large fills, illustrations) where the 4.5:1 text rule does not apply.
-  static const Color brand = Color(0xFF3F4BA0);
-  static const Color brandVivid = Color(0xFF5C6BC0);
-  static const Color brandDark = Color(0xFF9FA8DA);
+  // Brand primary – Modern Cobalt / Royal Blue (#0058BD) from website console.
+  static const Color brand = Color(0xFF0058BD);
+  static const Color brandHover = Color(0xFF0B4F9A);
+  static const Color brandMuted = Color(0xFFE8F0FB);
+  static const Color brandBorder = Color(0xFFD7E4F7);
+  static const Color brandVivid = Color(0xFF5B8DEF);
+  static const Color brandDark = Color(0xFF5B8DEF);
+  static const Color brandDarkMuted = Color(0xFF14375F);
 
-  // Ink – the primary-action surface.  At most one ink block per screen.
-  // Dark mode inverts it: the primary action is always the highest
-  // contrast block on the screen, whichever way round that lands.
-  static const Color ink = Color(0xFF111827);
-  static const Color inkPressed = Color(0xFF2B3441);
+  // Ink – primary-action surface (Blue #0058BD in light, #5B8DEF in dark).
+  static const Color ink = Color(0xFF0058BD);
+  static const Color inkPressed = Color(0xFF0B4F9A);
   static const Color onInk = Color(0xFFFFFFFF);
-  static const Color inkDark = Color(0xFFE7E9EA);
-  static const Color inkPressedDark = Color(0xFFC9CDD0);
-  static const Color onInkDark = Color(0xFF0B0E11);
+  static const Color inkDark = Color(0xFF5B8DEF);
+  static const Color inkPressedDark = Color(0xFF4375D6);
+  static const Color onInkDark = Color(0xFFFFFFFF);
 
-  // Status semantics – must pass WCAG AA (4.5:1) on both surfaces
-  static const Color success = Color(0xFF236B3F);
-  static const Color successDark = Color(0xFF5CB978);
-  static const Color warning = Color(0xFF8A5200);
-  static const Color warningDark = Color(0xFFE0AE5A);
-  static const Color error = Color(0xFFB3261E);
-  static const Color errorDark = Color(0xFFEF9A9A);
+  // Status semantics – aligned with website and console
+  // Success / Connected: Green (#16A34A) with soft muted tint (#DCFCE7)
+  static const Color success = Color(0xFF16A34A);
+  static const Color successMuted = Color(0xFFDCFCE7);
+  static const Color successForeground = Color(0xFF166534);
+  static const Color successDark = Color(0xFF4ADE80);
+  static const Color successDarkMuted = Color(0xFF133E26);
 
-  // Metric accent colors.  These encode information (which direction the
-  // traffic flows), so they stay chromatic rather than collapsing to grey –
-  // but they still have to clear the same 4.5:1 bar.  The two hues sit
-  // ~175° apart so they remain separable under color vision deficiency,
-  // and both are always paired with a directional icon and a text label.
-  static const Color download = Color(0xFF1F5FBF);
-  static const Color downloadDark = Color(0xFF82AAFF);
-  static const Color upload = Color(0xFFA83A57);
-  static const Color uploadDark = Color(0xFFEF9AAF);
+  // Warning: Amber (#D97706 / #B45309) with muted tint (#FFF3CD)
+  static const Color warning = Color(0xFFD97706);
+  static const Color warningMuted = Color(0xFFFFF3CD);
+  static const Color warningForeground = Color(0xFF664D03);
+  static const Color warningDark = Color(0xFFFBBF24);
+
+  // Error: Red (#DC2626) with muted tint (#FEE2E2)
+  static const Color error = Color(0xFFDC2626);
+  static const Color errorMuted = Color(0xFFFEE2E2);
+  static const Color errorForeground = Color(0xFF7F1D1D);
+  static const Color errorDark = Color(0xFFF87171);
+
+  // Metric accent colors (download = Blue, upload = Berry/Purple)
+  static const Color download = Color(0xFF0058BD);
+  static const Color downloadDark = Color(0xFF5B8DEF);
+  static const Color upload = Color(0xFF8B5CF6);
+  static const Color uploadDark = Color(0xFFA78BFA);
 }
 
 /// Corner radius scale.  Two container steps plus a pill – nothing else.
@@ -89,7 +97,11 @@ class AppMotion {
 class XConnectColors extends ThemeExtension<XConnectColors> {
   const XConnectColors({
     required this.brand,
+    required this.brandMuted,
+    required this.brandBorder,
     required this.success,
+    required this.successMuted,
+    required this.successForeground,
     required this.warning,
     required this.error,
     required this.download,
@@ -112,32 +124,29 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
   });
 
   final Color brand;
+  final Color brandMuted;
+  final Color brandBorder;
   final Color success;
+  final Color successMuted;
+  final Color successForeground;
   final Color warning;
   final Color error;
   final Color download;
   final Color upload;
 
-  /// Primary-action fill.  At most one per screen.
+  /// Primary-action fill.
   final Color ink;
   final Color onInk;
   final Color inkPressed;
 
   final Color cardBackground;
-
-  /// Kept for callers that still draw a hairline.  Borders are no longer the
-  /// default way to separate surfaces – see [surfaceSunken] and
-  /// docs/design/ui-style-system.md §6.
   final Color cardBorder;
-
-  /// One step below [cardBackground]: pressed states and wells inside a card.
   final Color surfaceSunken;
 
   final Color mutedText;
   final Color subtleText;
 
-  /// The log console is a terminal surface: it stays dark in both themes,
-  /// so it needs its own tokens rather than borrowing [ink].
+  /// The log console terminal colors
   final Color consoleBackground;
   final Color consoleText;
   final Color consoleWarning;
@@ -149,7 +158,11 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
 
   static const light = XConnectColors(
     brand: AppColors.brand,
+    brandMuted: AppColors.brandMuted,
+    brandBorder: AppColors.brandBorder,
     success: AppColors.success,
+    successMuted: AppColors.successMuted,
+    successForeground: AppColors.successForeground,
     warning: AppColors.warning,
     error: AppColors.error,
     download: AppColors.download,
@@ -157,11 +170,11 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     ink: AppColors.ink,
     onInk: AppColors.onInk,
     inkPressed: AppColors.inkPressed,
-    cardBackground: Color(0xFFF1F3F5),
-    cardBorder: Color(0xFFE7EAEE),
-    surfaceSunken: Color(0xFFE7EAEE),
-    mutedText: Color(0xFF4E5A65),
-    subtleText: Color(0xFF5B6874),
+    cardBackground: Color(0xFFFFFFFF),
+    cardBorder: Color(0xFFE2E8F0),
+    surfaceSunken: Color(0xFFF2F5F8),
+    mutedText: Color(0xFF667085),
+    subtleText: Color(0xFF98A1B2),
     consoleBackground: Color(0xFF111827),
     consoleText: Color(0xFFE7E9EA),
     consoleWarning: Color(0xFFE5B15C),
@@ -173,7 +186,11 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
 
   static const dark = XConnectColors(
     brand: AppColors.brandDark,
+    brandMuted: AppColors.brandDarkMuted,
+    brandBorder: Color(0xFF1E3A5F),
     success: AppColors.successDark,
+    successMuted: AppColors.successDarkMuted,
+    successForeground: Color(0xFF86EFAC),
     warning: AppColors.warningDark,
     error: AppColors.errorDark,
     download: AppColors.downloadDark,
@@ -181,11 +198,11 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     ink: AppColors.inkDark,
     onInk: AppColors.onInkDark,
     inkPressed: AppColors.inkPressedDark,
-    cardBackground: Color(0xFF191D21),
-    cardBorder: Color(0xFF242A31),
-    surfaceSunken: Color(0xFF22272C),
-    mutedText: Color(0xFFB0B8C8),
-    subtleText: Color(0xFF8B95A8),
+    cardBackground: Color(0xFF171E28),
+    cardBorder: Color(0xFF2B3648),
+    surfaceSunken: Color(0xFF202937),
+    mutedText: Color(0xFF94A3B8),
+    subtleText: Color(0xFF64748B),
     consoleBackground: Color(0xFF0B0E11),
     consoleText: Color(0xFFE7E9EA),
     consoleWarning: Color(0xFFE5B15C),
@@ -198,7 +215,11 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
   @override
   XConnectColors copyWith({
     Color? brand,
+    Color? brandMuted,
+    Color? brandBorder,
     Color? success,
+    Color? successMuted,
+    Color? successForeground,
     Color? warning,
     Color? error,
     Color? download,
@@ -221,7 +242,11 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
   }) {
     return XConnectColors(
       brand: brand ?? this.brand,
+      brandMuted: brandMuted ?? this.brandMuted,
+      brandBorder: brandBorder ?? this.brandBorder,
       success: success ?? this.success,
+      successMuted: successMuted ?? this.successMuted,
+      successForeground: successForeground ?? this.successForeground,
       warning: warning ?? this.warning,
       error: error ?? this.error,
       download: download ?? this.download,
@@ -250,7 +275,12 @@ class XConnectColors extends ThemeExtension<XConnectColors> {
     if (other is! XConnectColors) return this;
     return XConnectColors(
       brand: Color.lerp(brand, other.brand, t)!,
+      brandMuted: Color.lerp(brandMuted, other.brandMuted, t)!,
+      brandBorder: Color.lerp(brandBorder, other.brandBorder, t)!,
       success: Color.lerp(success, other.success, t)!,
+      successMuted: Color.lerp(successMuted, other.successMuted, t)!,
+      successForeground:
+          Color.lerp(successForeground, other.successForeground, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
       error: Color.lerp(error, other.error, t)!,
       download: Color.lerp(download, other.download, t)!,
@@ -292,48 +322,44 @@ class AppTheme {
     brightness: Brightness.light,
     primary: AppColors.brand,
     onPrimary: Colors.white,
-    primaryContainer: Color(0xFFE7E9F5),
-    onPrimaryContainer: Color(0xFF1A237E),
-    secondary: AppColors.download,
+    primaryContainer: AppColors.brandMuted,
+    onPrimaryContainer: AppColors.brandHover,
+    secondary: AppColors.brandVivid,
     onSecondary: Colors.white,
-    secondaryContainer: Color(0xFFDCE6F7),
+    secondaryContainer: AppColors.brandMuted,
     onSecondaryContainer: Color(0xFF14375F),
-    surface: Colors.white,
+    surface: Color(0xFFF8F9FA),
     onSurface: Color(0xFF1C1B1F),
-    onSurfaceVariant: Color(0xFF4E5A65),
+    onSurfaceVariant: Color(0xFF667085),
     error: AppColors.error,
     onError: Colors.white,
-    outline: Color(0xFF6B7684),
-    outlineVariant: Color(0xFFD9DEE4),
-    shadow: Color(0x1A000000),
+    outline: Color(0xFF98A1B2),
+    outlineVariant: Color(0xFFE2E8F0),
+    shadow: Color(0x0F5A6C84),
   );
 
   // ── Dark ColorScheme ──────────────────────────────────────────
   static const _darkColorScheme = ColorScheme(
     brightness: Brightness.dark,
     primary: AppColors.brandDark,
-    onPrimary: Color(0xFF1A237E),
-    primaryContainer: Color(0xFF3949AB),
-    onPrimaryContainer: Color(0xFFE8EAF6),
-    secondary: AppColors.downloadDark,
+    onPrimary: Color(0xFF0F141C),
+    primaryContainer: Color(0xFF14375F),
+    onPrimaryContainer: Color(0xFFD6E4FF),
+    secondary: AppColors.brandVivid,
     onSecondary: Color(0xFF0D2147),
     secondaryContainer: Color(0xFF1A3A6B),
     onSecondaryContainer: Color(0xFFD6E4FF),
-    surface: Color(0xFF101418),
-    onSurface: Color(0xFFE6E1E5),
-    onSurfaceVariant: Color(0xFFB0B8C8),
-    error: Color(0xFFF2B8B5),
+    surface: Color(0xFF0F141C),
+    onSurface: Color(0xFFF1F5F9),
+    onSurfaceVariant: Color(0xFF94A3B8),
+    error: Color(0xFFF87171),
     onError: Color(0xFF601410),
-    outline: Color(0xFF8B95A8),
-    outlineVariant: Color(0xFF2C333B),
+    outline: Color(0xFF64748B),
+    outlineVariant: Color(0xFF2B3648),
     shadow: Color(0x40000000),
   );
 
   // ── Shared TextTheme ──────────────────────────────────────────
-  // Collected from the sizes that were previously written inline at 53
-  // call sites.  The values are unchanged on purpose: this is a move, not
-  // a re-scale, so rendering is pixel-identical.  Per-platform type scales
-  // become a one-line change once every call site reads from here.
   static TextTheme _textTheme(ColorScheme cs, XConnectColors xc) {
     return TextTheme(
       // Traffic rate readouts.
@@ -392,8 +418,6 @@ class AppTheme {
   }
 
   // ── Focus ring ────────────────────────────────────────────────
-  // Desktop keyboard navigation had no visible focus at all.  Every button
-  // variant grows the same 2px brand ring when focused.
   static WidgetStateProperty<BorderSide?> _focusSide(
     ColorScheme cs, {
     BorderSide? base,
@@ -407,8 +431,6 @@ class AppTheme {
   }
 
   // ── Shared InputDecorationTheme ───────────────────────────────
-  // Filled, not outlined: the fill carries the boundary.  Only the focused
-  // state draws a stroke, because there it means something.
   static InputDecorationTheme _inputDecoration(
     ColorScheme cs,
     XConnectColors xc,
@@ -425,8 +447,8 @@ class AppTheme {
     return InputDecorationTheme(
       filled: true,
       fillColor: xc.cardBackground,
-      border: border(Colors.transparent),
-      enabledBorder: border(Colors.transparent),
+      border: border(xc.cardBorder),
+      enabledBorder: border(xc.cardBorder),
       focusedBorder: border(cs.primary, 2),
       disabledBorder: border(Colors.transparent),
       errorBorder: border(cs.error),
@@ -438,9 +460,9 @@ class AppTheme {
   }
 
   // ── Shared DialogTheme ────────────────────────────────────────
-  static DialogThemeData _dialogTheme(ColorScheme cs) {
+  static DialogThemeData _dialogTheme(ColorScheme cs, XConnectColors xc) {
     return DialogThemeData(
-      backgroundColor: cs.surface,
+      backgroundColor: xc.cardBackground,
       surfaceTintColor: Colors.transparent,
       titleTextStyle: TextStyle(
         color: cs.onSurface,
@@ -472,21 +494,19 @@ class AppTheme {
   }
 
   // ── Shared NavigationRailTheme ────────────────────────────────
-  // Selection reads as weight, not hue: the selected item switches to the
-  // filled icon in the primary text color instead of turning indigo.
   static NavigationRailThemeData _navigationRailTheme(
     ColorScheme cs,
     XConnectColors xc,
   ) {
     return NavigationRailThemeData(
       backgroundColor: cs.surface,
-      indicatorColor: xc.surfaceSunken,
+      indicatorColor: xc.brandMuted,
       indicatorShape: const StadiumBorder(),
       useIndicator: true,
-      selectedIconTheme: IconThemeData(color: cs.onSurface),
+      selectedIconTheme: IconThemeData(color: cs.primary),
       unselectedIconTheme: IconThemeData(color: xc.mutedText),
       selectedLabelTextStyle: TextStyle(
-        color: cs.onSurface,
+        color: cs.primary,
         fontSize: 12,
         fontWeight: FontWeight.w600,
       ),
@@ -498,8 +518,6 @@ class AppTheme {
   }
 
   // ── Shared NavigationBarTheme ─────────────────────────────────
-  // Previously undefined, so mobile fell back to the Material 3 default
-  // purple pill while desktop used indigo.  Both now say the same thing.
   static NavigationBarThemeData _navigationBarTheme(
     ColorScheme cs,
     XConnectColors xc,
@@ -508,13 +526,12 @@ class AppTheme {
       backgroundColor: cs.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      indicatorColor: xc.surfaceSunken,
+      indicatorColor: xc.brandMuted,
       indicatorShape: const StadiumBorder(),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         return IconThemeData(
-          color: states.contains(WidgetState.selected)
-              ? cs.onSurface
-              : xc.mutedText,
+          color:
+              states.contains(WidgetState.selected) ? cs.primary : xc.mutedText,
         );
       }),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -522,15 +539,13 @@ class AppTheme {
         return TextStyle(
           fontSize: 12,
           fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-          color: selected ? cs.onSurface : xc.mutedText,
+          color: selected ? cs.primary : xc.mutedText,
         );
       }),
     );
   }
 
   // ── Shared CardTheme ──────────────────────────────────────────
-  // Fill only: no elevation, no outline.  Depth comes from the surface
-  // ramp (surface → cardBackground → surfaceSunken).
   static CardThemeData _cardTheme(XConnectColors xc) {
     return CardThemeData(
       color: xc.cardBackground,
@@ -555,9 +570,9 @@ class AppTheme {
   }
 
   // ── Shared PopupMenuTheme ─────────────────────────────────────
-  static PopupMenuThemeData _popupMenuTheme(ColorScheme cs) {
+  static PopupMenuThemeData _popupMenuTheme(ColorScheme cs, XConnectColors xc) {
     return PopupMenuThemeData(
-      color: cs.surface,
+      color: xc.cardBackground,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -571,10 +586,6 @@ class AppTheme {
   }
 
   // ── Button themes ─────────────────────────────────────────────
-  // Three variants, one job each:
-  //   ElevatedButton → ink    (the primary action; at most one per screen)
-  //   OutlinedButton → tonal  (secondary; filled, not outlined)
-  //   TextButton     → plain  (link-like)
   static ElevatedButtonThemeData _elevatedButtonTheme(
     ColorScheme cs,
     XConnectColors xc,
@@ -583,20 +594,58 @@ class AppTheme {
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
-            return xc.ink.withValues(alpha: 0.38);
+            return cs.primary.withValues(alpha: 0.38);
           }
-          if (states.contains(WidgetState.pressed)) return xc.inkPressed;
+          if (states.contains(WidgetState.pressed)) return AppColors.brandHover;
           if (states.contains(WidgetState.hovered)) {
-            return Color.lerp(xc.ink, xc.inkPressed, 0.5);
+            return Color.lerp(cs.primary, AppColors.brandHover, 0.5);
           }
-          return xc.ink;
+          return cs.primary;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           return states.contains(WidgetState.disabled)
-              ? xc.onInk.withValues(alpha: 0.62)
-              : xc.onInk;
+              ? Colors.white.withValues(alpha: 0.62)
+              : Colors.white;
         }),
-        iconColor: WidgetStatePropertyAll(xc.onInk),
+        iconColor: const WidgetStatePropertyAll(Colors.white),
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        elevation: const WidgetStatePropertyAll(0),
+        shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        side: _focusSide(cs),
+        textStyle: const WidgetStatePropertyAll(
+          TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        shape: const WidgetStatePropertyAll(StadiumBorder()),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  static FilledButtonThemeData _filledButtonTheme(
+    ColorScheme cs,
+    XConnectColors xc,
+  ) {
+    return FilledButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return cs.primary.withValues(alpha: 0.38);
+          }
+          if (states.contains(WidgetState.pressed)) return AppColors.brandHover;
+          if (states.contains(WidgetState.hovered)) {
+            return Color.lerp(cs.primary, AppColors.brandHover, 0.5);
+          }
+          return cs.primary;
+        }),
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.disabled)
+              ? Colors.white.withValues(alpha: 0.62)
+              : Colors.white;
+        }),
+        iconColor: const WidgetStatePropertyAll(Colors.white),
         overlayColor: const WidgetStatePropertyAll(Colors.transparent),
         elevation: const WidgetStatePropertyAll(0),
         shadowColor: const WidgetStatePropertyAll(Colors.transparent),
@@ -634,7 +683,7 @@ class AppTheme {
         overlayColor: const WidgetStatePropertyAll(Colors.transparent),
         elevation: const WidgetStatePropertyAll(0),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
-        side: _focusSide(cs, base: BorderSide.none),
+        side: _focusSide(cs, base: BorderSide(color: xc.cardBorder)),
         textStyle: const WidgetStatePropertyAll(
           TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
@@ -670,14 +719,17 @@ class AppTheme {
   }
 
   // ── Shared FloatingActionButtonTheme ──────────────────────────
-  static FloatingActionButtonThemeData _fabTheme(XConnectColors xc) {
+  static FloatingActionButtonThemeData _fabTheme(
+    ColorScheme cs,
+    XConnectColors xc,
+  ) {
     return FloatingActionButtonThemeData(
-      backgroundColor: xc.ink,
-      foregroundColor: xc.onInk,
-      elevation: 3,
-      focusElevation: 3,
-      hoverElevation: 4,
-      highlightElevation: 2,
+      backgroundColor: cs.primary,
+      foregroundColor: Colors.white,
+      elevation: 2,
+      focusElevation: 2,
+      hoverElevation: 3,
+      highlightElevation: 1,
       extendedTextStyle: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
@@ -689,9 +741,9 @@ class AppTheme {
   // ── Shared ChipTheme ──────────────────────────────────────────
   static ChipThemeData _chipTheme(ColorScheme cs, XConnectColors xc) {
     return ChipThemeData(
-      backgroundColor: xc.cardBackground,
-      selectedColor: xc.surfaceSunken,
-      disabledColor: xc.cardBackground,
+      backgroundColor: xc.surfaceSunken,
+      selectedColor: xc.brandMuted,
+      disabledColor: xc.surfaceSunken,
       surfaceTintColor: Colors.transparent,
       side: BorderSide.none,
       showCheckmark: false,
@@ -728,16 +780,17 @@ class AppTheme {
       textTheme: _textTheme(cs, xc),
       appBarTheme: _appBarTheme(cs, xc),
       inputDecorationTheme: _inputDecoration(cs, xc),
-      dialogTheme: _dialogTheme(cs),
+      dialogTheme: _dialogTheme(cs, xc),
       navigationRailTheme: _navigationRailTheme(cs, xc),
       navigationBarTheme: _navigationBarTheme(cs, xc),
       cardTheme: _cardTheme(xc),
       snackBarTheme: _snackBarTheme(cs),
-      popupMenuTheme: _popupMenuTheme(cs),
+      popupMenuTheme: _popupMenuTheme(cs, xc),
       elevatedButtonTheme: _elevatedButtonTheme(cs, xc),
+      filledButtonTheme: _filledButtonTheme(cs, xc),
       outlinedButtonTheme: _outlinedButtonTheme(cs, xc),
       textButtonTheme: _textButtonTheme(cs),
-      floatingActionButtonTheme: _fabTheme(xc),
+      floatingActionButtonTheme: _fabTheme(cs, xc),
       chipTheme: _chipTheme(cs, xc),
       listTileTheme: _listTileTheme(cs, xc),
       dividerTheme: DividerThemeData(color: cs.outlineVariant, thickness: 1),

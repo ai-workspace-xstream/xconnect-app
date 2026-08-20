@@ -653,12 +653,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                     decoration: BoxDecoration(
                       color: context.xColors.cardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
+                      border: Border.all(color: context.xColors.cardBorder),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.add_rounded,
-                            color: Theme.of(context).colorScheme.onSurface,
+                            color: Theme.of(context).colorScheme.primary,
                             size: 20),
                         const SizedBox(width: 4),
                         Icon(Icons.dns_rounded,

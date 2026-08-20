@@ -792,11 +792,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return AnimatedContainer(
       duration: AppMotion.of(context, AppMotion.standard),
       padding: padding,
-      // Fill only. Depth comes from the surface ramp, not from a border and
-      // a shadow stacked on top of the same fill.
       decoration: BoxDecoration(
         color: xc.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: xc.cardBorder),
       ),
       child: child,
     );
@@ -832,7 +831,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_isSwitchingNode) {
       return xc.warning;
     }
-    return _hasActiveConnection ? xc.success : xc.subtleText;
+    return _hasActiveConnection ? xc.success : xc.mutedText;
   }
 
   String _connectionMetaLine(BuildContext context) {
@@ -891,7 +890,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final theme = Theme.of(context);
     final textStyle =
         (compact ? theme.textTheme.labelSmall : theme.textTheme.labelLarge)
-            ?.copyWith(color: isEmpty ? xc.mutedText : latency.color);
+            ?.copyWith(
+      color: isEmpty ? xc.mutedText : latency.color,
+      fontWeight: FontWeight.w600,
+    );
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -900,8 +902,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       decoration: BoxDecoration(
         color:
-            isEmpty ? xc.cardBackground : latency.color.withValues(alpha: 0.12),
+            isEmpty ? xc.surfaceSunken : latency.color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: isEmpty
+            ? null
+            : Border.all(color: latency.color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -974,6 +979,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildSummaryStatusChip(BuildContext context, VpnNode? node) {
+    final xc = context.xColors;
     if (node != null && _activeNode == node.name) {
       return _buildLatencyChip(
         context,
@@ -983,11 +989,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     final color = _connectionStateColor();
+    final isConnected = _hasActiveConnection;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: isConnected ? xc.successMuted : xc.surfaceSunken,
         borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: isConnected
+            ? Border.all(color: xc.success.withValues(alpha: 0.3))
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1002,7 +1012,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _connectionStateLabel(context),
             style: Theme.of(
               context,
-            ).textTheme.labelSmall?.copyWith(color: color),
+            ).textTheme.labelSmall?.copyWith(
+                  color: isConnected ? xc.successForeground : color,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
         ],
       ),
@@ -1144,6 +1157,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final latency = _latencyByNode[node.name];
     final emphasized = isActive || isSelected || isHighlighted;
 
+    Color labelColor = cs.onSurface;
+    Color chipBg = xc.surfaceSunken;
+    BorderSide borderSide = BorderSide.none;
+
+    if (isActive) {
+      labelColor = xc.successForeground;
+      chipBg = xc.successMuted;
+      borderSide = BorderSide(color: xc.success);
+    } else if (isSelected || isHighlighted) {
+      labelColor = cs.primary;
+      chipBg = xc.brandMuted;
+      borderSide = BorderSide(color: xc.brandBorder);
+    }
+
     return ChoiceChip(
       showCheckmark: false,
       selected: emphasized,
@@ -1164,13 +1191,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       labelStyle: Theme.of(
         context,
       ).textTheme.labelLarge?.copyWith(
-            color: isActive ? xc.success : cs.onSurface,
+            color: labelColor,
           ),
-      backgroundColor: xc.cardBackground,
-      selectedColor:
-          isActive ? xc.success.withValues(alpha: 0.12) : xc.surfaceSunken,
-      // A border here means "this node is running", not "this is a box".
-      side: isActive ? BorderSide(color: xc.success) : BorderSide.none,
+      backgroundColor: chipBg,
+      selectedColor: chipBg,
+      side: borderSide,
       shape: const StadiumBorder(),
       materialTapTargetSize: MaterialTapTargetSize.padded,
       onSelected: (!_isSwitchingNode) ? (_) => _selectNode(node) : null,

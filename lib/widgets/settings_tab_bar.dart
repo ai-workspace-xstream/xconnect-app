@@ -74,11 +74,12 @@ class _Tab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final xc = context.xColors;
     return Semantics(
       selected: selected,
       button: true,
       child: Material(
-        color: Colors.transparent,
+        color: selected ? xc.surfaceSunken : Colors.transparent,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         child: InkWell(
           onTap: onTap,
