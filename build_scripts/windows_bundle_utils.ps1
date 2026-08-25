@@ -103,6 +103,20 @@ function Copy-XConnectWintunDll {
     )
 
     $source = Resolve-XConnectWintunDll
-    Copy-Item $source -Destination (Join-Path $ReleaseDir "wintun.dll") -Force
-    Write-Host "Copied Wintun DLL: $source"
+    # The Flutter executable is installed at the release root, while the
+    # libXray helper is installed below bin/.  Windows resolves implicit DLL
+    # loads from the loading executable's directory, not its parent, so the
+    # helper must have wintun.dll beside xconnect-core.exe as well.
+    $destinations = @(
+        (Join-Path $ReleaseDir "wintun.dll")
+    )
+    $binDir = Join-Path $ReleaseDir "bin"
+    if (Test-Path $binDir) {
+        $destinations += (Join-Path $binDir "wintun.dll")
+    }
+
+    foreach ($destination in $destinations) {
+        Copy-Item $source -Destination $destination -Force
+        Write-Host "Copied Wintun DLL: $source -> $destination"
+    }
 }
