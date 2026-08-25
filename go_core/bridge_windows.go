@@ -79,6 +79,53 @@ type desktopRuntimeSnapshot struct {
 
 const windowsTunnelInterfaceName = "XConnect"
 
+type desktopIntegrationRequest struct {
+	Action string `json:"action"`
+}
+
+type desktopIntegrationResponse struct {
+	OK                 bool   `json:"ok"`
+	Message            string `json:"message,omitempty"`
+	DesktopEnvironment string `json:"desktopEnvironment,omitempty"`
+	AutostartEnabled   bool   `json:"autostartEnabled,omitempty"`
+	PrivilegeReady     bool   `json:"privilegeReady,omitempty"`
+}
+
+func desktopIntegrationResult(resp desktopIntegrationResponse) *C.char {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return C.CString(`{"ok":false,"message":"failed to encode response"}`)
+	}
+	return C.CString(string(data))
+}
+
+// DesktopIntegrationCommand is a Linux-only desktop integration channel. The
+// Dart FFI bindings load the symbol on every desktop platform, so Windows
+// provides a harmless compatibility implementation rather than failing DLL
+// initialization before a tunnel can be configured.
+//
+//export DesktopIntegrationCommand
+func DesktopIntegrationCommand(requestC *C.char) *C.char {
+	var req desktopIntegrationRequest
+	if err := json.Unmarshal([]byte(C.GoString(requestC)), &req); err != nil {
+		return desktopIntegrationResult(desktopIntegrationResponse{
+			Message:            "invalid request: " + err.Error(),
+			DesktopEnvironment: "windows",
+		})
+	}
+	if req.Action == "getDesktopEnvironment" {
+		return desktopIntegrationResult(desktopIntegrationResponse{
+			OK:                 true,
+			DesktopEnvironment: "windows",
+			PrivilegeReady:     true,
+		})
+	}
+	return desktopIntegrationResult(desktopIntegrationResponse{
+		Message:            "desktop integration command is not supported on Windows",
+		DesktopEnvironment: "windows",
+	})
+}
+
 func windowsTunnelInterfaceState() (bool, bool, string) {
 	iface, err := net.InterfaceByName(windowsTunnelInterfaceName)
 	if err != nil {
