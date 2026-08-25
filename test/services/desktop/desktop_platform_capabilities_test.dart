@@ -25,6 +25,17 @@ void main() {
       expect(capabilities.usesLocalProxyLatencyProbe, isFalse);
     });
 
+    test('resolves Linux desktop tunnel capabilities', () {
+      final capabilities =
+          DesktopPlatformCapabilities.resolveForOperatingSystem('linux');
+
+      expect(capabilities.supportsNativeTrayMenu, isFalse);
+      expect(capabilities.supportsRuntimeMcp, isFalse);
+      expect(capabilities.supportsUnifiedTunnelStatus, isTrue);
+      expect(capabilities.supportsRuntimeMetrics, isTrue);
+      expect(capabilities.usesLocalProxyLatencyProbe, isFalse);
+    });
+
     test('falls back to disabled capabilities for unsupported platforms', () {
       final capabilities =
           DesktopPlatformCapabilities.resolveForOperatingSystem('ios');

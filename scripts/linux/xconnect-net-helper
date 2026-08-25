@@ -58,16 +58,12 @@ case "$ACTION" in
       exit 1
     fi
 
-    if ! ip link show "$TUN_DEV" >/dev/null 2>&1; then
-      ip tuntap add dev "$TUN_DEV" mode tun
-    fi
-    ip link set "$TUN_DEV" up
-    ip addr replace 10.0.0.2/24 dev "$TUN_DEV"
-    ip -6 addr replace fd00::2/120 dev "$TUN_DEV"
-
-    if command -v resolvectl >/dev/null 2>&1; then
-      resolvectl dns "$TUN_DEV" "$DNS_IPV4" "$DNS_IPV6" >/dev/null 2>&1 || true
-      resolvectl domain "$TUN_DEV" "~." >/dev/null 2>&1 || true
+    # Xray owns the named interface and its automatic route lifecycle. The
+    # privileged helper must not create a second device with the same name or
+    # mutate system DNS outside that lifecycle.
+    if ip link show "$TUN_DEV" >/dev/null 2>&1; then
+      echo "${TUN_DEV} already exists; stop the existing secure tunnel first" >&2
+      exit 1
     fi
 
     write_state
@@ -78,8 +74,8 @@ case "$ACTION" in
       # shellcheck disable=SC1090
       source "$STATE_FILE"
     fi
-    restore_dns
-    ip link delete "$TUN_DEV" >/dev/null 2>&1 || true
+    # The Xray runtime removes its own interface and routes. Keep this path
+    # idempotent for a failed startup before the interface was created.
     rm -f "$STATE_FILE"
     echo "tunnel helper stopped"
     ;;

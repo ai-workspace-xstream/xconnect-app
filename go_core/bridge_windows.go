@@ -9,9 +9,12 @@ import "C"
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -62,12 +65,44 @@ type processMemoryCounters struct {
 }
 
 type desktopRuntimeSnapshot struct {
-	Running                bool     `json:"running"`
-	DownloadBytesPerSecond *int     `json:"downloadBytesPerSecond,omitempty"`
-	UploadBytesPerSecond   *int     `json:"uploadBytesPerSecond,omitempty"`
-	MemoryBytes            *int64   `json:"memoryBytes,omitempty"`
-	CPUPercent             *float64 `json:"cpuPercent,omitempty"`
-	UpdatedAt              int64    `json:"updatedAt"`
+	Running                   bool     `json:"running"`
+	DownloadBytesPerSecond    *int     `json:"downloadBytesPerSecond,omitempty"`
+	UploadBytesPerSecond      *int     `json:"uploadBytesPerSecond,omitempty"`
+	MemoryBytes               *int64   `json:"memoryBytes,omitempty"`
+	CPUPercent                *float64 `json:"cpuPercent,omitempty"`
+	TunnelInterface           string   `json:"tunnelInterface,omitempty"`
+	TunnelInterfaceUp         bool     `json:"tunnelInterfaceUp"`
+	DefaultRouteThroughTunnel bool     `json:"defaultRouteThroughTunnel"`
+	LastError                 string   `json:"lastError,omitempty"`
+	UpdatedAt                 int64    `json:"updatedAt"`
+}
+
+const windowsTunnelInterfaceName = "XConnect"
+
+func windowsTunnelInterfaceState() (bool, bool, string) {
+	iface, err := net.InterfaceByName(windowsTunnelInterfaceName)
+	if err != nil {
+		return false, false, "secure tunnel interface is unavailable"
+	}
+	if iface.Flags&net.FlagUp == 0 {
+		return false, false, "secure tunnel interface is down"
+	}
+
+	// Get-NetRoute reads Windows' effective route table. The command is read
+	// only and does not require elevation, so it is safe to run during status
+	// polling.
+	command := "(Get-NetRoute -InterfaceAlias 'XConnect' -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0"
+	output, routeErr := exec.Command(
+		"powershell",
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		command,
+	).CombinedOutput()
+	if routeErr != nil || !strings.EqualFold(strings.TrimSpace(string(output)), "True") {
+		return true, false, "secure tunnel default route is unavailable"
+	}
+	return true, true, ""
 }
 
 func filetimeToUint64(value windows.Filetime) uint64 {
@@ -294,11 +329,21 @@ func StopXray() *C.char {
 
 //export GetDesktopRuntimeSnapshot
 func GetDesktopRuntimeSnapshot() *C.char {
+	interfaceUp, defaultRoute, lastError := windowsTunnelInterfaceState()
+	if !xray.GetXrayState() {
+		interfaceUp = false
+		defaultRoute = false
+		lastError = ""
+	}
 	snapshot := desktopRuntimeSnapshot{
-		Running:     xray.GetXrayState(),
-		MemoryBytes: currentWorkingSetBytes(),
-		CPUPercent:  currentCPUPercent(),
-		UpdatedAt:   time.Now().UnixMilli(),
+		Running:                   xray.GetXrayState(),
+		MemoryBytes:               currentWorkingSetBytes(),
+		CPUPercent:                currentCPUPercent(),
+		TunnelInterface:           windowsTunnelInterfaceName,
+		TunnelInterfaceUp:         interfaceUp,
+		DefaultRouteThroughTunnel: defaultRoute,
+		LastError:                 lastError,
+		UpdatedAt:                 time.Now().UnixMilli(),
 	}
 	payload, err := json.Marshal(snapshot)
 	if err != nil {
@@ -410,4 +455,3 @@ func InitTray() {
 		}()
 	})
 }
-

@@ -6,7 +6,7 @@ section: net
 priority: optional
 maintainer: XConnect Team <support@svc.plus>
 description: |
-  XConnect Linux desktop client with proxy mode by default and optional tunnel mode.
+  XConnect Linux desktop client with System Tunnel support for GNOME and KDE.
 homepage: https://svc.plus
 license: Proprietary
 contents:
@@ -30,11 +30,13 @@ overrides:
       - libnotify-bin
       - policykit-1
       - iproute2
+      - libcap2-bin
   rpm:
     depends:
       - libappindicator-gtk3
       - libnotify
       - polkit
       - iproute
+      - libcap
 scripts:
   postinstall: ./packaging/nfpm/postinstall.sh

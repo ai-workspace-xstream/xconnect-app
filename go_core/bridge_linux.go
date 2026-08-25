@@ -70,6 +70,7 @@ import "C"
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,6 +86,35 @@ import (
 
 var procMap sync.Map
 var instMu sync.Mutex
+
+const linuxTunnelInterfaceName = "xconnect-tun0"
+
+type desktopRuntimeSnapshot struct {
+	Running                   bool   `json:"running"`
+	TunnelInterface           string `json:"tunnelInterface,omitempty"`
+	TunnelInterfaceUp         bool   `json:"tunnelInterfaceUp"`
+	DefaultRouteThroughTunnel bool   `json:"defaultRouteThroughTunnel"`
+	LastError                 string `json:"lastError,omitempty"`
+	UpdatedAt                 int64  `json:"updatedAt"`
+}
+
+func linuxTunnelInterfaceState() (bool, bool, string) {
+	iface, err := net.InterfaceByName(linuxTunnelInterfaceName)
+	if err != nil {
+		return false, false, "secure tunnel interface is unavailable"
+	}
+	if iface.Flags&net.FlagUp == 0 {
+		return false, false, "secure tunnel interface is down"
+	}
+
+	// Xray's automatic route mode can use a policy table, so inspect every
+	// table rather than assuming that the main table owns the default route.
+	output, err := runOutput("ip", "route", "show", "table", "all", "default", "dev", linuxTunnelInterfaceName)
+	if err != nil || strings.TrimSpace(output) == "" {
+		return true, false, "secure tunnel default route is unavailable"
+	}
+	return true, true, ""
+}
 
 type desktopIntegrationRequest struct {
 	Action   string `json:"action"`
@@ -676,6 +706,28 @@ func StopXray() *C.char {
 	}
 	clearNodeRegistry()
 	return C.CString("success")
+}
+
+//export GetDesktopRuntimeSnapshot
+func GetDesktopRuntimeSnapshot() *C.char {
+	interfaceUp, defaultRoute, lastError := linuxTunnelInterfaceState()
+	if !xray.GetXrayState() {
+		interfaceUp = false
+		defaultRoute = false
+		lastError = ""
+	}
+	payload, err := json.Marshal(desktopRuntimeSnapshot{
+		Running:                   xray.GetXrayState(),
+		TunnelInterface:           linuxTunnelInterfaceName,
+		TunnelInterfaceUp:         interfaceUp,
+		DefaultRouteThroughTunnel: defaultRoute,
+		LastError:                 lastError,
+		UpdatedAt:                 time.Now().UnixMilli(),
+	})
+	if err != nil {
+		return C.CString("{}")
+	}
+	return C.CString(string(payload))
 }
 
 // ---- System tray integration ----
