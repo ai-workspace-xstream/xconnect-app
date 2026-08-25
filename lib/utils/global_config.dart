@@ -107,7 +107,10 @@ class GlobalState {
 
   /// 当前连接模式，可在底部弹出栏中切换（如 VPN / 仅代理）
   static final ValueNotifier<String> connectionMode = ValueNotifier<String>(
-    Platform.isLinux ? proxyOnlyConnectionMode : tunnelConnectionMode,
+    // Linux desktop has a native privileged TUN helper for both GNOME and
+    // KDE. Keep the cross-platform default consistent so the Connect action
+    // actually exercises the requested system tunnel path.
+    tunnelConnectionMode,
   );
 
   /// 当前活跃节点名称（桌面菜单栏/主界面共享）
@@ -163,9 +166,9 @@ class GlobalState {
       return tunnelConnectionMode;
     }
     if (Platform.isLinux) {
-      return value == tunnelConnectionMode
-          ? tunnelConnectionMode
-          : proxyOnlyConnectionMode;
+      return value == proxyOnlyConnectionMode
+          ? proxyOnlyConnectionMode
+          : tunnelConnectionMode;
     }
     return value == proxyOnlyConnectionMode
         ? proxyOnlyConnectionMode

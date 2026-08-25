@@ -180,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       Platform.isIOS ||
       (Platform.isMacOS && NativeBridge.isTunMode) ||
       (_desktopCapabilities.supportsUnifiedTunnelStatus &&
-          Platform.isWindows &&
+          (Platform.isWindows || Platform.isLinux) &&
           NativeBridge.isTunMode);
 
   bool get _packetTunnelExplicitlyUnavailable =>

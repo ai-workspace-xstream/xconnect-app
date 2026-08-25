@@ -397,7 +397,7 @@ class NativeBridge {
             saveResult != 'profile_unchanged') {
           return saveResult;
         }
-        return _waitForDarwinPacketTunnelConnected(
+        return await _waitForDarwinPacketTunnelConnected(
           successMessage: 'TUN 模式启动成功 ($nodeName)',
         );
       } on PlatformException catch (e) {
@@ -418,9 +418,12 @@ class NativeBridge {
           final result = resPtr.cast<Utf8>().toDartString();
           _ffi.freeCString(resPtr);
           malloc.free(configPtr);
-          return result.toLowerCase().startsWith('success')
-              ? 'TUN 模式启动成功 ($nodeName)'
-              : '启动失败: $result';
+          if (!result.toLowerCase().startsWith('success')) {
+            return '启动失败: $result';
+          }
+          return await _waitForDesktopTunnelConnected(
+            successMessage: 'TUN 模式启动成功 ($nodeName)',
+          );
         }
         return '启动失败: FFI 不可用';
       } catch (e) {
@@ -436,6 +439,7 @@ class NativeBridge {
             !privilegeMessage.toLowerCase().contains('success')) {
           return '启动失败: $privilegeMessage';
         }
+        await _stopOtherRunningNodes(nodeName);
         final helperResult = await _invokeLinuxDesktopCommand(
           'startTunnelHelper',
           payload: <String, dynamic>{'mode': 'tun'},
@@ -443,7 +447,6 @@ class NativeBridge {
         if (helperResult['ok'] != true) {
           return '启动失败: ${(helperResult['message'] as String?) ?? 'tunnel helper failed'}';
         }
-        await _stopOtherRunningNodes(nodeName);
         final configJson = await File(runtimeConfigPath).readAsString();
         if (_useFfi) {
           final configPtr = configJson.toNativeUtf8();
@@ -456,7 +459,9 @@ class NativeBridge {
               'XConnect',
               'Tunnel Mode connected: $nodeName',
             );
-            return 'TUN 模式启动成功 ($nodeName)';
+            return await _waitForDesktopTunnelConnected(
+              successMessage: 'TUN 模式启动成功 ($nodeName)',
+            );
           }
           await _invokeLinuxDesktopCommand(
             'stopTunnelHelper',
@@ -1465,7 +1470,7 @@ class NativeBridge {
       if (saveResult != 'profile_saved' && saveResult != 'profile_unchanged') {
         return saveResult;
       }
-      return _waitForDarwinPacketTunnelConnected(
+      return await _waitForDarwinPacketTunnelConnected(
         successMessage: 'Packet Tunnel 已连接',
       );
     } on MissingPluginException {
@@ -1607,8 +1612,11 @@ class NativeBridge {
     if (Platform.isWindows || Platform.isLinux) {
       final snapshot = await getDesktopRuntimeSnapshot();
       return PacketTunnelStatus(
-        status: snapshot.running ? 'connected' : 'disconnected',
+        status: snapshot.running
+            ? (snapshot.isTunnelReady ? 'connected' : 'connecting')
+            : 'disconnected',
         utunInterfaces: const [],
+        lastError: snapshot.lastError,
       );
     }
 
@@ -1715,7 +1723,7 @@ class NativeBridge {
           } catch (e) {
             return '启动失败: $e';
           }
-          return _waitForDarwinPacketTunnelConnected(
+          return await _waitForDarwinPacketTunnelConnected(
             successMessage: successMessage,
             timeout: timeout,
             allowIosProfileRepair: false,
@@ -1735,6 +1743,30 @@ class NativeBridge {
         ? ''
         : ' (${lastStatus.utunInterfaces.join(", ")})';
     return '启动失败: Packet Tunnel 状态未就绪: ${lastStatus.status}$utunDetail';
+  }
+
+  /// Windows and Linux must prove that the named system tunnel interface and
+  /// its default route are present. Running Xray alone is only a control-plane
+  /// signal and is not enough to report a connected tunnel.
+  static Future<String> _waitForDesktopTunnelConnected({
+    required String successMessage,
+    Duration timeout = const Duration(seconds: 12),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    PacketTunnelStatus lastStatus = _tunStatusFallback;
+    while (DateTime.now().isBefore(deadline)) {
+      lastStatus = await getPacketTunnelStatus();
+      if (lastStatus.status == 'connected') {
+        return successMessage;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+
+    await _stopNodeForTunnelInternal();
+    final detail = lastStatus.lastError?.trim();
+    return detail == null || detail.isEmpty
+        ? '启动失败: 隧道接口或路由未就绪'
+        : '启动失败: $detail';
   }
 
   static bool _looksLikeIosPluginRegistrationError(String error) {
@@ -1875,6 +1907,10 @@ class PacketTunnelStatus {
 
 class DesktopRuntimeSnapshot {
   final bool running;
+  final String? tunnelInterface;
+  final bool tunnelInterfaceUp;
+  final bool defaultRouteThroughTunnel;
+  final String? lastError;
   final int? downloadBytesPerSecond;
   final int? uploadBytesPerSecond;
   final int? memoryBytes;
@@ -1883,12 +1919,19 @@ class DesktopRuntimeSnapshot {
 
   const DesktopRuntimeSnapshot({
     this.running = false,
+    this.tunnelInterface,
+    this.tunnelInterfaceUp = false,
+    this.defaultRouteThroughTunnel = false,
+    this.lastError,
     this.downloadBytesPerSecond,
     this.uploadBytesPerSecond,
     this.memoryBytes,
     this.cpuPercent,
     this.updatedAt,
   });
+
+  bool get isTunnelReady =>
+      tunnelInterface != null && tunnelInterfaceUp && defaultRouteThroughTunnel;
 
   factory DesktopRuntimeSnapshot.fromJsonString(String jsonString) {
     if (jsonString.trim().isEmpty) {
@@ -1902,6 +1945,10 @@ class DesktopRuntimeSnapshot {
       }
       return DesktopRuntimeSnapshot(
         running: raw['running'] == true,
+        tunnelInterface: raw['tunnelInterface'] as String?,
+        tunnelInterfaceUp: raw['tunnelInterfaceUp'] == true,
+        defaultRouteThroughTunnel: raw['defaultRouteThroughTunnel'] == true,
+        lastError: raw['lastError'] as String?,
         downloadBytesPerSecond:
             (raw['downloadBytesPerSecond'] as num?)?.toInt(),
         uploadBytesPerSecond: (raw['uploadBytesPerSecond'] as num?)?.toInt(),

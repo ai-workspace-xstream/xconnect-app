@@ -1,3 +1,10 @@
+# 未发布
+
+- Windows 隧道连接会在 `XConnect` 接口与默认路由均就绪后才报告连接成功。
+- Linux 隧道连接使用 `xconnect-tun0` 命名接口与自动路由，并补齐 GNOME/KDE
+  的包安装能力配置和运行时状态检查。
+- iOS 和 macOS 的 Packet Tunnel 配置与行为保持不变。
+
 # XConnect v1.0.0
 
 _发布日期：2026-08-14 — 标签 `v2026.08.14-1938`，合并 commit `27a312d`，分支 `main`_

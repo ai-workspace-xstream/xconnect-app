@@ -1,3 +1,12 @@
+# Unreleased
+
+- Windows System Tunnel now waits for the named `XConnect` interface and its
+  default route before reporting a successful connection.
+- Linux System Tunnel now uses the named `xconnect-tun0` interface with
+  automatic routing, GNOME/KDE package capability setup, and matching runtime
+  status checks.
+- iOS and macOS Packet Tunnel configuration and behavior are unchanged.
+
 # XConnect v1.0.0
 
 _Release Date: 2026-08-14 — tag `v2026.08.14-1938`, merge commit `27a312d`, branch `main`_

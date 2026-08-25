@@ -18,7 +18,14 @@ bash build_scripts/build_windows.sh
 
 该脚本会将 `go_core` 编译为 `bindings/libgo_native_bridge.dll`，供 Dart FFI 通过 `DynamicLibrary.open` 加载。
 
+APP 集成使用仓库锁定的 `libXray` submodule；`vendor/Xray-core` 仅作为 CLI/reference
+实现保留，不参与 Windows APP bridge 构建，也不会在构建过程中被 patch。
+
 如果你在排查 `go build` 相关问题，也可以进入 `go_core/` 目录单独执行构建命令并检查 `CGO_ENABLED`、`CC` 和 MinGW 工具链是否正确。
+
+Windows System Tunnel 使用名为 `XConnect` 的 Wintun 接口。应用仅在 Xray
+运行、该接口已启动且 Windows 默认路由已指向该接口后报告隧道已连接；这可将
+引擎启动失败、接口创建失败和路由未生效区分开来。
 
 ## 3. 构建 Flutter 桌面应用
 

@@ -1189,7 +1189,9 @@ class VpnConfig {
       inbounds.add({
         "tag": _tunInboundTag,
         "protocol": "tun",
-        "settings": {"mtu": 1500},
+        "settings": tunnelInboundSettingsForOperatingSystem(
+          Platform.operatingSystem,
+        ),
         "sniffing": {
           "enabled": GlobalState.sniffingEnabled.value,
           "routeOnly": true,
@@ -1199,5 +1201,28 @@ class VpnConfig {
     }
 
     return const JsonEncoder.withIndent('  ').convert(inbounds);
+  }
+
+  /// Desktop tunnel interfaces use stable names so the native runtime can
+  /// verify that the engine created its system-level interface before the UI
+  /// reports a connected tunnel. Apple platforms receive their interface from
+  /// the Packet Tunnel provider and intentionally keep their existing shape.
+  static Map<String, dynamic> tunnelInboundSettingsForOperatingSystem(
+    String operatingSystem,
+  ) {
+    final settings = <String, dynamic>{'mtu': 1500};
+    switch (operatingSystem) {
+      case 'windows':
+        settings.addAll(<String, dynamic>{
+          'name': 'XConnect',
+          'autoRoute': true,
+        });
+      case 'linux':
+        settings.addAll(<String, dynamic>{
+          'name': 'xconnect-tun0',
+          'autoRoute': true,
+        });
+    }
+    return settings;
   }
 }

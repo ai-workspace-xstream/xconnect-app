@@ -9,9 +9,12 @@ import "C"
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -62,12 +65,91 @@ type processMemoryCounters struct {
 }
 
 type desktopRuntimeSnapshot struct {
-	Running                bool     `json:"running"`
-	DownloadBytesPerSecond *int     `json:"downloadBytesPerSecond,omitempty"`
-	UploadBytesPerSecond   *int     `json:"uploadBytesPerSecond,omitempty"`
-	MemoryBytes            *int64   `json:"memoryBytes,omitempty"`
-	CPUPercent             *float64 `json:"cpuPercent,omitempty"`
-	UpdatedAt              int64    `json:"updatedAt"`
+	Running                   bool     `json:"running"`
+	DownloadBytesPerSecond    *int     `json:"downloadBytesPerSecond,omitempty"`
+	UploadBytesPerSecond      *int     `json:"uploadBytesPerSecond,omitempty"`
+	MemoryBytes               *int64   `json:"memoryBytes,omitempty"`
+	CPUPercent                *float64 `json:"cpuPercent,omitempty"`
+	TunnelInterface           string   `json:"tunnelInterface,omitempty"`
+	TunnelInterfaceUp         bool     `json:"tunnelInterfaceUp"`
+	DefaultRouteThroughTunnel bool     `json:"defaultRouteThroughTunnel"`
+	LastError                 string   `json:"lastError,omitempty"`
+	UpdatedAt                 int64    `json:"updatedAt"`
+}
+
+const windowsTunnelInterfaceName = "XConnect"
+
+type desktopIntegrationRequest struct {
+	Action string `json:"action"`
+}
+
+type desktopIntegrationResponse struct {
+	OK                 bool   `json:"ok"`
+	Message            string `json:"message,omitempty"`
+	DesktopEnvironment string `json:"desktopEnvironment,omitempty"`
+	AutostartEnabled   bool   `json:"autostartEnabled,omitempty"`
+	PrivilegeReady     bool   `json:"privilegeReady,omitempty"`
+}
+
+func desktopIntegrationResult(resp desktopIntegrationResponse) *C.char {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return C.CString(`{"ok":false,"message":"failed to encode response"}`)
+	}
+	return C.CString(string(data))
+}
+
+// DesktopIntegrationCommand is a Linux-only desktop integration channel. The
+// Dart FFI bindings load the symbol on every desktop platform, so Windows
+// provides a harmless compatibility implementation rather than failing DLL
+// initialization before a tunnel can be configured.
+//
+//export DesktopIntegrationCommand
+func DesktopIntegrationCommand(requestC *C.char) *C.char {
+	var req desktopIntegrationRequest
+	if err := json.Unmarshal([]byte(C.GoString(requestC)), &req); err != nil {
+		return desktopIntegrationResult(desktopIntegrationResponse{
+			Message:            "invalid request: " + err.Error(),
+			DesktopEnvironment: "windows",
+		})
+	}
+	if req.Action == "getDesktopEnvironment" {
+		return desktopIntegrationResult(desktopIntegrationResponse{
+			OK:                 true,
+			DesktopEnvironment: "windows",
+			PrivilegeReady:     true,
+		})
+	}
+	return desktopIntegrationResult(desktopIntegrationResponse{
+		Message:            "desktop integration command is not supported on Windows",
+		DesktopEnvironment: "windows",
+	})
+}
+
+func windowsTunnelInterfaceState() (bool, bool, string) {
+	iface, err := net.InterfaceByName(windowsTunnelInterfaceName)
+	if err != nil {
+		return false, false, "secure tunnel interface is unavailable"
+	}
+	if iface.Flags&net.FlagUp == 0 {
+		return false, false, "secure tunnel interface is down"
+	}
+
+	// Get-NetRoute reads Windows' effective route table. The command is read
+	// only and does not require elevation, so it is safe to run during status
+	// polling.
+	command := "(Get-NetRoute -InterfaceAlias 'XConnect' -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0"
+	output, routeErr := exec.Command(
+		"powershell",
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		command,
+	).CombinedOutput()
+	if routeErr != nil || !strings.EqualFold(strings.TrimSpace(string(output)), "True") {
+		return true, false, "secure tunnel default route is unavailable"
+	}
+	return true, true, ""
 }
 
 func filetimeToUint64(value windows.Filetime) uint64 {
@@ -294,11 +376,21 @@ func StopXray() *C.char {
 
 //export GetDesktopRuntimeSnapshot
 func GetDesktopRuntimeSnapshot() *C.char {
+	interfaceUp, defaultRoute, lastError := windowsTunnelInterfaceState()
+	if !xray.GetXrayState() {
+		interfaceUp = false
+		defaultRoute = false
+		lastError = ""
+	}
 	snapshot := desktopRuntimeSnapshot{
-		Running:     xray.GetXrayState(),
-		MemoryBytes: currentWorkingSetBytes(),
-		CPUPercent:  currentCPUPercent(),
-		UpdatedAt:   time.Now().UnixMilli(),
+		Running:                   xray.GetXrayState(),
+		MemoryBytes:               currentWorkingSetBytes(),
+		CPUPercent:                currentCPUPercent(),
+		TunnelInterface:           windowsTunnelInterfaceName,
+		TunnelInterfaceUp:         interfaceUp,
+		DefaultRouteThroughTunnel: defaultRoute,
+		LastError:                 lastError,
+		UpdatedAt:                 time.Now().UnixMilli(),
 	}
 	payload, err := json.Marshal(snapshot)
 	if err != nil {
@@ -410,4 +502,3 @@ func InitTray() {
 		}()
 	})
 }
-

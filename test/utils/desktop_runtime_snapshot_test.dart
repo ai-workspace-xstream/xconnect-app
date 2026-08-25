@@ -7,6 +7,10 @@ void main() {
       final snapshot = DesktopRuntimeSnapshot.fromJsonString('''
       {
         "running": true,
+        "tunnelInterface": "XConnect",
+        "tunnelInterfaceUp": true,
+        "defaultRouteThroughTunnel": true,
+        "lastError": null,
         "downloadBytesPerSecond": 1234,
         "uploadBytesPerSecond": 567,
         "memoryBytes": 2048,
@@ -16,6 +20,10 @@ void main() {
       ''');
 
       expect(snapshot.running, isTrue);
+      expect(snapshot.tunnelInterface, 'XConnect');
+      expect(snapshot.tunnelInterfaceUp, isTrue);
+      expect(snapshot.defaultRouteThroughTunnel, isTrue);
+      expect(snapshot.isTunnelReady, isTrue);
       expect(snapshot.downloadBytesPerSecond, 1234);
       expect(snapshot.uploadBytesPerSecond, 567);
       expect(snapshot.memoryBytes, 2048);
@@ -29,6 +37,7 @@ void main() {
       );
 
       expect(snapshot.running, isFalse);
+      expect(snapshot.isTunnelReady, isFalse);
       expect(snapshot.downloadBytesPerSecond, isNull);
       expect(snapshot.uploadBytesPerSecond, isNull);
       expect(snapshot.memoryBytes, isNull);
