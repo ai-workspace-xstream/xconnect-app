@@ -124,10 +124,17 @@ class NativeBridge {
     if (!Platform.isLinux) {
       return <String, dynamic>{'ok': false, 'message': '当前平台暂不支持'};
     }
+    final command = _ffi.desktopIntegrationCommand;
+    if (command == null) {
+      return <String, dynamic>{
+        'ok': false,
+        'message': '当前运行时不支持 Linux 桌面集成',
+      };
+    }
     final request = <String, dynamic>{'action': action, ...?payload};
     final requestPtr = jsonEncode(request).toNativeUtf8();
     try {
-      final resPtr = _ffi.desktopIntegrationCommand(requestPtr.cast());
+      final resPtr = command(requestPtr.cast());
       final response = resPtr.cast<Utf8>().toDartString();
       _ffi.freeCString(resPtr);
       final decoded = jsonDecode(response);

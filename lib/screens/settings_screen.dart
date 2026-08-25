@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:archive/archive_io.dart';
 import '../../utils/global_config.dart'
     show GlobalState, DnsConfig, GlobalApplicationConfig, XhttpAdvancedConfig;
@@ -189,15 +190,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       },
     );
-    if (input == null || input.isEmpty) return;
+    var importText = input?.trim() ?? '';
+    if (importText.isEmpty) {
+      final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
+      importText = clipboard?.text?.trim() ?? '';
+    }
+    if (importText.isEmpty) return;
+    final normalizedInput = importText
+        .trim()
+        .replaceFirst(RegExp(r'^file:///', caseSensitive: false), '')
+        .replaceFirst(RegExp(r'^vless\\://', caseSensitive: false), 'vless://')
+        .replaceAll('"', '');
+    if (normalizedInput.isEmpty) return;
 
     addAppLog('开始导入配置...');
     try {
-      if (input.startsWith('vless://')) {
+      if (normalizedInput.startsWith('vless://')) {
         final bundleId = await GlobalApplicationConfig.getBundleId();
-        final profile = VpnConfig.parseVlessUri(input);
+        final profile = VpnConfig.parseVlessUri(normalizedInput);
         await VpnConfig.generateFromVlessUri(
-          vlessUri: input,
+          vlessUri: normalizedInput,
           password: '',
           bundleId: bundleId,
           setMessage: (msg) => addAppLog(msg),
@@ -213,12 +225,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       final existingNames = VpnConfig.nodes.map((e) => e.name).toSet();
-      final file = File(input);
+      final file = File(normalizedInput);
       if (!await file.exists()) {
         addAppLog('备份文件不存在', level: LogLevel.error);
         return;
       }
       final bytes = await file.readAsBytes();
+      if (normalizedInput.toLowerCase().endsWith('.json')) {
+        await VpnConfig.importFromJson(utf8.decode(bytes));
+        await VpnConfig.load();
+        GlobalState.activeNodeName.value = '';
+        GlobalState.nodeListRevision.value++;
+        addAppLog('Config JSON imported successfully');
+        return;
+      }
       final archive = ZipDecoder().decodeBytes(bytes);
       for (final entry in archive) {
         final name = entry.name;
