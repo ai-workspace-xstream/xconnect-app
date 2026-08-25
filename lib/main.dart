@@ -271,7 +271,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
   Future<void> _importFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final raw = (data?.text ?? '').trim();
+    final raw = (data?.text ?? '')
+        .trim()
+        .replaceFirst(RegExp(r'^vless\\://', caseSensitive: false), 'vless://')
+        .replaceAll('"', '');
     if (!mounted) return;
     if (!raw.startsWith('vless://')) {
       _showComingSoon(context.l10n.get('clipboardNoVless'));
