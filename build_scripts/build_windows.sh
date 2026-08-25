@@ -34,6 +34,14 @@ export CC
 go mod download
 
 GOOS=windows GOARCH=amd64 go build -buildmode=c-shared \
-  -ldflags="-linkmode external -extldflags '-static'" \
+	-buildvcs=false \
+	-ldflags="-linkmode external -extldflags '-static'" \
   -o ../bindings/libgo_native_bridge.dll \
   .
+
+# Keep the libXray runtime out of the Flutter process.  This helper imports
+# libXray directly and is launched by the Windows bridge with UAC elevation.
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+	-buildvcs=false -trimpath -ldflags="-s -w -H=windowsgui" \
+  -o ../bindings/xconnect-core.exe \
+  ./cmd/xconnect-core

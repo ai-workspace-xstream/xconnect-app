@@ -8,60 +8,26 @@ package main
 import "C"
 import (
 	"encoding/json"
-	"errors"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
 
 	"github.com/getlantern/systray"
-	"github.com/xtls/libxray/xray"
 	"golang.org/x/sys/windows"
 )
 
 var procMap sync.Map
 var instMu sync.Mutex
-var runtimeStatsMu sync.Mutex
-var lastCPUProcessTime uint64
-var lastCPUWallTime time.Time
-
-func startXrayInternal(cfgData []byte) error {
-	if xray.GetXrayState() {
-		return errors.New("already running")
-	}
-	return xray.RunXrayFromJSON(string(cfgData))
-}
-
-func stopXrayInternal() error {
-	if !xray.GetXrayState() {
-		return errors.New("not running")
-	}
-	return xray.StopXray()
-}
 
 func clearNodeRegistry() {
 	procMap.Range(func(key, value any) bool {
 		procMap.Delete(key)
 		return true
 	})
-}
-
-type processMemoryCounters struct {
-	CB                         uint32
-	PageFaultCount             uint32
-	PeakWorkingSetSize         uintptr
-	WorkingSetSize             uintptr
-	QuotaPeakPagedPoolUsage    uintptr
-	QuotaPagedPoolUsage        uintptr
-	QuotaPeakNonPagedPoolUsage uintptr
-	QuotaNonPagedPoolUsage     uintptr
-	PagefileUsage              uintptr
-	PeakPagefileUsage          uintptr
 }
 
 type desktopRuntimeSnapshot struct {
@@ -135,90 +101,10 @@ func windowsTunnelInterfaceState() (bool, bool, string) {
 		return false, false, "secure tunnel interface is down"
 	}
 
-	// Get-NetRoute reads Windows' effective route table. The command is read
-	// only and does not require elevation, so it is safe to run during status
-	// polling.
-	command := "(Get-NetRoute -InterfaceAlias 'XConnect' -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0"
-	output, routeErr := exec.Command(
-		"powershell",
-		"-NoProfile",
-		"-NonInteractive",
-		"-Command",
-		command,
-	).CombinedOutput()
-	if routeErr != nil || !strings.EqualFold(strings.TrimSpace(string(output)), "True") {
+	if !windowsTunnelDefaultRoute(iface.Index) {
 		return true, false, "secure tunnel default route is unavailable"
 	}
 	return true, true, ""
-}
-
-func filetimeToUint64(value windows.Filetime) uint64 {
-	return uint64(value.HighDateTime)<<32 | uint64(value.LowDateTime)
-}
-
-func currentWorkingSetBytes() *int64 {
-	psapi := windows.NewLazySystemDLL("psapi.dll")
-	proc := psapi.NewProc("GetProcessMemoryInfo")
-	counters := processMemoryCounters{CB: uint32(unsafe.Sizeof(processMemoryCounters{}))}
-	r1, _, _ := proc.Call(
-		uintptr(windows.CurrentProcess()),
-		uintptr(unsafe.Pointer(&counters)),
-		uintptr(counters.CB),
-	)
-	if r1 == 0 {
-		return nil
-	}
-	value := int64(counters.WorkingSetSize)
-	return &value
-}
-
-func currentCPUPercent() *float64 {
-	var creation windows.Filetime
-	var exit windows.Filetime
-	var kernel windows.Filetime
-	var user windows.Filetime
-	if err := windows.GetProcessTimes(
-		windows.CurrentProcess(),
-		&creation,
-		&exit,
-		&kernel,
-		&user,
-	); err != nil {
-		return nil
-	}
-
-	processTime := filetimeToUint64(kernel) + filetimeToUint64(user)
-	now := time.Now()
-
-	runtimeStatsMu.Lock()
-	defer runtimeStatsMu.Unlock()
-
-	if lastCPUWallTime.IsZero() {
-		lastCPUWallTime = now
-		lastCPUProcessTime = processTime
-		return nil
-	}
-
-	wallDelta := now.Sub(lastCPUWallTime)
-	processDelta := processTime - lastCPUProcessTime
-	lastCPUWallTime = now
-	lastCPUProcessTime = processTime
-	if wallDelta <= 0 {
-		return nil
-	}
-
-	wallTicks := float64(wallDelta.Nanoseconds()) / 100
-	if wallTicks <= 0 {
-		return nil
-	}
-	percent := (float64(processDelta) / wallTicks) * 100
-	if runtime.NumCPU() > 0 {
-		percent /= float64(runtime.NumCPU())
-	}
-	if percent < 0 {
-		percent = 0
-	}
-	return &percent
 }
 
 //export WriteConfigFiles
@@ -280,10 +166,10 @@ func StartNodeService(name *C.char) *C.char {
 	defer instMu.Unlock()
 
 	node := C.GoString(name)
-	if _, ok := procMap.Load(node); ok && xray.GetXrayState() {
+	if _, ok := procMap.Load(node); ok && desktopCoreRunning() {
 		return C.CString("success")
 	}
-	if xray.GetXrayState() {
+	if desktopCoreRunning() {
 		return C.CString("error:already running")
 	}
 
@@ -292,7 +178,9 @@ func StartNodeService(name *C.char) *C.char {
 	if err != nil {
 		return C.CString("error:" + err.Error())
 	}
-	if err := startXrayInternal(data); err != nil {
+	// Proxy mode does not need a UAC transition.  TUN mode uses StartXray
+	// below, which launches the same libXray helper with the "runas" verb.
+	if err := startDesktopCoreWithVerb(data, "open"); err != nil {
 		return C.CString("error:" + err.Error())
 	}
 	procMap.Store(node, true)
@@ -306,16 +194,16 @@ func StopNodeService(name *C.char) *C.char {
 
 	node := C.GoString(name)
 	if _, ok := procMap.Load(node); ok {
-		if xray.GetXrayState() {
-			if err := stopXrayInternal(); err != nil {
+		if desktopCoreRunning() {
+			if err := stopDesktopCore(); err != nil {
 				return C.CString("error:" + err.Error())
 			}
 		}
 		procMap.Delete(node)
 		return C.CString("success")
 	}
-	if xray.GetXrayState() {
-		if err := stopXrayInternal(); err != nil {
+	if desktopCoreRunning() {
+		if err := stopDesktopCore(); err != nil {
 			return C.CString("error:" + err.Error())
 		}
 	}
@@ -326,7 +214,7 @@ func StopNodeService(name *C.char) *C.char {
 //export CheckNodeStatus
 func CheckNodeStatus(name *C.char) C.int {
 	node := C.GoString(name)
-	if _, ok := procMap.Load(node); ok && xray.GetXrayState() {
+	if _, ok := procMap.Load(node); ok && desktopCoreRunning() {
 		return 1
 	}
 	return 0
@@ -349,11 +237,8 @@ func StartXray(configC *C.char) *C.char {
 	instMu.Lock()
 	defer instMu.Unlock()
 
-	if xray.GetXrayState() {
-		return C.CString("error:already running")
-	}
 	cfgData := []byte(C.GoString(configC))
-	if err := startXrayInternal(cfgData); err != nil {
+	if err := startDesktopCore(cfgData); err != nil {
 		return C.CString("error:" + err.Error())
 	}
 	return C.CString("success")
@@ -364,10 +249,10 @@ func StopXray() *C.char {
 	instMu.Lock()
 	defer instMu.Unlock()
 
-	if !xray.GetXrayState() {
+	if !desktopCoreRunning() {
 		return C.CString("error:not running")
 	}
-	if err := stopXrayInternal(); err != nil {
+	if err := stopDesktopCore(); err != nil {
 		return C.CString("error:" + err.Error())
 	}
 	clearNodeRegistry()
@@ -377,15 +262,16 @@ func StopXray() *C.char {
 //export GetDesktopRuntimeSnapshot
 func GetDesktopRuntimeSnapshot() *C.char {
 	interfaceUp, defaultRoute, lastError := windowsTunnelInterfaceState()
-	if !xray.GetXrayState() {
+	running := desktopCoreRunning()
+	if !running {
 		interfaceUp = false
 		defaultRoute = false
 		lastError = ""
 	}
 	snapshot := desktopRuntimeSnapshot{
-		Running:                   xray.GetXrayState(),
-		MemoryBytes:               currentWorkingSetBytes(),
-		CPUPercent:                currentCPUPercent(),
+		Running:                   running,
+		MemoryBytes:               desktopCoreWorkingSetBytes(),
+		CPUPercent:                desktopCoreCPUPercent(),
 		TunnelInterface:           windowsTunnelInterfaceName,
 		TunnelInterfaceUp:         interfaceUp,
 		DefaultRouteThroughTunnel: defaultRoute,
