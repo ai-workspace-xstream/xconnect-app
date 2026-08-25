@@ -30,5 +30,27 @@ void main() {
         'mtu': 1500,
       });
     });
+
+    test('desktop TUN replaces sniffed destinations for the data plane', () {
+      expect(
+        VpnConfig.tunnelSniffingRouteOnlyForOperatingSystem('windows'),
+        isFalse,
+      );
+      expect(
+        VpnConfig.tunnelSniffingRouteOnlyForOperatingSystem('linux'),
+        isFalse,
+      );
+    });
+
+    test('Apple Packet Tunnel keeps route-only sniffing', () {
+      expect(
+        VpnConfig.tunnelSniffingRouteOnlyForOperatingSystem('macos'),
+        isTrue,
+      );
+      expect(
+        VpnConfig.tunnelSniffingRouteOnlyForOperatingSystem('ios'),
+        isTrue,
+      );
+    });
   });
 }

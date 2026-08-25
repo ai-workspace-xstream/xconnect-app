@@ -1194,7 +1194,9 @@ class VpnConfig {
         ),
         "sniffing": {
           "enabled": GlobalState.sniffingEnabled.value,
-          "routeOnly": true,
+          "routeOnly": tunnelSniffingRouteOnlyForOperatingSystem(
+            Platform.operatingSystem,
+          ),
           "destOverride": <String>["http", "tls", "quic"],
         }
       });
@@ -1230,5 +1232,14 @@ class VpnConfig {
         });
     }
     return settings;
+  }
+
+  /// Desktop TUN needs the sniffed destination to replace the original IP so
+  /// gVisor receives response traffic for proxied TCP/UDP flows. Apple Packet
+  /// Tunnel providers keep the existing route-only behavior.
+  static bool tunnelSniffingRouteOnlyForOperatingSystem(
+    String operatingSystem,
+  ) {
+    return operatingSystem != 'windows' && operatingSystem != 'linux';
   }
 }
