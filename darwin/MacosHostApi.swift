@@ -130,7 +130,7 @@ class DarwinHostApiImpl: DarwinHostApi {
     defaults.set(options, forKey: profileOptionsKey)
     defaults.removeObject(forKey: statusErrorKey)
 
-    #if os(iOS)
+    #if os(iOS) || os(macOS)
       loadOrCreateTunnelManager(staleManagerHint: staleManagerHint) { manager, error in
         if let error {
           let errorMessage = self.describeError(error)
