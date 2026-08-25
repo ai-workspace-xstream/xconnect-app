@@ -70,6 +70,17 @@ typedef InitTrayDart = void Function();
 typedef GetDesktopRuntimeSnapshotNative = ffi.Pointer<ffi.Char> Function();
 typedef GetDesktopRuntimeSnapshotDart = ffi.Pointer<ffi.Char> Function();
 
+DesktopIntegrationCommandDart? _lookupDesktopIntegrationCommand(
+  ffi.DynamicLibrary lib,
+) {
+  try {
+    return lib.lookupFunction<DesktopIntegrationCommandNative,
+        DesktopIntegrationCommandDart>('DesktopIntegrationCommand');
+  } catch (_) {
+    return null;
+  }
+}
+
 GetDesktopRuntimeSnapshotDart? _lookupGetDesktopRuntimeSnapshot(
   ffi.DynamicLibrary lib,
 ) {
@@ -118,9 +129,7 @@ class BridgeBindings {
           'StartXray',
         ),
         stopXray = lib.lookupFunction<StopXrayNative, StopXrayDart>('StopXray'),
-        desktopIntegrationCommand = lib.lookupFunction<
-            DesktopIntegrationCommandNative,
-            DesktopIntegrationCommandDart>('DesktopIntegrationCommand'),
+        desktopIntegrationCommand = _lookupDesktopIntegrationCommand(lib),
         initTray = lib.lookupFunction<InitTrayNative, InitTrayDart>('InitTray'),
         getDesktopRuntimeSnapshot = _lookupGetDesktopRuntimeSnapshot(lib);
 
@@ -134,7 +143,7 @@ class BridgeBindings {
   final IsXrayDownloadingDart isXrayDownloading;
   final StartXrayDart startXray;
   final StopXrayDart stopXray;
-  final DesktopIntegrationCommandDart desktopIntegrationCommand;
+  final DesktopIntegrationCommandDart? desktopIntegrationCommand;
   final InitTrayDart initTray;
   final GetDesktopRuntimeSnapshotDart? getDesktopRuntimeSnapshot;
 }
