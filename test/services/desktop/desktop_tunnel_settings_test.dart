@@ -3,23 +3,19 @@ import 'package:xconnect/services/vpn_config_service.dart';
 
 void main() {
   group('desktop tunnel inbound settings', () {
-    test('Windows uses a stable interface and automatic routing', () {
+    test('Windows lets the OS address the stable automatically-routed TUN', () {
       expect(VpnConfig.tunnelInboundSettingsForOperatingSystem('windows'), {
         'mtu': 1500,
         'name': 'XConnect',
-        'gateway': ['198.18.0.2/15', 'fc00::2/64'],
-        'dns': ['8.8.8.8', '2001:4860:4860::8888'],
         'autoSystemRoutingTable': ['0.0.0.0/0', '::/0'],
         'autoOutboundsInterface': 'auto',
       });
     });
 
-    test('Linux uses a stable interface and automatic routing', () {
+    test('Linux lets the OS address the stable automatically-routed TUN', () {
       expect(VpnConfig.tunnelInboundSettingsForOperatingSystem('linux'), {
         'mtu': 1500,
         'name': 'xconnect-tun0',
-        'gateway': ['198.18.0.2/15', 'fc00::2/64'],
-        'dns': ['8.8.8.8', '2001:4860:4860::8888'],
         'autoSystemRoutingTable': ['0.0.0.0/0', '::/0'],
         'autoOutboundsInterface': 'auto',
       });
