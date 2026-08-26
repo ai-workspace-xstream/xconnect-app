@@ -24,16 +24,18 @@ mkdir -p "$FLUTTER_LIB_DIR"
 # 启用CGO
 export CGO_ENABLED=1
 
-# 检测 Flutter clang 工具链
-FLUTTER_BIN=$(command -v flutter || true)
-if [ -n "$FLUTTER_BIN" ]; then
-  FLUTTER_ROOT=$(readlink -f "$FLUTTER_BIN" | xargs dirname | xargs dirname)
-  FLUTTER_ROOT=${FLUTTER_ROOT%/bin}
-  CANDIDATE_CC="$FLUTTER_ROOT/usr/bin/clang"
-  CANDIDATE_CXX="$FLUTTER_ROOT/usr/bin/clang++"
-  if [ -x "$CANDIDATE_CC" ] && [ -x "$CANDIDATE_CXX" ]; then
-    CC="$CANDIDATE_CC"
-    CXX="$CANDIDATE_CXX"
+# Detect the Flutter clang toolchain unless the caller selected one explicitly.
+if [ -z "${CC:-}" ] || [ -z "${CXX:-}" ]; then
+  FLUTTER_BIN=$(command -v flutter || true)
+  if [ -n "$FLUTTER_BIN" ]; then
+    FLUTTER_ROOT=$(readlink -f "$FLUTTER_BIN" | xargs dirname | xargs dirname)
+    FLUTTER_ROOT=${FLUTTER_ROOT%/bin}
+    CANDIDATE_CC="$FLUTTER_ROOT/usr/bin/clang"
+    CANDIDATE_CXX="$FLUTTER_ROOT/usr/bin/clang++"
+    if [ -x "$CANDIDATE_CC" ] && [ -x "$CANDIDATE_CXX" ]; then
+      CC="${CC:-$CANDIDATE_CC}"
+      CXX="${CXX:-$CANDIDATE_CXX}"
+    fi
   fi
 fi
 
@@ -50,6 +52,10 @@ export CXX
 
 echo ">>> Building Go shared library"
 go mod download
-CC=$CC GOOS=$GOOS GOARCH=$GOARCH go build -buildmode=c-shared -o "$FLUTTER_LIB_DIR/libgo_native_bridge.so"
+CC=$CC GOOS=$GOOS GOARCH=$GOARCH go build \
+  -trimpath \
+  -ldflags="-s -w" \
+  -buildmode=c-shared \
+  -o "$FLUTTER_LIB_DIR/libgo_native_bridge.so"
 
 echo ">>> Build complete: $FLUTTER_LIB_DIR/libgo_native_bridge.so"

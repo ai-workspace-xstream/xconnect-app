@@ -13,10 +13,20 @@ struct _MyApplication {
   GtkWindow* main_window;
 };
 
+static gboolean can_restore_from_tray(GtkWidget* widget) {
+#ifdef GDK_WINDOWING_X11
+  GdkDisplay* display = gtk_widget_get_display(widget);
+  return GDK_IS_X11_DISPLAY(display);
+#else
+  return FALSE;
+#endif
+}
+
 static gboolean window_state_event(GtkWidget* widget, GdkEventWindowState* event,
                                    gpointer user_data) {
   if (event->changed_mask & GDK_WINDOW_STATE_ICONIFIED &&
-      (event->new_window_state & GDK_WINDOW_STATE_ICONIFIED)) {
+      (event->new_window_state & GDK_WINDOW_STATE_ICONIFIED) &&
+      can_restore_from_tray(widget)) {
     gtk_widget_hide(widget);
   }
   return FALSE;

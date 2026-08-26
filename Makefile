@@ -139,11 +139,12 @@ build-windows-x64: check-flutter check-go
 
 build-linux-x64: check-flutter check-go
 	@echo ">>> Building Linux x64 release"
+	CC="$${CC:-$$(command -v clang)}" \
+	CXX="$${CXX:-$$(command -v clang++)}" \
 	./build_scripts/build_linux.sh
-	CC=/snap/flutter/current/usr/bin/clang \
-	CXX=/snap/flutter/current/usr/bin/clang++ \
+	CC="$${CC:-$$(command -v clang)}" \
+	CXX="$${CXX:-$$(command -v clang++)}" \
 	$(FLUTTER) build linux --release -v $(DART_DEFINES)
-	@cp linux/lib/libgo_native_bridge.so build/linux/x64/release/bundle/lib/ 2>/dev/null || true
 	@echo ">>> Build complete: build/linux/x64/release/bundle/xconnect"
 
 build-ios-ipa: check-flutter check-macos check-git-submodules

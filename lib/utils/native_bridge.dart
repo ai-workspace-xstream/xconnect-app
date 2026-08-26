@@ -155,11 +155,21 @@ class NativeBridge {
       return;
     }
     _linuxDesktopInitialized = true;
-    if (_useFfi) {
+    if (_useFfi &&
+        supportsLinuxTrayForSessionType(
+          Platform.environment['XDG_SESSION_TYPE'],
+        )) {
       try {
         _ffi.initTray();
       } catch (_) {}
     }
+  }
+
+  /// The current Linux tray implementation restores windows through X11.
+  /// Wayland sessions use normal dock minimization so the app cannot become
+  /// permanently hidden after the window is minimized.
+  static bool supportsLinuxTrayForSessionType(String? sessionType) {
+    return sessionType?.trim().toLowerCase() == 'x11';
   }
 
   static Future<LinuxDesktopIntegrationStatus>

@@ -1,12 +1,26 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:sqlite3/open.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import '../utils/global_config.dart';
 
 class SqliteNodeStore {
   static Database? _db;
+
+  static void _configureLinuxLibrary() {
+    if (Platform.isLinux) {
+      // Ubuntu's runtime package exposes the stable SONAME. The unversioned
+      // libsqlite3.so name belongs to the development package and is normally
+      // absent on end-user systems.
+      open.overrideFor(
+        OperatingSystem.linux,
+        () => DynamicLibrary.open('libsqlite3.so.0'),
+      );
+    }
+  }
 
   static Future<Database> _openDb() async {
     if (_db != null) {
@@ -18,6 +32,7 @@ class SqliteNodeStore {
     final dbFile = File(dbPath);
     await dbFile.parent.create(recursive: true);
 
+    _configureLinuxLibrary();
     final db = sqlite3.open(dbPath);
     db.execute('''
       CREATE TABLE IF NOT EXISTS vpn_nodes (

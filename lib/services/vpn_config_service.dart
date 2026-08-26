@@ -404,7 +404,7 @@ class VpnConfig {
     );
 
     try {
-      await NativeBridge.writeConfigFiles(
+      final writeResult = await NativeBridge.writeConfigFiles(
         xrayConfigPath: xrayConfigPath,
         xrayConfigContent: xrayConfigContent,
         servicePath: servicePath,
@@ -413,6 +413,9 @@ class VpnConfig {
         vpnNodesConfigContent: vpnNodesConfigContent,
         password: password,
       );
+      if (!writeResult.toLowerCase().startsWith('success')) {
+        throw StateError(writeResult);
+      }
 
       setMessage('✅ 配置已保存: $xrayConfigPath');
       setMessage('✅ 服务项已生成: $servicePath');
