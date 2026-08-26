@@ -36,6 +36,9 @@ mkdir -p "$STAGE_DIR/opt/xconnect"
 mkdir -p "$STAGE_DIR/usr/bin"
 mkdir -p "$STAGE_DIR/usr/share/applications"
 mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "$STAGE_DIR/usr/libexec/xconnect"
+mkdir -p "$STAGE_DIR/usr/share/polkit-1/actions"
+mkdir -p "$STAGE_DIR/etc/ld.so.conf.d"
 
 echo ">>> Staging Linux bundle for native packages ..."
 rsync -a --delete "$BUNDLE_DIR/" "$STAGE_DIR/opt/xconnect/"
@@ -60,6 +63,12 @@ EOF
 
 cp "$PROJECT_ROOT/assets/logo.png" \
   "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps/xconnect.png"
+cp "$PROJECT_ROOT/scripts/linux/xconnect-net-helper" \
+  "$STAGE_DIR/usr/libexec/xconnect/xconnect-net-helper"
+cp "$PROJECT_ROOT/packaging/linux/org.xconnect.policy" \
+  "$STAGE_DIR/usr/share/polkit-1/actions/org.xconnect.policy"
+chmod 0755 "$STAGE_DIR/usr/libexec/xconnect/xconnect-net-helper"
+printf '%s\n' '/opt/xconnect/lib' > "$STAGE_DIR/etc/ld.so.conf.d/xconnect.conf"
 
 cat > "$NFPM_CONFIG" <<EOF
 name: xconnect
@@ -78,14 +87,24 @@ license: Apache-2.0
 depends:
   - libgtk-3-0
   - libayatana-appindicator3-1
+  - libnotify-bin
+  - "pkexec | policykit-1"
+  - iproute2
+  - libcap2-bin
   - libx11-6
   - libstdc++6
+  - libsqlite3-0
 overrides:
   rpm:
     depends:
-      - gtk3
+      - libappindicator-gtk3
+      - libnotify
+      - polkit
+      - iproute
+      - libcap
       - libX11
       - libstdc++
+      - sqlite-libs
 contents:
   - src: ${STAGE_DIR}/opt/xconnect/
     dst: /opt/xconnect
@@ -97,6 +116,17 @@ contents:
     dst: /usr/share/applications/xconnect.desktop
   - src: ${STAGE_DIR}/usr/share/icons/hicolor/256x256/apps/xconnect.png
     dst: /usr/share/icons/hicolor/256x256/apps/xconnect.png
+  - src: ${STAGE_DIR}/usr/libexec/xconnect/xconnect-net-helper
+    dst: /usr/libexec/xconnect/xconnect-net-helper
+    file_info:
+      mode: 0755
+  - src: ${STAGE_DIR}/usr/share/polkit-1/actions/org.xconnect.policy
+    dst: /usr/share/polkit-1/actions/org.xconnect.policy
+  - src: ${STAGE_DIR}/etc/ld.so.conf.d/xconnect.conf
+    dst: /etc/ld.so.conf.d/xconnect.conf
+scripts:
+  postinstall: ${PROJECT_ROOT}/packaging/nfpm/postinstall.sh
+  postremove: ${PROJECT_ROOT}/packaging/nfpm/postremove.sh
 EOF
 
 echo ">>> Building .deb package ..."

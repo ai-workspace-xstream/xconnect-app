@@ -710,6 +710,18 @@ class XhttpAdvancedConfig {
 
 /// 用于获取应用相关的配置信息
 class GlobalApplicationConfig {
+  static String get _linuxConfigHome {
+    final xdgConfigHome = Platform.environment['XDG_CONFIG_HOME'];
+    if (xdgConfigHome != null && xdgConfigHome.trim().isNotEmpty) {
+      return xdgConfigHome;
+    }
+    final home = Platform.environment['HOME'];
+    if (home != null && home.trim().isNotEmpty) {
+      return '$home/.config';
+    }
+    return '.config';
+  }
+
   /// 沙盒化应用目录结构管理
   static Future<String> getSandboxBasePath() async {
     final baseDir = await getApplicationSupportDirectory();
@@ -824,8 +836,11 @@ class GlobalApplicationConfig {
       case 'windows':
         return '$windowsBasePath\\xray.exe';
       case 'linux':
-        final home = Platform.environment['HOME'] ?? '~';
-        return '$home/.local/bin/xray';
+        final home = Platform.environment['HOME'];
+        if (home != null && home.trim().isNotEmpty) {
+          return '$home/.local/bin/xray';
+        }
+        return '.local/bin/xray';
       default:
         final baseDir = await getApplicationSupportDirectory();
         final binDir = Directory('${baseDir.path}/bin');
@@ -868,7 +883,9 @@ class GlobalApplicationConfig {
             Platform.environment['ProgramFiles'] ?? 'C:\\Program Files';
         return '$base\\XConnect\\';
       case 'linux':
-        return '/opt/etc/';
+        final configDir = Directory('$_linuxConfigHome/xconnect');
+        await configDir.create(recursive: true);
+        return '${configDir.path}/';
       default:
         final configsPath = await getConfigsPath();
         return '$configsPath/';
@@ -888,9 +905,7 @@ class GlobalApplicationConfig {
         return '${xconnectDir.path}\\vpn_nodes.json';
 
       case 'linux':
-        final home = Platform.environment['HOME'] ??
-            (await getApplicationSupportDirectory()).path;
-        final xconnectDir = Directory('$home/.config/xconnect');
+        final xconnectDir = Directory('$_linuxConfigHome/xconnect');
         await xconnectDir.create(recursive: true);
         return '${xconnectDir.path}/vpn_nodes.json';
 
@@ -923,7 +938,9 @@ class GlobalApplicationConfig {
         final servicesPath = await getServicesPath();
         return '$servicesPath/$serviceName';
       case 'linux':
-        return '/etc/systemd/system/$serviceName';
+        final servicesDir = Directory('$_linuxConfigHome/systemd/user');
+        await servicesDir.create(recursive: true);
+        return '${servicesDir.path}/$serviceName';
       case 'windows':
         return '$windowsBasePath\\$serviceName';
       default:

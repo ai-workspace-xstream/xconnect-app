@@ -15,4 +15,11 @@ void main() {
     expect(status.privilegeReady, isTrue);
     expect(status.message, 'ok');
   });
+
+  test('Linux tray bridge is limited to sessions it can restore', () {
+    expect(NativeBridge.supportsLinuxTrayForSessionType('x11'), isTrue);
+    expect(NativeBridge.supportsLinuxTrayForSessionType(' X11 '), isTrue);
+    expect(NativeBridge.supportsLinuxTrayForSessionType('wayland'), isFalse);
+    expect(NativeBridge.supportsLinuxTrayForSessionType(null), isFalse);
+  });
 }

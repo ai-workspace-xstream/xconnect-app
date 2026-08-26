@@ -23,14 +23,20 @@ contents:
       mode: 0755
   - src: ./dist/linux/package-root/usr/share/polkit-1/actions/org.xconnect.policy
     dst: /usr/share/polkit-1/actions/org.xconnect.policy
+  - src: ./dist/linux/package-root/etc/ld.so.conf.d/xconnect.conf
+    dst: /etc/ld.so.conf.d/xconnect.conf
 overrides:
   deb:
     depends:
+      - libgtk-3-0
       - libayatana-appindicator3-1
       - libnotify-bin
-      - policykit-1
+      - "pkexec | policykit-1"
       - iproute2
       - libcap2-bin
+      - libx11-6
+      - libstdc++6
+      - libsqlite3-0
   rpm:
     depends:
       - libappindicator-gtk3
@@ -38,5 +44,9 @@ overrides:
       - polkit
       - iproute
       - libcap
+      - libX11
+      - libstdc++
+      - sqlite-libs
 scripts:
   postinstall: ./packaging/nfpm/postinstall.sh
+  postremove: ./packaging/nfpm/postremove.sh

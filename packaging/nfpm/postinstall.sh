@@ -15,3 +15,7 @@ fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache /usr/share/icons/hicolor >/dev/null 2>&1 || true
 fi
+
+if command -v ldconfig >/dev/null 2>&1; then
+  ldconfig
+fi

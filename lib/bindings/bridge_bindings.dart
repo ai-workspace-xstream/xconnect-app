@@ -92,16 +92,24 @@ GetDesktopRuntimeSnapshotDart? _lookupGetDesktopRuntimeSnapshot(
   }
 }
 
+CreateWindowsServiceDart? _lookupCreateWindowsService(
+  ffi.DynamicLibrary lib,
+) {
+  try {
+    return lib.lookupFunction<CreateWindowsServiceNative,
+        CreateWindowsServiceDart>('CreateWindowsService');
+  } catch (_) {
+    return null;
+  }
+}
+
 class BridgeBindings {
   BridgeBindings(ffi.DynamicLibrary lib)
       : startNodeService =
             lib.lookupFunction<StartNodeServiceNative, StartNodeServiceDart>(
           'StartNodeService',
         ),
-        createWindowsService = lib.lookupFunction<CreateWindowsServiceNative,
-            CreateWindowsServiceDart>(
-          'CreateWindowsService',
-        ),
+        createWindowsService = _lookupCreateWindowsService(lib),
         stopNodeService =
             lib.lookupFunction<StopNodeServiceNative, StopNodeServiceDart>(
           'StopNodeService',
@@ -134,7 +142,7 @@ class BridgeBindings {
         getDesktopRuntimeSnapshot = _lookupGetDesktopRuntimeSnapshot(lib);
 
   final StartNodeServiceDart startNodeService;
-  final CreateWindowsServiceDart createWindowsService;
+  final CreateWindowsServiceDart? createWindowsService;
   final StopNodeServiceDart stopNodeService;
   final WriteConfigFilesDart writeConfigFiles;
   final CheckNodeStatusDart checkNodeStatus;

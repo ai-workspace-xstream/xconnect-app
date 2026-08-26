@@ -8,9 +8,11 @@ flutter pub get
 
 case "$platform" in
   linux)
-    ./build_scripts/build_linux.sh
-    flutter test --reporter expanded || true
-    flutter build linux --release -v
+    linux_cc="${CC:-$(command -v clang)}"
+    linux_cxx="${CXX:-$(command -v clang++)}"
+    CC="$linux_cc" CXX="$linux_cxx" ./build_scripts/build_linux.sh
+    flutter test --reporter expanded
+    CC="$linux_cc" CXX="$linux_cxx" flutter build linux --release -v
     bash ./build_scripts/package_linux_bundle.sh
     if ! command -v nfpm >/dev/null 2>&1; then
       go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.3

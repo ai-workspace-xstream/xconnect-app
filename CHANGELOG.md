@@ -1,5 +1,20 @@
 # Unreleased
 
+- Added verified Ubuntu 26.04 Linux builds, including native GNOME Wayland
+  minimize behavior and X11-only legacy tray integration.
+- Linux DEB/RPM packages now include the privileged network helper, PolicyKit
+  policy, capability setup hook, and complete runtime dependencies required by
+  System Tunnel mode.
+- Linux Flutter bundles now always install the Go native bridge library instead
+  of relying on a best-effort Makefile copy.
+- Linux release bridges now omit Go debug symbols and local source paths to
+  reduce installed and downloadable artifact size.
+- Linux now loads SQLite through its stable `libsqlite3.so.0` runtime SONAME,
+  so end users do not need the SQLite development package.
+- Linux capability-marked packages retain a secure origin-relative native
+  library path so System Tunnel binaries can load their bundled bridge.
+- Linux native packages register their bundled bridge directory with the
+  system loader cache, allowing capability-marked binaries to start securely.
 - Windows System Tunnel now waits for the named `XConnect` interface and its
   default route before reporting a successful connection.
 - Linux System Tunnel now uses the named `xconnect-tun0` interface with
