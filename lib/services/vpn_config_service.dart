@@ -1213,9 +1213,11 @@ class VpnConfig {
     String operatingSystem,
   ) {
     final settings = <String, dynamic>{'mtu': 1500};
+    // Let each desktop OS own interface addressing and DNS. Fixed TUN
+    // addresses can collide with another Wintun/TUN client, while a fixed DNS
+    // server bypasses the user's resolver policy. Xray only needs on-link
+    // routes here; autoOutboundsInterface keeps its uplink outside the TUN.
     const systemRoutedTunnelSettings = <String, dynamic>{
-      'gateway': <String>['198.18.0.2/15', 'fc00::2/64'],
-      'dns': <String>['8.8.8.8', '2001:4860:4860::8888'],
       'autoSystemRoutingTable': <String>['0.0.0.0/0', '::/0'],
       'autoOutboundsInterface': 'auto',
     };
