@@ -52,6 +52,7 @@ linux/app_icon.png
 # Generated FFI artifacts
 bindings/*.so
 bindings/*.dll
+bindings/*.exe
 bindings/*.h
 linux/lib/
 # Windows temporary iconset and generated ico

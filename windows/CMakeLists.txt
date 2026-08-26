@@ -72,6 +72,7 @@ endif()
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 set(GO_BRIDGE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../bindings/libgo_native_bridge.dll")
+set(GO_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../bindings/xconnect-core.exe")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -88,6 +89,15 @@ if(EXISTS "${GO_BRIDGE_PATH}")
 else()
   message(FATAL_ERROR
     "Missing Windows Go bridge: ${GO_BRIDGE_PATH}. Run build_scripts/build_windows.sh before flutter build windows.")
+endif()
+
+if(EXISTS "${GO_CORE_PATH}")
+  install(PROGRAMS "${GO_CORE_PATH}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/bin"
+    COMPONENT Runtime)
+else()
+  message(FATAL_ERROR
+    "Missing Windows libXray core: ${GO_CORE_PATH}. Run build_scripts/build_windows.sh before flutter build windows.")
 endif()
 
 if(PLUGIN_BUNDLED_LIBRARIES)
