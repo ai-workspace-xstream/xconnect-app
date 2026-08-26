@@ -1194,7 +1194,9 @@ class VpnConfig {
         ),
         "sniffing": {
           "enabled": GlobalState.sniffingEnabled.value,
-          "routeOnly": true,
+          "routeOnly": tunnelSniffingRouteOnlyForOperatingSystem(
+            Platform.operatingSystem,
+          ),
           "destOverride": <String>["http", "tls", "quic"],
         }
       });
@@ -1211,18 +1213,33 @@ class VpnConfig {
     String operatingSystem,
   ) {
     final settings = <String, dynamic>{'mtu': 1500};
+    const systemRoutedTunnelSettings = <String, dynamic>{
+      'gateway': <String>['198.18.0.2/15', 'fc00::2/64'],
+      'dns': <String>['8.8.8.8', '2001:4860:4860::8888'],
+      'autoSystemRoutingTable': <String>['0.0.0.0/0', '::/0'],
+      'autoOutboundsInterface': 'auto',
+    };
     switch (operatingSystem) {
       case 'windows':
         settings.addAll(<String, dynamic>{
           'name': 'XConnect',
-          'autoRoute': true,
+          ...systemRoutedTunnelSettings,
         });
       case 'linux':
         settings.addAll(<String, dynamic>{
           'name': 'xconnect-tun0',
-          'autoRoute': true,
+          ...systemRoutedTunnelSettings,
         });
     }
     return settings;
+  }
+
+  /// Desktop TUN needs the sniffed destination to replace the original IP so
+  /// gVisor receives response traffic for proxied TCP/UDP flows. Apple Packet
+  /// Tunnel providers keep the existing route-only behavior.
+  static bool tunnelSniffingRouteOnlyForOperatingSystem(
+    String operatingSystem,
+  ) {
+    return operatingSystem != 'windows' && operatingSystem != 'linux';
   }
 }
