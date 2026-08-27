@@ -84,6 +84,22 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 			if requestedNode := strings.TrimSpace(request.NodeID); requestedNode != "" && requestedNode != lastKnown.NodeID {
 				return JoinResult{}, fault.New(fault.CodeStateConflict, "join existing device", nil)
 			}
+			runtimeStatus, statusErr := j.runtime.Status(ctx)
+			if statusErr != nil {
+				return JoinResult{}, fault.New(fault.CodeRuntimeStatusFailed, "read existing runtime status", statusErr)
+			}
+			if !runtimeStatus.Applied || runtimeStatus.Revision != lastKnown.Config.Revision || runtimeStatus.CoreID != model.CoreIDXray || !model.SupportedAdapterID(runtimeStatus.AdapterID) {
+				applyResult, applyErr := j.runtime.Apply(ctx, runtime.ApplyRequest{
+					Config:              lastKnown.Config,
+					WireGuardPrivateKey: lastKnown.WireGuardPrivateKey,
+				})
+				if applyErr == nil && (applyResult.Revision != lastKnown.Config.Revision || applyResult.CoreID != model.CoreIDXray || !model.SupportedAdapterID(applyResult.AdapterID)) {
+					applyErr = fault.New(fault.CodeRuntimeApplyFailed, "validate recovered runtime", nil)
+				}
+				if applyErr != nil {
+					return JoinResult{}, fault.New(runtimeApplyErrorCode(applyErr), "recover existing runtime", applyErr)
+				}
+			}
 			return JoinResult{
 				DeviceID:      lastKnown.DeviceID,
 				NetworkID:     lastKnown.NetworkID,
@@ -156,14 +172,11 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 			Config:              *checkpoint.Config,
 			WireGuardPrivateKey: checkpoint.WireGuardPrivateKey,
 		})
-		if err == nil && (applyResult.Revision != checkpoint.Config.Revision || applyResult.CoreID != model.CoreIDXray || applyResult.AdapterID != model.AdapterIDLibXray) {
+		if err == nil && (applyResult.Revision != checkpoint.Config.Revision || applyResult.CoreID != model.CoreIDXray || !model.SupportedAdapterID(applyResult.AdapterID)) {
 			err = fault.New(fault.CodeRuntimeApplyFailed, "validate runtime apply result", nil)
 		}
 		if err != nil {
-			code := fault.CodeRuntimeApplyFailed
-			if fault.Code(err) == fault.CodeRuntimeUnavailable {
-				code = fault.CodeRuntimeUnavailable
-			}
+			code := runtimeApplyErrorCode(err)
 			checkpoint.LastErrorCode = code
 			checkpoint.UpdatedAt = j.now().UTC()
 			_ = j.store.SaveCheckpoint(checkpoint)
@@ -220,6 +233,19 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 		NetworkID: lastKnown.NetworkID,
 		Revision:  lastKnown.Config.Revision,
 	}, nil
+}
+
+func runtimeApplyErrorCode(err error) string {
+	switch fault.Code(err) {
+	case fault.CodeRuntimeUnavailable,
+		fault.CodeRuntimeDependency,
+		fault.CodeRuntimePermission,
+		fault.CodeRuntimeProcessStale,
+		fault.CodeRuntimeRollbackFailed:
+		return fault.Code(err)
+	default:
+		return fault.CodeRuntimeApplyFailed
+	}
 }
 
 func (j *Joiner) loadOrCreateCheckpoint(request JoinRequest) (state.Checkpoint, error) {

@@ -14,7 +14,11 @@ const (
 	CodeInvalidConfig           = "invalid_config"
 	CodeUnsupportedRuntimeCore  = "unsupported_runtime_core"
 	CodeRuntimeUnavailable      = "runtime_unavailable"
+	CodeRuntimeDependency       = "runtime_dependency_missing"
+	CodeRuntimePermission       = "runtime_permission_denied"
 	CodeRuntimeApplyFailed      = "runtime_apply_failed"
+	CodeRuntimeProcessStale     = "runtime_process_stale"
+	CodeRuntimeRollbackFailed   = "runtime_rollback_failed"
 	CodeRuntimeStatusFailed     = "runtime_status_failed"
 	CodeNotJoined               = "not_joined"
 )

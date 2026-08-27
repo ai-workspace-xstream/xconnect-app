@@ -36,7 +36,11 @@ func Status(ctx context.Context, store *state.Store, tunnelRuntime runtime.Inter
 		return StatusResult{}, fault.New(fault.CodeRuntimeStatusFailed, "read runtime status", err)
 	}
 	return StatusResult{
-		Joined:    lastKnown.Phase == state.PhaseAcknowledged,
+		Joined: lastKnown.Phase == state.PhaseAcknowledged &&
+			runtimeStatus.Applied &&
+			runtimeStatus.Revision == lastKnown.Config.Revision &&
+			runtimeStatus.CoreID == model.CoreIDXray &&
+			model.SupportedAdapterID(runtimeStatus.AdapterID),
 		DeviceID:  lastKnown.DeviceID,
 		NetworkID: lastKnown.NetworkID,
 		Revision:  lastKnown.Config.Revision,

@@ -112,6 +112,24 @@ func TestProductionJoinFailsClosedWithoutPlatformRuntimeAndDoesNotAck(t *testing
 	}
 }
 
+func TestPlatformRuntimeSelectsLinuxOnlyExternalRuntime(t *testing.T) {
+	linuxRuntime := platformRuntime("linux", t.TempDir())
+	if _, ok := linuxRuntime.(*overlayruntime.Desktop); !ok {
+		t.Fatalf("linux runtime = %T, want desktop runtime", linuxRuntime)
+	}
+	darwinRuntime := platformRuntime("darwin", t.TempDir())
+	diagnostics, err := darwinRuntime.Diagnose(t.Context())
+	if err != nil {
+		t.Fatalf("darwin diagnose: %v", err)
+	}
+	if len(diagnostics) != 2 || diagnostics[1].Code != "protected_host_runtime_required" || !diagnostics[1].Healthy {
+		t.Fatalf("darwin diagnostics = %#v", diagnostics)
+	}
+	if _, err := darwinRuntime.Apply(t.Context(), overlayruntime.ApplyRequest{}); fault.Code(err) != fault.CodeRuntimeUnavailable {
+		t.Fatalf("darwin apply code = %q, err=%v", fault.Code(err), err)
+	}
+}
+
 func TestJoinAcceptsInviteURLControllerAndSelection(t *testing.T) {
 	controller := "https://accounts.example"
 	invite := "xconnect://join?controller=" + url.QueryEscape(controller) + "&network_id=net_private&node_id=gw_tokyo"

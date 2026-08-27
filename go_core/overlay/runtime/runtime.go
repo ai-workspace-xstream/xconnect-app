@@ -40,9 +40,23 @@ type Interface interface {
 // Unavailable is the production-safe Batch 02 default. It prevents an
 // enrollment-only CLI from acknowledging a config before a platform runtime
 // has actually applied it.
-type Unavailable struct{}
+type Unavailable struct {
+	diagnostics []Diagnostic
+}
 
-func NewUnavailable() *Unavailable { return &Unavailable{} }
+func NewUnavailable() *Unavailable {
+	return &Unavailable{diagnostics: []Diagnostic{{Code: "platform_runtime_available", Healthy: false}}}
+}
+
+// NewProtectedHostUnavailable represents a platform whose system networking
+// must be supplied by a protected native host (for example Apple's Packet
+// Tunnel extension), not by the external Linux command runtime.
+func NewProtectedHostUnavailable() *Unavailable {
+	return &Unavailable{diagnostics: []Diagnostic{
+		{Code: "platform_runtime_available", Healthy: false},
+		{Code: "protected_host_runtime_required", Healthy: true},
+	}}
+}
 
 func (r *Unavailable) Apply(context.Context, ApplyRequest) (ApplyResult, error) {
 	return ApplyResult{}, fault.New(fault.CodeRuntimeUnavailable, "apply runtime profile", nil)
@@ -53,5 +67,5 @@ func (r *Unavailable) Status(context.Context) (Status, error) {
 }
 
 func (r *Unavailable) Diagnose(context.Context) ([]Diagnostic, error) {
-	return []Diagnostic{{Code: "platform_runtime_available", Healthy: false}}, nil
+	return append([]Diagnostic(nil), r.diagnostics...), nil
 }

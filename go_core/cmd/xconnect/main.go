@@ -32,9 +32,19 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client) error {
-	return runWithRuntimeFactory(ctx, args, stdout, stderr, httpClient, func(string) overlayruntime.Interface {
-		return overlayruntime.NewUnavailable()
+	return runWithRuntimeFactory(ctx, args, stdout, stderr, httpClient, func(stateDirectory string) overlayruntime.Interface {
+		return platformRuntime(runtime.GOOS, stateDirectory)
 	})
+}
+
+func platformRuntime(goos, stateDirectory string) overlayruntime.Interface {
+	if goos == "linux" {
+		return overlayruntime.NewLinuxDesktop(stateDirectory)
+	}
+	if goos == "darwin" {
+		return overlayruntime.NewProtectedHostUnavailable()
+	}
+	return overlayruntime.NewUnavailable()
 }
 
 func runWithRuntimeFactory(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory) error {

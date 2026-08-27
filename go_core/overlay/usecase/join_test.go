@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,20 @@ type controlPlaneFixture struct {
 	configFailure int
 	ackFailure    int
 	config        model.Config
+}
+
+type externalXrayRuntime struct {
+	overlayruntime.Fake
+}
+
+func (r *externalXrayRuntime) Apply(ctx context.Context, request overlayruntime.ApplyRequest) (overlayruntime.ApplyResult, error) {
+	result, err := r.Fake.Apply(ctx, request)
+	if err != nil {
+		return result, err
+	}
+	result.AdapterID = model.AdapterIDXrayCore
+	r.StatusResult.AdapterID = model.AdapterIDXrayCore
+	return result, nil
 }
 
 func newControlPlaneFixture(t *testing.T) *controlPlaneFixture {
@@ -212,6 +227,24 @@ func TestJoinSuccessUsesVersionedAPIAndPersistsSecureState(t *testing.T) {
 	}
 }
 
+func TestJoinAcceptsExternalXrayCoreAdapterAfterRealApply(t *testing.T) {
+	fixture := newControlPlaneFixture(t)
+	tunnelRuntime := &externalXrayRuntime{}
+	joiner, _ := newJoiner(t, fixture, tunnelRuntime)
+
+	result, err := joiner.Join(t.Context(), joinRequest(fixture.server.URL))
+	if err != nil {
+		t.Fatalf("join external Xray runtime: %v", err)
+	}
+	if result.Revision != fixture.config.Revision {
+		t.Fatalf("unexpected join result: %#v", result)
+	}
+	_, _, ackCalls := fixture.calls()
+	if ackCalls != 1 {
+		t.Fatalf("ACK calls = %d, want 1 after external runtime apply", ackCalls)
+	}
+}
+
 func TestRepeatedJoinIsIdempotent(t *testing.T) {
 	fixture := newControlPlaneFixture(t)
 	runtime := &overlayruntime.Fake{}
@@ -231,6 +264,50 @@ func TestRepeatedJoinIsIdempotent(t *testing.T) {
 	registerCalls, configCalls, ackCalls := fixture.calls()
 	if registerCalls != 1 || configCalls != 1 || ackCalls != 1 || runtime.ApplyCalls != 1 {
 		t.Fatalf("idempotent calls = register:%d config:%d apply:%d ack:%d", registerCalls, configCalls, runtime.ApplyCalls, ackCalls)
+	}
+}
+
+func TestRepeatedJoinRecoversStoppedRuntimeWithoutRepeatingControlPlaneCalls(t *testing.T) {
+	fixture := newControlPlaneFixture(t)
+	tunnelRuntime := &overlayruntime.Fake{}
+	joiner, _ := newJoiner(t, fixture, tunnelRuntime)
+	request := joinRequest(fixture.server.URL)
+	if _, err := joiner.Join(t.Context(), request); err != nil {
+		t.Fatalf("first join: %v", err)
+	}
+	tunnelRuntime.StatusResult.Applied = false
+
+	result, err := joiner.Join(t.Context(), request)
+	if err != nil {
+		t.Fatalf("recover join: %v", err)
+	}
+	if !result.AlreadyJoined || tunnelRuntime.ApplyCalls != 2 {
+		t.Fatalf("runtime recovery result=%#v apply calls=%d", result, tunnelRuntime.ApplyCalls)
+	}
+	registerCalls, configCalls, ackCalls := fixture.calls()
+	if registerCalls != 1 || configCalls != 1 || ackCalls != 1 {
+		t.Fatalf("recovery repeated control-plane calls: register=%d config=%d ack=%d", registerCalls, configCalls, ackCalls)
+	}
+}
+
+func TestRepeatedJoinRuntimeRecoveryFailureDoesNotAckAgain(t *testing.T) {
+	fixture := newControlPlaneFixture(t)
+	tunnelRuntime := &overlayruntime.Fake{}
+	joiner, _ := newJoiner(t, fixture, tunnelRuntime)
+	request := joinRequest(fixture.server.URL)
+	if _, err := joiner.Join(t.Context(), request); err != nil {
+		t.Fatalf("first join: %v", err)
+	}
+	tunnelRuntime.StatusResult.Applied = false
+	tunnelRuntime.ApplyError = fault.New(fault.CodeRuntimeProcessStale, "stale PID", errors.New("untrusted executable"))
+
+	_, err := joiner.Join(t.Context(), request)
+	if fault.Code(err) != fault.CodeRuntimeProcessStale {
+		t.Fatalf("error code = %q, err=%v", fault.Code(err), err)
+	}
+	_, _, ackCalls := fixture.calls()
+	if ackCalls != 1 {
+		t.Fatalf("runtime recovery sent another ACK: %d", ackCalls)
 	}
 }
 
@@ -337,5 +414,72 @@ func TestRuntimeApplyFailureDoesNotAckOrLeakSecrets(t *testing.T) {
 	}
 	if checkpoint.Phase != state.PhaseConfigFetched || checkpoint.LastErrorCode != fault.CodeRuntimeApplyFailed {
 		t.Fatalf("unexpected failure checkpoint: %#v", checkpoint)
+	}
+}
+
+func TestRuntimeSafetyGateCodesRemainStableAndNeverAck(t *testing.T) {
+	for _, code := range []string{
+		fault.CodeRuntimeDependency,
+		fault.CodeRuntimePermission,
+		fault.CodeRuntimeProcessStale,
+		fault.CodeRuntimeRollbackFailed,
+	} {
+		t.Run(code, func(t *testing.T) {
+			fixture := newControlPlaneFixture(t)
+			tunnelRuntime := &overlayruntime.Fake{ApplyError: fault.New(code, "backend detail", errors.New("UUID 11111111-1111-1111-1111-111111111111"))}
+			joiner, store := newJoiner(t, fixture, tunnelRuntime)
+
+			_, err := joiner.Join(t.Context(), joinRequest(fixture.server.URL))
+			if fault.Code(err) != code {
+				t.Fatalf("error code = %q, want %q, err=%v", fault.Code(err), code, err)
+			}
+			if strings.Contains(err.Error(), "11111111-1111-1111-1111-111111111111") {
+				t.Fatalf("error leaked runtime details: %v", err)
+			}
+			_, _, ackCalls := fixture.calls()
+			if ackCalls != 0 {
+				t.Fatalf("ACK calls = %d, want 0", ackCalls)
+			}
+			checkpoint, loadErr := store.LoadCheckpoint()
+			if loadErr != nil {
+				t.Fatalf("load checkpoint: %v", loadErr)
+			}
+			if checkpoint.Phase != state.PhaseConfigFetched || checkpoint.LastErrorCode != code {
+				t.Fatalf("unexpected safety-gate checkpoint: %#v", checkpoint)
+			}
+		})
+	}
+}
+
+func TestStatusReportsJoinedOnlyWhenAcknowledgedRuntimeIsHealthy(t *testing.T) {
+	store := state.NewStore(t.TempDir())
+	config := validConfig()
+	if err := store.SaveLastKnown(state.LastKnown{
+		Server:    "https://accounts.example",
+		DeviceID:  config.Device.ID,
+		NetworkID: config.Network.ID,
+		Phase:     state.PhaseAcknowledged,
+		Config:    config,
+	}); err != nil {
+		t.Fatalf("save last-known: %v", err)
+	}
+	tunnelRuntime := &overlayruntime.Fake{StatusResult: overlayruntime.Status{
+		Available: true,
+		Applied:   false,
+		Revision:  config.Revision,
+		CoreID:    model.CoreIDXray,
+		AdapterID: model.AdapterIDXrayCore,
+	}}
+	result, err := usecase.Status(t.Context(), store, tunnelRuntime)
+	if err != nil {
+		t.Fatalf("status while stopped: %v", err)
+	}
+	if result.Joined {
+		t.Fatalf("stopped runtime reported joined: %#v", result)
+	}
+	tunnelRuntime.StatusResult.Applied = true
+	result, err = usecase.Status(t.Context(), store, tunnelRuntime)
+	if err != nil || !result.Joined {
+		t.Fatalf("healthy acknowledged runtime status=%#v err=%v", result, err)
 	}
 }

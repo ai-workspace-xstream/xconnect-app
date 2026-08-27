@@ -20,6 +20,7 @@ const (
 	SchemaVersionV1      = 1
 	CoreIDXray           = "xray"
 	AdapterIDLibXray     = "libXray"
+	AdapterIDXrayCore    = "xray-core"
 	WireRuntimeXrayCore  = "xray-core"
 	TransportVLESSTLS    = "vless-tls"
 	TransportSecurityTLS = "tls"
@@ -152,6 +153,10 @@ func (c Config) Validate() error {
 func (c Config) CoreID() string { return CoreIDXray }
 
 func (c Config) AdapterID() string { return AdapterIDLibXray }
+
+func SupportedAdapterID(adapterID string) bool {
+	return adapterID == AdapterIDLibXray || adapterID == AdapterIDXrayCore
+}
 
 func validPort(port int) bool { return port >= 1 && port <= 65535 }
 

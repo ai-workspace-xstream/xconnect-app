@@ -1,5 +1,12 @@
 # Unreleased
 
+- Added the real Linux XConnect-One CLI runtime for external Xray-core and
+  WireGuard, with private atomic profiles, Xray config/readiness and owned UDP
+  socket verification, WireGuard interface verification, revision-idempotent
+  apply, verified process identity, transactional rollback, and last-known-good
+  recovery. Failed or partial apply never acknowledges the controller config.
+- Kept macOS CLI networking fail-closed for the protected Packet Tunnel host
+  runtime; the Linux `wg-quick` path is never selected on Apple platforms.
 - Added the first `xconnect` CLI enrollment slice with a versioned Overlay v1
   HTTP client, resumable and idempotent Join checkpoints, private local state,
   Xray/libXray runtime validation, and `join`, `status`, and `diagnose` commands.
