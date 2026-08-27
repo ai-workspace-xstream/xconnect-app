@@ -21,6 +21,16 @@
 
 现有 `overlayctl` 能力迁入本仓并正式重命名为 `xconnect`。不发布 `overlayctl` 兼容二进制。
 
+## 产品组合关系
+
+XConnect-APP 是共享的五平台应用与连接运行时底座；XConnect-One 是其内置的零信任组网产品插件。两者共享账号会话、Flutter 外壳、安全存储、更新器、诊断框架和每个平台唯一的系统 VPN 入口，同时保持产品领域边界。
+
+- XConnect-APP 不硬编码 XConnect-One 的控制面、ACL 和传输语义。
+- XConnect-One 不复制平台 VPN、登录、密钥存储或发布链路。
+- 既有 Secure Tunnel 与 XConnect-One 可在同一 App 内被发现、配置和切换。
+- `xconnect join` 和 Flutter UI 均从产品注册表取得 XConnect-One，并调用同一 shared use case。
+- 首期采用随 App 编译和签名的内置插件；移动端不下载或执行商店审核之外的动态代码。
+
 ## 复用基线
 
 - Flutter UI 和现有账号/配置同步服务。
@@ -34,15 +44,25 @@
 ## 目标模块边界
 
 ```text
+product/sdk
+  ├─ ProductPlugin / ProductManifest
+  ├─ HostServices / Capability
+  └─ plugin contract testkit
+
+product/xconnect_one
+  ├─ 注册 CLI commands 与 Flutter routes
+  └─ 组合 overlay use cases/providers
+
 cmd/xconnect
-  └─ overlay/usecase
-      ├─ overlay/controlplane
-      ├─ overlay/enroll
-      ├─ overlay/config
-      ├─ overlay/policy
-      ├─ overlay/runtime
-      ├─ overlay/diagnostics
-      └─ overlay/state
+  └─ product registry → XConnect-One
+      └─ overlay/usecase
+          ├─ overlay/controlplane
+          ├─ overlay/enroll
+          ├─ overlay/config
+          ├─ overlay/policy
+          ├─ overlay/runtime
+          ├─ overlay/diagnostics
+          └─ overlay/state
 
 Flutter OverlayService
   └─ Pigeon/FFI
@@ -50,6 +70,20 @@ Flutter OverlayService
 ```
 
 CLI 与 Flutter UI 必须调用相同 Join/Up/Down/Sync use cases，不能维护两套状态机。
+
+## Product Plugin SPI
+
+插件契约至少包括 `Manifest`、`Register(HostServices)`、`Commands`、`Profiles` 和 `Health`。HostServices 采用最小权限，按 capability 暴露账号会话、Secret Store、系统 Tunnel Runtime、受控网络请求、事件总线、日志/指标、诊断和 UI route registration。
+
+XConnect-One 内部通过以下 provider 扩展：
+
+- `ControlPlaneProvider`：enroll、config、events、ACK。
+- `TransportProvider`：首期 VLESS/TLS/XUDP，后续可插入直连 WireGuard 或 QUIC。
+- `PolicyProvider`：验证、解释和本地快速拒绝。
+- `ProfileProvider`：生成平台无关 Tunnel Profile。
+- `DiagnosticsContributor`：向统一诊断包追加脱敏证据。
+
+manifest 包含 plugin ID、语义版本、Host API 范围、所需 capability、配置 schema 版本和签名信息。Host 在激活前校验兼容性与权限；插件初始化失败或崩溃不得破坏 XConnect-APP 的其他连接模式。
 
 ## Runtime SPI
 
@@ -84,6 +118,8 @@ Apple 平台继续遵守仓库约束：系统网络接管只使用 Packet Tunnel
 
 ### Batch 01：契约与 Shared Core
 
+- 建立 Product Plugin API、manifest schema、产品注册表、fake host 和 contract testkit。
+- 建立 XConnect-One 内置插件骨架，并注册 CLI/UI/Profile 能力。
 - 引入 Overlay OpenAPI 生成 client。
 - 建立 SignedConfig、Gateway/Peer、Policy 和 Runtime 状态模型。
 - 实现签名、generation、ETag 和 last-known-good 存储。
@@ -150,6 +186,7 @@ flutter test
 
 每个相关 Batch 还必须执行：
 
+- Product Plugin manifest、capability、故障隔离、升级/回滚 contract tests。
 - OpenAPI/JSON Schema contract tests。
 - Join 状态机故障注入。
 - 签名、generation、last-known-good 和 rollback cases。
