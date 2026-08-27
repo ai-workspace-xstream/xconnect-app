@@ -21,6 +21,8 @@
 
 现有 `overlayctl` 能力迁入本仓并正式重命名为 `xconnect`。不发布 `overlayctl` 兼容二进制。
 
+第一版唯一代理内核为 **Xray-core**，所有客户端平台复用仓库锁定的 **libXray** 集成。移除并禁止 sing-box runtime、dependency、adapter、config renderer、artifact、fallback 和 CI matrix。
+
 ## 产品组合关系
 
 XConnect-APP 是共享的五平台应用与连接运行时底座；XConnect-One 是其内置的零信任组网产品插件。两者共享账号会话、Flutter 外壳、安全存储、更新器、诊断框架和每个平台唯一的系统 VPN 入口，同时保持产品领域边界。
@@ -78,7 +80,7 @@ CLI 与 Flutter UI 必须调用相同 Join/Up/Down/Sync use cases，不能维护
 XConnect-One 内部通过以下 provider 扩展：
 
 - `ControlPlaneProvider`：enroll、config、events、ACK。
-- `TransportProvider`：首期 VLESS/TLS/XUDP，后续可插入直连 WireGuard 或 QUIC。
+- `TransportProvider`：v1 只注册由 `libXray/xray-core` 驱动的 VLESS/TLS/XUDP；其他 provider 不进入第一版。
 - `PolicyProvider`：验证、解释和本地快速拒绝。
 - `ProfileProvider`：生成平台无关 Tunnel Profile。
 - `DiagnosticsContributor`：向统一诊断包追加脱敏证据。
@@ -86,6 +88,8 @@ XConnect-One 内部通过以下 provider 扩展：
 manifest 包含 plugin ID、语义版本、Host API 范围、所需 capability、配置 schema 版本和签名信息。Host 在激活前校验兼容性与权限；插件初始化失败或崩溃不得破坏 XConnect-APP 的其他连接模式。
 
 ## Runtime SPI
+
+Runtime SPI 抽象平台 VPN 生命周期，不抽象多个代理内核。v1 只接受 core ID `xray`；配置或插件声明 `sing-box`/未知 core 时必须在 Prepare 前失败，且不得自动 fallback。
 
 共享接口至少包括：
 
@@ -105,12 +109,12 @@ type Runtime interface {
 
 平台系统入口保持唯一：
 
-| 平台 | 系统网络入口 |
-|---|---|
-| macOS/iOS | `NEPacketTunnelProvider` |
-| Android | `VpnService` |
-| Windows | Windows Service + Wintun/WireGuard backend |
-| Linux | systemd + kernel WireGuard/netlink，必要时 userspace backend |
+| 平台 | 系统网络入口 | 唯一代理内核 |
+|---|---|---|
+| macOS/iOS | `NEPacketTunnelProvider` | `libXray`（iOS 静态 `libxray.a`） |
+| Android | `VpnService` | `libXray`/JNI |
+| Windows | Windows Service + Wintun/WireGuard backend | `libXray` helper |
+| Linux | systemd + kernel WireGuard/netlink，必要时 userspace backend | `libXray` |
 
 Apple 平台继续遵守仓库约束：系统网络接管只使用 Packet Tunnel，不新增 sudo 路由修改或第二种系统入口。
 
@@ -120,6 +124,7 @@ Apple 平台继续遵守仓库约束：系统网络接管只使用 Packet Tunnel
 
 - 建立 Product Plugin API、manifest schema、产品注册表、fake host 和 contract testkit。
 - 建立 XConnect-One 内置插件骨架，并注册 CLI/UI/Profile 能力。
+- 固定 core ID `xray`；清除 sing-box 代码路径，并添加依赖树、配置 fixture 和发布物扫描门禁。
 - 引入 Overlay OpenAPI 生成 client。
 - 建立 SignedConfig、Gateway/Peer、Policy 和 Runtime 状态模型。
 - 实现签名、generation、ETag 和 last-known-good 存储。
@@ -187,6 +192,8 @@ flutter test
 每个相关 Batch 还必须执行：
 
 - Product Plugin manifest、capability、故障隔离、升级/回滚 contract tests。
+- `libXray/xray-core` 五平台构建和版本一致性检查。
+- sing-box dependency、symbol、配置键、二进制和 fallback 的负向扫描。
 - OpenAPI/JSON Schema contract tests。
 - Join 状态机故障注入。
 - 签名、generation、last-known-good 和 rollback cases。
