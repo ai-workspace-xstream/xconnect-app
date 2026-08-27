@@ -4,8 +4,7 @@
 
 ## 生成共享库
 
-APP 集成使用仓库锁定的 `libXray` submodule；`vendor/Xray-core` 仅作为 CLI/reference
-实现保留，不参与桌面 APP bridge 构建。
+APP 集成使用仓库锁定的 `libXray` submodule，不需要额外的 Xray core submodule。
 
 在仓库根目录执行：
 

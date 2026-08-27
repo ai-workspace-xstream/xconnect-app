@@ -18,8 +18,7 @@ bash build_scripts/build_windows.sh
 
 该脚本会将 `go_core` 编译为 `bindings/libgo_native_bridge.dll`，供 Dart FFI 通过 `DynamicLibrary.open` 加载。
 
-APP 集成使用仓库锁定的 `libXray` submodule；`vendor/Xray-core` 仅作为 CLI/reference
-实现保留，不参与 Windows APP bridge 构建，也不会在构建过程中被 patch。
+APP 集成使用仓库锁定的 `libXray` submodule，不需要额外的 Xray core submodule。
 
 如果你在排查 `go build` 相关问题，也可以进入 `go_core/` 目录单独执行构建命令并检查 `CGO_ENABLED`、`CC` 和 MinGW 工具链是否正确。
 

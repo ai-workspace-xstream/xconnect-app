@@ -1,7 +1,6 @@
-// xconnect-core is the Windows desktop runtime for XConnect.  It deliberately
-// links the libXray package directly instead of using vendor/Xray-core as a
-// second application runtime.  Keeping the core in its own process prevents
-// Xray's buffers and goroutines from sharing the Flutter process lifetime.
+// xconnect-core is the Windows desktop runtime for XConnect. It links the
+// libXray package directly and keeps the core in its own process, preventing
+// the runtime's buffers and goroutines from sharing the Flutter process lifetime.
 package main
 
 import (

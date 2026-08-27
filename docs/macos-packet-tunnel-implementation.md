@@ -770,7 +770,6 @@ Use this table as the first-pass map when another Codex session needs to debug o
 | `macos/PacketTunnel/PacketTunnelProvider.swift` | `startTunnel()`, `stopTunnel()`, `buildNetworkSettings()`, `resolvePacketFlowFileDescriptor()`, `resolveDarwinTunnelHandle()`, `sanitizeConfigForDarwinTun()`, `XrayTunnelBridge` | Packet Tunnel extension startup and in-process data plane | `NETunnelProviderManager` starts but tunnel still fails |
 | `go_core/bridge_apple.go` | `StartXrayTunnelWithFd`, `StopXrayTunnel`, `GetLastXrayTunnelError` | Swift-to-Go bridge entry used by Packet Tunnel | fd handoff succeeds but engine startup still fails |
 | `libXray/xray/xray.go` | `RunXrayFromJSON`, `StopXray`, state helpers | Local wrapper around xray runtime | Xray lifecycle behavior itself needs inspection |
-| `vendor/Xray-core/proxy/tun/tun_darwin.go` | Darwin tun adapter | Consumes `xray.tun.fd` and owns low-level tun runtime path | native Darwin tun behavior must be understood |
 | `build_scripts/build_packet_tunnel_bridge_macos.sh` | full script | Builds and signs `libxray_bridge.dylib` into the Packet Tunnel bundle | symbols are missing or bridge dylib packaging is broken |
 | `macos/PacketTunnel/PacketTunnel.entitlements` | entitlement plist | Packet Tunnel and App Group capabilities | authorization / signing / App Group issues appear |
 | `macos/Runner/Info.plist` | `PacketTunnelProviderBundleId` | Declares expected Packet Tunnel provider bundle id | manager cannot find the right provider |
