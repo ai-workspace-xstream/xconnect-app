@@ -42,6 +42,12 @@ final class ProductRegistry {
         'plugin_already_active',
       );
     }
+    if (manifest.delivery != PluginDelivery.builtIn) {
+      throw ProductRegistryException(
+        manifest.pluginId,
+        'unsupported_plugin_delivery',
+      );
+    }
     if (!manifest.hostApi.supports(hostApiVersion)) {
       throw ProductRegistryException(
         manifest.pluginId,

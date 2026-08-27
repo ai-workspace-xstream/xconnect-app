@@ -76,6 +76,41 @@ void main() {
       expect(registered, isFalse);
     });
 
+    test('rejects a signed bundle before executing plugin code', () async {
+      var registered = false;
+      var healthChecked = false;
+      final registry = ProductRegistry(
+        hostApiVersion: const ApiVersion(1, 0, 0),
+        hostServices: fakeHostServices(),
+      );
+      final plugin = FakeProductPlugin(
+        manifest: fakeManifest(
+          delivery: PluginDelivery.signedBundle,
+          signature: const ProductPluginSignature(
+            algorithm: 'ed25519',
+            keyId: 'future-signing-key',
+            value: 'not-verified-by-v1-host',
+          ),
+        ),
+        onRegister: (_) => registered = true,
+        onHealth: () => healthChecked = true,
+      );
+
+      await expectLater(
+        registry.activate(plugin),
+        throwsA(
+          isA<ProductRegistryException>().having(
+            (error) => error.code,
+            'code',
+            'unsupported_plugin_delivery',
+          ),
+        ),
+      );
+      expect(registered, isFalse);
+      expect(healthChecked, isFalse);
+      expect(registry.activeProducts, isEmpty);
+    });
+
     test('rejects unsupported core before registration', () async {
       var registered = false;
       final registry = ProductRegistry(

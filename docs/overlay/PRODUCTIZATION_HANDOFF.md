@@ -135,7 +135,9 @@ Apple 平台继续遵守仓库约束：系统网络接管只使用 Packet Tunnel
 已落地的 Batch 01 基线：
 
 - `lib/product/sdk/`：manifest、Host API 版本范围、最小权限 capability、
-  `HostServices` 作用域、插件贡献模型和原子产品注册表。
+  `HostServices` 作用域、插件贡献模型和原子产品注册表。v1 Host policy 仅激活
+  编译期 `built-in` 插件；保留的 `signed-bundle` manifest 类型在执行任何插件
+  代码前以 `unsupported_plugin_delivery` 拒绝。
 - `lib/product/xconnect_one/`：内置 XConnect-One 插件及 CLI、UI、Tunnel
   Profile 声明。
 - `lib/product/runtime/`：仅允许 `xray` core ID 和 `libXray` adapter，拒绝其他

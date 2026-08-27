@@ -25,6 +25,7 @@ final class FakeProductPlugin implements ProductPlugin {
     ProductHealth? health,
     this.registerError,
     this.onRegister,
+    this.onHealth,
   })  : _registration =
             registration ?? ProductRegistration(pluginId: manifest.pluginId),
         _health = health ??
@@ -39,6 +40,7 @@ final class FakeProductPlugin implements ProductPlugin {
   final ProductHealth _health;
   final Object? registerError;
   final void Function(HostServices services)? onRegister;
+  final void Function()? onHealth;
 
   @override
   Future<ProductRegistration> register(HostServices hostServices) async {
@@ -48,7 +50,10 @@ final class FakeProductPlugin implements ProductPlugin {
   }
 
   @override
-  Future<ProductHealth> health() async => _health;
+  Future<ProductHealth> health() async {
+    onHealth?.call();
+    return _health;
+  }
 }
 
 ProductManifest fakeManifest({
@@ -60,6 +65,8 @@ ProductManifest fakeManifest({
   ),
   Set<HostCapability> requiredCapabilities = const {},
   String runtimeCoreId = 'xray',
+  PluginDelivery delivery = PluginDelivery.builtIn,
+  ProductPluginSignature? signature,
 }) {
   return ProductManifest(
     pluginId: pluginId,
@@ -69,5 +76,7 @@ ProductManifest fakeManifest({
     configSchemaVersion: 1,
     requiredCapabilities: requiredCapabilities,
     runtimeCoreId: runtimeCoreId,
+    delivery: delivery,
+    signature: signature,
   );
 }
