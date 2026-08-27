@@ -11,6 +11,9 @@ fi
 git secrets --install
 git secrets --scan
 
+# XConnect-One v1 runtime policy
+bash ./scripts/ci/check_xconnect_one_runtime.sh
+
 # Flutter verification
 flutter pub get
 flutter analyze

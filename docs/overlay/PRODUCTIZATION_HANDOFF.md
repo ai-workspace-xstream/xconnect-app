@@ -1,6 +1,6 @@
 # XConnect-One Overlay：客户端实施计划
 
-状态：Batch 00 / planning
+状态：Batch 01 / implementation in progress
 
 长期特性分支：`codex/xconnect-overlay-productization`
 
@@ -131,6 +131,22 @@ Apple 平台继续遵守仓库约束：系统网络接管只使用 Packet Tunnel
 - 建立 fake control plane、fake runtime、fake clock。
 
 退出条件：契约 golden、签名失败、generation replay 和 rollback 单元测试通过。
+
+已落地的 Batch 01 基线：
+
+- `lib/product/sdk/`：manifest、Host API 版本范围、最小权限 capability、
+  `HostServices` 作用域、插件贡献模型和原子产品注册表。
+- `lib/product/xconnect_one/`：内置 XConnect-One 插件及 CLI、UI、Tunnel
+  Profile 声明。
+- `lib/product/runtime/`：仅允许 `xray` core ID 和 `libXray` adapter，拒绝其他
+  core 或 adapter 且不自动 fallback。
+- `test/product/`：manifest golden、capability 隔离、注册失败隔离、失败升级保留
+  旧版本，以及 XConnect-One 契约测试。
+- `scripts/ci/check_xconnect_one_runtime.sh`：依赖、运行时源码和发布物的负向扫描
+  门禁。
+
+OpenAPI client、SignedConfig/Policy/Runtime 状态模型、签名与 generation/LKG 存储
+仍属于后续 Batch 01 PR，不在本基线中伪造实现。
 
 ### Batch 02：`xconnect join` CLI
 

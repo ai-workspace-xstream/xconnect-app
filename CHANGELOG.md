@@ -1,5 +1,9 @@
 # Unreleased
 
+- Added the XConnect-One built-in Product Plugin SDK baseline with versioned
+  manifests, least-privilege HostServices capabilities, an atomic product
+  registry, CLI/UI/profile contributions, and an Xray-core/libXray-only runtime
+  policy enforced by unit tests and CI scanning.
 - Added verified Ubuntu 26.04 Linux builds, including native GNOME Wayland
   minimize behavior and X11-only legacy tray integration.
 - Linux DEB/RPM packages now include the privileged network helper, PolicyKit
