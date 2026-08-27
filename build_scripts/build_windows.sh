@@ -3,9 +3,7 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# The desktop app bridge links against the libXray module. vendor/Xray-core is
-# retained as a CLI/reference checkout and must not be patched or used as the
-# app integration source.
+# The desktop app bridge links directly against the libXray module.
 if [[ ! -f "$DIR/libXray/go.mod" ]]; then
   echo "Missing libXray submodule. Run: git submodule update --init libXray" >&2
   exit 1

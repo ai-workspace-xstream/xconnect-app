@@ -95,8 +95,8 @@ The following lists where the packet-tunnel related adapters, bridge code, and p
 	- TUN / tun2socks flow: `go_core/bridge_linux.go`, `go_core/bridge_windows.go` and `libXray/` wrappers describe how TUN inbound is handed to xray-core or tun2socks.
 	- Flutter-side FFI calls in `lib/utils/native_bridge.dart` call `startXray(configJson)` on these platforms when running TUN mode.
 
-- Vendor / core implementation references:
-	- `vendor/Xray-core/` and `libXray/` contain the lower-level tun adapters and integration notes (see `vendor/Xray-core/proxy/tun/README.md` for platform fd handling).
+- Core implementation reference:
+	- `libXray/` contains the lower-level runtime wrapper and integration notes.
 
 Notes:
 - When updating or extending platform behavior, keep adapters thin: prefer adding behavior in `go_core/*` or `libXray/` so the Flutter API surface (`lib/utils/native_bridge.dart`) remains stable.
