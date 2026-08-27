@@ -608,6 +608,14 @@ func WriteConfigFiles(xrayPathC, xrayContentC, servicePathC, serviceContentC, vp
 	return C.CString("success")
 }
 
+//export CreateWindowsService
+func CreateWindowsService(name, execPath, configPath *C.char) *C.char {
+	_ = name
+	_ = execPath
+	_ = configPath
+	return C.CString("error:not supported")
+}
+
 //export StartNodeService
 func StartNodeService(name *C.char) *C.char {
 	instMu.Lock()
