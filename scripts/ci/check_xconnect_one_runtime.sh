@@ -37,6 +37,12 @@ rg --quiet "supportedCoreId = 'xray'" \
   lib/product/runtime/runtime_core_policy.dart
 rg --quiet "supportedAdapterId = 'libXray'" \
   lib/product/runtime/runtime_core_policy.dart
+test -f go_core/overlay/signedconfig/testdata/signed-config-ed25519-vector.json
+rg --quiet 'ProxyCoreXray[[:space:]]*=[[:space:]]*"xray"' \
+  go_core/overlay/signedconfig/contract.go
+rg --quiet 'RelayTargetPort[[:space:]]*=[[:space:]]*51820' \
+  go_core/overlay/signedconfig/contract.go
+rg --quiet 'config-contract' go_core/cmd/xconnect/main.go
 
 for artifact_root in build dist artifacts; do
   if [[ ! -d "$artifact_root" ]]; then

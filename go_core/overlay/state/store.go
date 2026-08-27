@@ -1,16 +1,19 @@
 package state
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
+	"go_core/overlay/signedconfig"
 )
 
 const SchemaVersion = 1
@@ -40,6 +43,9 @@ type Checkpoint struct {
 	WireGuardPublicKey  string        `json:"wireguard_public_key"`
 	Phase               Phase         `json:"phase"`
 	Config              *model.Config `json:"config,omitempty"`
+	ConfigContract      string        `json:"config_contract,omitempty"`
+	SignedConfigID      string        `json:"signed_config_id,omitempty"`
+	SignedGeneration    uint64        `json:"signed_generation,omitempty"`
 	LastErrorCode       string        `json:"last_error_code,omitempty"`
 	UpdatedAt           time.Time     `json:"updated_at"`
 }
@@ -54,11 +60,39 @@ type LastKnown struct {
 	WireGuardPublicKey  string       `json:"wireguard_public_key"`
 	Phase               Phase        `json:"phase"`
 	Config              model.Config `json:"config"`
+	ConfigContract      string       `json:"config_contract,omitempty"`
+	SignedConfigID      string       `json:"signed_config_id,omitempty"`
+	SignedGeneration    uint64       `json:"signed_generation,omitempty"`
 	UpdatedAt           time.Time    `json:"updated_at"`
 }
 
 type Store struct {
 	dir string
+}
+
+type ContractBinding struct {
+	Controller        string    `json:"controller"`
+	DeviceID          string    `json:"device_id"`
+	NetworkID         string    `json:"network_id"`
+	SignedLocked      bool      `json:"signed_locked"`
+	HighestGeneration uint64    `json:"highest_generation"`
+	ConfigID          string    `json:"config_id"`
+	PayloadSHA256     string    `json:"payload_sha256"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+type ContractState struct {
+	SchemaVersion int               `json:"schema_version"`
+	Bindings      []ContractBinding `json:"bindings"`
+}
+
+type SigningKeyCache struct {
+	SchemaVersion int                      `json:"schema_version"`
+	Controller    string                   `json:"controller"`
+	DeviceID      string                   `json:"device_id"`
+	ETag          string                   `json:"etag"`
+	Keys          signedconfig.SigningKeys `json:"keys"`
+	FetchedAt     time.Time                `json:"fetched_at"`
 }
 
 func NewStore(dir string) *Store { return &Store{dir: dir} }
@@ -71,6 +105,14 @@ func (s *Store) CheckpointPath() string {
 
 func (s *Store) LastKnownPath() string {
 	return filepath.Join(s.dir, "state.json")
+}
+
+func (s *Store) ContractStatePath() string {
+	return filepath.Join(s.dir, "config-contract.json")
+}
+
+func (s *Store) SigningKeyCachePath() string {
+	return filepath.Join(s.dir, "signing-keys.json")
 }
 
 func (s *Store) LoadCheckpoint() (Checkpoint, error) {
@@ -111,6 +153,94 @@ func (s *Store) LoadLastKnown() (LastKnown, error) {
 func (s *Store) SaveLastKnown(lastKnown LastKnown) error {
 	lastKnown.SchemaVersion = SchemaVersion
 	return writeJSON0600(s.LastKnownPath(), lastKnown)
+}
+
+func (s *Store) LoadContractState() (ContractState, error) {
+	var contractState ContractState
+	if err := readJSON(s.ContractStatePath(), &contractState); err != nil {
+		return ContractState{}, err
+	}
+	if contractState.SchemaVersion != SchemaVersion {
+		return ContractState{}, fault.New(fault.CodeStateIO, "load config-contract state", nil)
+	}
+	return contractState, nil
+}
+
+func (s *Store) IsSignedLocked(controller, deviceID, networkID string) (bool, error) {
+	contractState, err := s.LoadContractState()
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, binding := range contractState.Bindings {
+		if binding.Controller == controller && binding.DeviceID == deviceID && binding.NetworkID == networkID {
+			return binding.SignedLocked, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Store) AcceptSignedConfig(controller, deviceID, networkID, configID, payloadSHA256 string, generation uint64, now time.Time) error {
+	digest, digestErr := hex.DecodeString(payloadSHA256)
+	if strings.TrimSpace(controller) == "" || strings.TrimSpace(deviceID) == "" || strings.TrimSpace(networkID) == "" || strings.TrimSpace(configID) == "" || generation == 0 || digestErr != nil || len(digest) != 32 || payloadSHA256 != strings.ToLower(payloadSHA256) {
+		return fault.New(fault.CodeStateIO, "validate signed config floor", nil)
+	}
+	contractState, err := s.LoadContractState()
+	if errors.Is(err, ErrNotFound) {
+		contractState = ContractState{SchemaVersion: SchemaVersion}
+	} else if err != nil {
+		return err
+	}
+	for index := range contractState.Bindings {
+		binding := &contractState.Bindings[index]
+		if binding.Controller != controller || binding.DeviceID != deviceID || binding.NetworkID != networkID {
+			continue
+		}
+		if generation < binding.HighestGeneration || generation == binding.HighestGeneration && (binding.ConfigID != configID || binding.PayloadSHA256 != payloadSHA256) {
+			return fault.New(fault.CodeConfigReplay, "accept signed config generation", nil)
+		}
+		if generation > binding.HighestGeneration {
+			binding.HighestGeneration = generation
+			binding.ConfigID = configID
+			binding.PayloadSHA256 = payloadSHA256
+		}
+		binding.SignedLocked = true
+		binding.UpdatedAt = now.UTC()
+		contractState.SchemaVersion = SchemaVersion
+		return writeJSON0600(s.ContractStatePath(), contractState)
+	}
+	contractState.Bindings = append(contractState.Bindings, ContractBinding{
+		Controller: controller, DeviceID: deviceID, NetworkID: networkID,
+		SignedLocked: true, HighestGeneration: generation, ConfigID: configID, PayloadSHA256: payloadSHA256, UpdatedAt: now.UTC(),
+	})
+	contractState.SchemaVersion = SchemaVersion
+	return writeJSON0600(s.ContractStatePath(), contractState)
+}
+
+func (s *Store) LoadSigningKeyCache(controller, deviceID string) (SigningKeyCache, error) {
+	var cache SigningKeyCache
+	if err := readJSON(s.SigningKeyCachePath(), &cache); err != nil {
+		return SigningKeyCache{}, err
+	}
+	if cache.Controller != controller || cache.DeviceID != deviceID {
+		return SigningKeyCache{}, ErrNotFound
+	}
+	if cache.SchemaVersion != SchemaVersion || strings.TrimSpace(cache.ETag) == "" {
+		return SigningKeyCache{}, fault.New(fault.CodeStateIO, "load signing-key cache", nil)
+	}
+	if err := cache.Keys.Validate(); err != nil {
+		return SigningKeyCache{}, fault.New(fault.CodeStateIO, "validate signing-key cache", err)
+	}
+	cache.Keys.ETag = cache.ETag
+	return cache, nil
+}
+
+func (s *Store) SaveSigningKeyCache(cache SigningKeyCache) error {
+	cache.SchemaVersion = SchemaVersion
+	cache.Keys.ETag = ""
+	return writeJSON0600(s.SigningKeyCachePath(), cache)
 }
 
 func readJSON(path string, target any) error {

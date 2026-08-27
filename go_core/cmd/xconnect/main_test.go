@@ -150,6 +150,17 @@ func TestJoinRejectsCredentialsInInviteURL(t *testing.T) {
 	}
 }
 
+func TestJoinRejectsUnknownConfigContractBeforeNetworkAccess(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := runWithRuntimeFactory(t.Context(), []string{
+		"join", "https://accounts.example", "--config-contract", "future", "--state-dir", t.TempDir(), "--device-id", "dev_cli",
+	}, &stdout, &stderr, http.DefaultClient, func(string) overlayruntime.Interface { return &overlayruntime.Fake{} })
+	if fault.Code(err) != fault.CodeInvalidInput {
+		t.Fatalf("error code = %q, err=%v", fault.Code(err), err)
+	}
+}
+
 func TestJoinAuthenticationErrorDoesNotExposeTokenOrResponseBody(t *testing.T) {
 	var ackCalls atomic.Int32
 	server := newCLITestServer(t, true, &ackCalls)
@@ -181,6 +192,8 @@ func newCLITestServer(t *testing.T, unauthorized bool, ackCalls *atomic.Int32) *
 			return
 		}
 		switch request.URL.Path {
+		case "/api/overlay/v1/signing-keys", "/api/overlay/v1/signed-config":
+			writer.WriteHeader(http.StatusNotFound)
 		case "/api/overlay/v1/devices/register":
 			var payload controlplane.RegisterDeviceRequest
 			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {

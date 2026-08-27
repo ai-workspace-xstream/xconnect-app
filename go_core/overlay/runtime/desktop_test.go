@@ -14,6 +14,7 @@ import (
 
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
+	"go_core/overlay/signedconfig"
 )
 
 type fakeDesktopBackend struct {
@@ -509,6 +510,42 @@ func TestRenderedProfilesContainOnlySupportedXrayRuntime(t *testing.T) {
 	}
 	if !strings.Contains(wireGuard, request.WireGuardPrivateKey) || !strings.Contains(wireGuard, "Endpoint = 127.0.0.1:51830") {
 		t.Fatal("WireGuard profile does not use the protected local transport")
+	}
+}
+
+func TestSignedConfigRendersFixedCohostedWireGuardRelayTarget(t *testing.T) {
+	config := signedconfig.Config{
+		SchemaVersion: signedconfig.SchemaVersionV1,
+		ConfigID:      "cfg_42",
+		NetworkID:     "net_private",
+		DeviceID:      "dev_linux",
+		Generation:    42,
+		IssuedAt:      signedconfig.CanonicalTime{Time: time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)},
+		ExpiresAt:     signedconfig.CanonicalTime{Time: time.Date(2026, 8, 27, 13, 0, 0, 0, time.UTC)},
+		ProxyCore:     signedconfig.ProxyCoreXray,
+		Transport: signedconfig.Transport{
+			Kind: signedconfig.TransportVLESS, Loopback: signedconfig.Endpoint{Host: signedconfig.LoopbackHost, Port: 51830},
+			Remote: signedconfig.RemoteEndpoint{Host: "gateway.example.net", Port: 443, ServerName: "tls.example.net"},
+			AuthID: "11111111-1111-1111-1111-111111111111",
+		},
+		WireGuard: signedconfig.WireGuard{
+			InterfaceName: "wg-xco", Addresses: []string{"10.77.0.20/32"}, MTU: 1280,
+			Peers: []signedconfig.Peer{{GatewayID: "gw_tokyo_01", PublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", AllowedIPs: []string{"10.77.0.0/16"}, Endpoint: signedconfig.Endpoint{Host: signedconfig.LoopbackHost, Port: 51830}, PersistentKeepaliveSeconds: 25}},
+		},
+		Signature: signedconfig.Signature{Algorithm: signedconfig.SignatureEd25519, KeyID: "signing_key_01", Value: base64.StdEncoding.EncodeToString(make([]byte, 64))},
+	}
+	compiled, err := signedconfig.Compile(config)
+	if err != nil {
+		t.Fatalf("compile signed config: %v", err)
+	}
+	rendered, err := renderXrayConfig(compiled)
+	if err != nil {
+		t.Fatalf("render compiled signed config: %v", err)
+	}
+	for _, expected := range []string{`"address": "127.0.0.1"`, `"port": 51820`, `"serverName": "tls.example.net"`, `"packetEncoding": "xudp"`} {
+		if !bytes.Contains(rendered, []byte(expected)) {
+			t.Fatalf("compiled Xray profile does not lock %s: %s", expected, rendered)
+		}
 	}
 }
 

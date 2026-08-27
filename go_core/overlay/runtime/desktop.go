@@ -672,7 +672,7 @@ func renderWireGuardConfig(config model.Config, privateKey string) string {
 
 func renderXrayConfig(config model.Config) ([]byte, error) {
 	user := map[string]any{
-		"id":             config.Transport.UUID,
+		"id":             config.Transport.VLESSAuthID(),
 		"encryption":     "none",
 		"packetEncoding": config.Transport.PacketEncoding,
 	}
@@ -688,7 +688,7 @@ func renderXrayConfig(config model.Config) ([]byte, error) {
 			"protocol": "dokodemo-door",
 			"settings": map[string]any{
 				"address": config.WireGuard.GatewayWireGuardIP,
-				"port":    51820,
+				"port":    config.WireGuard.RelayTargetPort(),
 				"network": "udp",
 			},
 		}},
@@ -704,7 +704,7 @@ func renderXrayConfig(config model.Config) ([]byte, error) {
 				"network":  "tcp",
 				"security": "tls",
 				"tlsSettings": map[string]any{
-					"serverName":    config.Transport.Server,
+					"serverName":    config.Transport.TLSServerName(),
 					"allowInsecure": false,
 					"fingerprint":   "chrome",
 				},

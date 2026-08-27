@@ -13,6 +13,7 @@ import (
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
 	"go_core/overlay/runtime"
+	"go_core/overlay/signedconfig"
 	"go_core/overlay/state"
 )
 
@@ -20,6 +21,30 @@ type ControlPlane interface {
 	RegisterDevice(context.Context, controlplane.RegisterDeviceRequest) (controlplane.RegisterDeviceResponse, error)
 	GetConfig(context.Context, controlplane.ConfigRequest) (model.Config, error)
 	AckConfig(context.Context, controlplane.ConfigAckRequest) (controlplane.ConfigAckResponse, error)
+}
+
+type SignedControlPlane interface {
+	GetSigningKeys(context.Context, string) (controlplane.SigningKeysResponse, error)
+	GetSignedConfig(context.Context, controlplane.SignedConfigRequest) (signedconfig.Config, error)
+	AckSignedConfig(context.Context, controlplane.SignedConfigAckRequest) (controlplane.SignedConfigAckResponse, error)
+}
+
+type ConfigContract string
+
+const (
+	ConfigContractAuto   ConfigContract = "auto"
+	ConfigContractSigned ConfigContract = "signed"
+	ConfigContractLegacy ConfigContract = "legacy"
+)
+
+func ParseConfigContract(value string) (ConfigContract, error) {
+	contract := ConfigContract(strings.ToLower(strings.TrimSpace(value)))
+	switch contract {
+	case ConfigContractAuto, ConfigContractSigned, ConfigContractLegacy:
+		return contract, nil
+	default:
+		return "", fault.New(fault.CodeInvalidInput, "parse config contract", nil)
+	}
 }
 
 type KeyGenerator func() (privateKey string, publicKey string, err error)
@@ -30,6 +55,7 @@ type Joiner struct {
 	runtime      runtime.Interface
 	now          func() time.Time
 	generateKey  KeyGenerator
+	contract     ConfigContract
 }
 
 type JoinRequest struct {
@@ -56,7 +82,13 @@ func NewJoiner(controlPlane ControlPlane, store *state.Store, tunnelRuntime runt
 		runtime:      tunnelRuntime,
 		now:          time.Now,
 		generateKey:  generateWireGuardKeyPair,
+		contract:     ConfigContractLegacy,
 	}
+}
+
+func (j *Joiner) WithConfigContract(contract ConfigContract) *Joiner {
+	j.contract = contract
+	return j
 }
 
 func (j *Joiner) WithClock(now func() time.Time) *Joiner {
@@ -84,28 +116,19 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 			if requestedNode := strings.TrimSpace(request.NodeID); requestedNode != "" && requestedNode != lastKnown.NodeID {
 				return JoinResult{}, fault.New(fault.CodeStateConflict, "join existing device", nil)
 			}
-			runtimeStatus, statusErr := j.runtime.Status(ctx)
-			if statusErr != nil {
-				return JoinResult{}, fault.New(fault.CodeRuntimeStatusFailed, "read existing runtime status", statusErr)
+			lastContract := ConfigContract(lastKnown.ConfigContract)
+			if lastContract == "" {
+				lastContract = ConfigContractLegacy
 			}
-			if !runtimeStatus.Applied || runtimeStatus.Revision != lastKnown.Config.Revision || runtimeStatus.CoreID != model.CoreIDXray || !model.SupportedAdapterID(runtimeStatus.AdapterID) {
-				applyResult, applyErr := j.runtime.Apply(ctx, runtime.ApplyRequest{
-					Config:              lastKnown.Config,
-					WireGuardPrivateKey: lastKnown.WireGuardPrivateKey,
-				})
-				if applyErr == nil && (applyResult.Revision != lastKnown.Config.Revision || applyResult.CoreID != model.CoreIDXray || !model.SupportedAdapterID(applyResult.AdapterID)) {
-					applyErr = fault.New(fault.CodeRuntimeApplyFailed, "validate recovered runtime", nil)
-				}
-				if applyErr != nil {
-					return JoinResult{}, fault.New(runtimeApplyErrorCode(applyErr), "recover existing runtime", applyErr)
-				}
+			if lastContract == ConfigContractSigned && j.contract == ConfigContractLegacy {
+				return JoinResult{}, fault.New(fault.CodeConfigDowngradeBlocked, "join signed device with legacy config", nil)
 			}
-			return JoinResult{
-				DeviceID:      lastKnown.DeviceID,
-				NetworkID:     lastKnown.NetworkID,
-				Revision:      lastKnown.Config.Revision,
-				AlreadyJoined: true,
-			}, nil
+			if lastContract == ConfigContractSigned || j.contract == ConfigContractLegacy {
+				return j.recoverLastKnown(ctx, lastKnown)
+			}
+			if err := j.seedMigrationCheckpoint(lastKnown); err != nil {
+				return JoinResult{}, err
+			}
 		}
 	} else if !errors.Is(err, state.ErrNotFound) {
 		return JoinResult{}, err
@@ -114,6 +137,12 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 	checkpoint, err := j.loadOrCreateCheckpoint(request)
 	if err != nil {
 		return JoinResult{}, err
+	}
+	if checkpoint.ConfigContract == string(ConfigContractSigned) && j.contract == ConfigContractLegacy {
+		return JoinResult{}, fault.New(fault.CodeConfigDowngradeBlocked, "resume signed config with legacy contract", nil)
+	}
+	if checkpoint.ConfigContract == string(ConfigContractLegacy) && j.contract == ConfigContractSigned && phaseAtLeast(checkpoint.Phase, state.PhaseConfigFetched) {
+		return JoinResult{}, fault.New(fault.CodeStateConflict, "resume legacy config with signed contract", nil)
 	}
 
 	if !phaseAtLeast(checkpoint.Phase, state.PhaseDeviceRegistered) {
@@ -141,14 +170,11 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 	}
 
 	if !phaseAtLeast(checkpoint.Phase, state.PhaseConfigFetched) {
-		config, err := j.controlPlane.GetConfig(ctx, controlplane.ConfigRequest{
-			DeviceID:  checkpoint.DeviceID,
-			NetworkID: checkpoint.NetworkID,
-			NodeID:    checkpoint.NodeID,
-		})
+		fetched, err := j.fetchRuntimeConfig(ctx, checkpoint)
 		if err != nil {
 			return JoinResult{}, err
 		}
+		config := fetched.Config
 		if err := config.Validate(); err != nil {
 			return JoinResult{}, err
 		}
@@ -156,6 +182,9 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 			return JoinResult{}, fault.New(fault.CodeInvalidConfig, "validate config ownership", nil)
 		}
 		checkpoint.Config = &config
+		checkpoint.ConfigContract = string(fetched.Contract)
+		checkpoint.SignedConfigID = fetched.SignedConfigID
+		checkpoint.SignedGeneration = fetched.SignedGeneration
 		checkpoint.Phase = state.PhaseConfigFetched
 		checkpoint.LastErrorCode = ""
 		checkpoint.UpdatedAt = j.now().UTC()
@@ -191,18 +220,34 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 	}
 
 	if !phaseAtLeast(checkpoint.Phase, state.PhaseAcknowledged) {
-		ack, err := j.controlPlane.AckConfig(ctx, controlplane.ConfigAckRequest{
-			DeviceID:  checkpoint.DeviceID,
-			NetworkID: checkpoint.NetworkID,
-			Revision:  checkpoint.Config.Revision,
-			Digest:    checkpoint.Config.Digest,
-			AppliedAt: j.now().UTC(),
-		})
-		if err != nil {
-			return JoinResult{}, err
-		}
-		if !ack.Acked || ack.DeviceID != checkpoint.DeviceID || ack.NetworkID != checkpoint.NetworkID || ack.Revision != checkpoint.Config.Revision {
-			return JoinResult{}, fault.New(fault.CodeInvalidResponse, "acknowledge config", nil)
+		if checkpoint.ConfigContract == string(ConfigContractSigned) {
+			signedControlPlane, ok := j.controlPlane.(SignedControlPlane)
+			if !ok {
+				return JoinResult{}, fault.New(fault.CodeSignedConfigUnavailable, "ack signed config", nil)
+			}
+			ack, err := signedControlPlane.AckSignedConfig(ctx, controlplane.SignedConfigAckRequest{
+				Generation: checkpoint.SignedGeneration,
+				ConfigID:   checkpoint.SignedConfigID,
+				DeviceID:   checkpoint.DeviceID,
+				AppliedAt:  j.now().UTC(),
+			})
+			if err != nil {
+				return JoinResult{}, err
+			}
+			if !ack.Acked || ack.Ack.DeviceID != checkpoint.DeviceID || ack.Ack.ConfigID != checkpoint.SignedConfigID || ack.Ack.Generation != checkpoint.SignedGeneration {
+				return JoinResult{}, fault.New(fault.CodeInvalidResponse, "acknowledge signed config", nil)
+			}
+		} else {
+			ack, err := j.controlPlane.AckConfig(ctx, controlplane.ConfigAckRequest{
+				DeviceID: checkpoint.DeviceID, NetworkID: checkpoint.NetworkID,
+				Revision: checkpoint.Config.Revision, Digest: checkpoint.Config.Digest, AppliedAt: j.now().UTC(),
+			})
+			if err != nil {
+				return JoinResult{}, err
+			}
+			if !ack.Acked || ack.DeviceID != checkpoint.DeviceID || ack.NetworkID != checkpoint.NetworkID || ack.Revision != checkpoint.Config.Revision {
+				return JoinResult{}, fault.New(fault.CodeInvalidResponse, "acknowledge legacy config", nil)
+			}
 		}
 		checkpoint.Phase = state.PhaseAcknowledged
 		checkpoint.UpdatedAt = j.now().UTC()
@@ -220,6 +265,9 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 		WireGuardPublicKey:  checkpoint.WireGuardPublicKey,
 		Phase:               state.PhaseAcknowledged,
 		Config:              *checkpoint.Config,
+		ConfigContract:      checkpoint.ConfigContract,
+		SignedConfigID:      checkpoint.SignedConfigID,
+		SignedGeneration:    checkpoint.SignedGeneration,
 		UpdatedAt:           j.now().UTC(),
 	}
 	if err := j.store.SaveLastKnown(lastKnown); err != nil {
@@ -233,6 +281,157 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 		NetworkID: lastKnown.NetworkID,
 		Revision:  lastKnown.Config.Revision,
 	}, nil
+}
+
+type fetchedRuntimeConfig struct {
+	Config           model.Config
+	Contract         ConfigContract
+	SignedConfigID   string
+	SignedGeneration uint64
+}
+
+func (j *Joiner) fetchRuntimeConfig(ctx context.Context, checkpoint state.Checkpoint) (fetchedRuntimeConfig, error) {
+	locked, err := j.store.IsSignedLocked(checkpoint.Server, checkpoint.DeviceID, checkpoint.NetworkID)
+	if err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	switch j.contract {
+	case ConfigContractLegacy:
+		if locked {
+			return fetchedRuntimeConfig{}, fault.New(fault.CodeConfigDowngradeBlocked, "fetch legacy config after signed lock", nil)
+		}
+		return j.fetchLegacyConfig(ctx, checkpoint)
+	case ConfigContractSigned:
+		return j.fetchSignedConfig(ctx, checkpoint)
+	case ConfigContractAuto:
+		fetched, signedErr := j.fetchSignedConfig(ctx, checkpoint)
+		if signedErr == nil {
+			return fetched, nil
+		}
+		if fault.Code(signedErr) != fault.CodeSignedConfigUnavailable {
+			return fetchedRuntimeConfig{}, signedErr
+		}
+		if locked {
+			return fetchedRuntimeConfig{}, fault.New(fault.CodeConfigDowngradeBlocked, "signed config capability unavailable after lock", nil)
+		}
+		return j.fetchLegacyConfig(ctx, checkpoint)
+	default:
+		return fetchedRuntimeConfig{}, fault.New(fault.CodeInvalidInput, "select config contract", nil)
+	}
+}
+
+func (j *Joiner) fetchLegacyConfig(ctx context.Context, checkpoint state.Checkpoint) (fetchedRuntimeConfig, error) {
+	config, err := j.controlPlane.GetConfig(ctx, controlplane.ConfigRequest{
+		DeviceID: checkpoint.DeviceID, NetworkID: checkpoint.NetworkID, NodeID: checkpoint.NodeID,
+	})
+	if err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	return fetchedRuntimeConfig{Config: config, Contract: ConfigContractLegacy}, nil
+}
+
+func (j *Joiner) fetchSignedConfig(ctx context.Context, checkpoint state.Checkpoint) (fetchedRuntimeConfig, error) {
+	signedControlPlane, ok := j.controlPlane.(SignedControlPlane)
+	if !ok {
+		return fetchedRuntimeConfig{}, fault.New(fault.CodeSignedConfigUnavailable, "use signed config control plane", nil)
+	}
+	cache, cacheErr := j.store.LoadSigningKeyCache(checkpoint.Server, checkpoint.DeviceID)
+	if cacheErr != nil && !errors.Is(cacheErr, state.ErrNotFound) {
+		return fetchedRuntimeConfig{}, cacheErr
+	}
+	etag := ""
+	if cacheErr == nil {
+		etag = cache.ETag
+	}
+	keyResponse, keyErr := signedControlPlane.GetSigningKeys(ctx, etag)
+	var keys signedconfig.SigningKeys
+	if keyErr != nil {
+		if fault.Code(keyErr) != fault.CodeSignedConfigUnavailable || cacheErr != nil {
+			return fetchedRuntimeConfig{}, keyErr
+		}
+		keys = cache.Keys
+	} else if keyResponse.NotModified {
+		if cacheErr != nil || strings.TrimSpace(etag) == "" {
+			return fetchedRuntimeConfig{}, fault.New(fault.CodeInvalidSigningKeys, "reuse missing signing-key cache", nil)
+		}
+		keys = cache.Keys
+	} else {
+		keys = keyResponse.Keys
+		if err := keys.Validate(); err != nil {
+			return fetchedRuntimeConfig{}, err
+		}
+		if err := j.store.SaveSigningKeyCache(state.SigningKeyCache{
+			Controller: checkpoint.Server, DeviceID: checkpoint.DeviceID,
+			ETag: keyResponse.ETag, Keys: keys, FetchedAt: j.now().UTC(),
+		}); err != nil {
+			return fetchedRuntimeConfig{}, err
+		}
+	}
+	config, err := signedControlPlane.GetSignedConfig(ctx, controlplane.SignedConfigRequest{
+		DeviceID: checkpoint.DeviceID, NetworkID: checkpoint.NetworkID, NodeID: checkpoint.NodeID,
+	})
+	if err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	if err := signedconfig.Verify(config, keys, j.now()); err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	if config.DeviceID != checkpoint.DeviceID || config.NetworkID != checkpoint.NetworkID {
+		return fetchedRuntimeConfig{}, fault.New(fault.CodeInvalidSignedConfig, "validate signed config ownership", nil)
+	}
+	compiled, err := signedconfig.Compile(config)
+	if err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	if err := j.store.AcceptSignedConfig(checkpoint.Server, checkpoint.DeviceID, checkpoint.NetworkID, config.ConfigID, compiled.Digest, config.Generation, j.now()); err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	return fetchedRuntimeConfig{
+		Config: compiled, Contract: ConfigContractSigned,
+		SignedConfigID: config.ConfigID, SignedGeneration: config.Generation,
+	}, nil
+}
+
+func (j *Joiner) recoverLastKnown(ctx context.Context, lastKnown state.LastKnown) (JoinResult, error) {
+	if ConfigContract(lastKnown.ConfigContract) == ConfigContractSigned {
+		if err := j.store.AcceptSignedConfig(lastKnown.Server, lastKnown.DeviceID, lastKnown.NetworkID, lastKnown.SignedConfigID, lastKnown.Config.Digest, lastKnown.SignedGeneration, j.now()); err != nil {
+			return JoinResult{}, err
+		}
+	}
+	runtimeStatus, statusErr := j.runtime.Status(ctx)
+	if statusErr != nil {
+		return JoinResult{}, fault.New(fault.CodeRuntimeStatusFailed, "read existing runtime status", statusErr)
+	}
+	if !runtimeStatus.Applied || runtimeStatus.Revision != lastKnown.Config.Revision || runtimeStatus.CoreID != model.CoreIDXray || !model.SupportedAdapterID(runtimeStatus.AdapterID) {
+		applyResult, applyErr := j.runtime.Apply(ctx, runtime.ApplyRequest{Config: lastKnown.Config, WireGuardPrivateKey: lastKnown.WireGuardPrivateKey})
+		if applyErr == nil && (applyResult.Revision != lastKnown.Config.Revision || applyResult.CoreID != model.CoreIDXray || !model.SupportedAdapterID(applyResult.AdapterID)) {
+			applyErr = fault.New(fault.CodeRuntimeApplyFailed, "validate recovered runtime", nil)
+		}
+		if applyErr != nil {
+			return JoinResult{}, fault.New(runtimeApplyErrorCode(applyErr), "recover existing runtime", applyErr)
+		}
+	}
+	return JoinResult{DeviceID: lastKnown.DeviceID, NetworkID: lastKnown.NetworkID, Revision: lastKnown.Config.Revision, AlreadyJoined: true}, nil
+}
+
+func (j *Joiner) seedMigrationCheckpoint(lastKnown state.LastKnown) error {
+	checkpoint, err := j.store.LoadCheckpoint()
+	if err == nil {
+		if checkpoint.Server != lastKnown.Server || checkpoint.DeviceID != lastKnown.DeviceID || checkpoint.NetworkID != lastKnown.NetworkID {
+			return fault.New(fault.CodeStateConflict, "resume config-contract migration", nil)
+		}
+		return nil
+	}
+	if !errors.Is(err, state.ErrNotFound) {
+		return err
+	}
+	return j.store.SaveCheckpoint(state.Checkpoint{
+		Server: lastKnown.Server, DeviceID: lastKnown.DeviceID,
+		NetworkID: lastKnown.NetworkID, NodeID: lastKnown.NodeID,
+		WireGuardPrivateKey: lastKnown.WireGuardPrivateKey,
+		WireGuardPublicKey:  lastKnown.WireGuardPublicKey,
+		Phase:               state.PhaseDeviceRegistered, UpdatedAt: j.now().UTC(),
+	})
 }
 
 func runtimeApplyErrorCode(err error) string {

@@ -1,5 +1,11 @@
 # Unreleased
 
+- Migrated the XConnect-One CLI join path to the canonical Ed25519 SignedConfig
+  contract with strict key discovery caching, signature/time/ownership checks,
+  persistent generation replay and downgrade protection, resumable generation
+  acknowledgement after verified runtime apply, and explicit
+  `auto|signed|legacy` migration policy. The compiled v1 Xray relay target is
+  fixed to the cohosted WireGuard listener at `127.0.0.1:51820`.
 - Added the real Linux XConnect-One CLI runtime for external Xray-core and
   WireGuard, with private atomic profiles, Xray config/readiness and owned UDP
   socket verification, WireGuard interface verification, revision-idempotent

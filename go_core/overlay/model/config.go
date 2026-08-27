@@ -59,6 +59,7 @@ type WireGuardConfig struct {
 	PeerAllowedIPs       []string `json:"peer_allowed_ips"`
 	PeerEndpoint         string   `json:"peer_endpoint"`
 	GatewayWireGuardIP   string   `json:"gateway_wireguard_ip"`
+	GatewayWireGuardPort int      `json:"gateway_wireguard_port,omitempty"`
 	GatewayWireGuardCIDR string   `json:"gateway_wireguard_cidr"`
 }
 
@@ -67,8 +68,10 @@ type TransportConfig struct {
 	Type           string `json:"type"`
 	Security       string `json:"security"`
 	Server         string `json:"server"`
+	ServerName     string `json:"server_name,omitempty"`
 	Port           int    `json:"port"`
 	UUID           string `json:"uuid"`
+	AuthID         string `json:"auth_id,omitempty"`
 	Path           string `json:"path"`
 	Mode           string `json:"mode"`
 	Flow           string `json:"flow"`
@@ -121,8 +124,11 @@ func (c Config) Validate() error {
 	if c.Transport.Type != TransportVLESSTLS || c.Transport.Security != TransportSecurityTLS || c.Transport.PacketEncoding != PacketEncodingXUDP {
 		return fault.New(fault.CodeInvalidConfig, "validate config", nil)
 	}
-	if strings.TrimSpace(c.Transport.Server) == "" || !validPort(c.Transport.Port) || !validPort(c.Transport.LocalPort) || !validUUID(c.Transport.UUID) {
+	if strings.TrimSpace(c.Transport.Server) == "" || !validPort(c.Transport.Port) || !validPort(c.Transport.LocalPort) || !validVLESSAuthID(c.Transport.VLESSAuthID()) {
 		return fault.New(fault.CodeInvalidConfig, "validate config", nil)
+	}
+	if c.Transport.UUID != "" && c.Transport.AuthID != "" {
+		return fault.New(fault.CodeInvalidConfig, "validate config credential", nil)
 	}
 	if !interfaceNamePattern.MatchString(c.WireGuard.Interface) || strings.TrimSpace(c.WireGuard.PrivateKeyRef) == "" || len(c.WireGuard.PeerAllowedIPs) == 0 {
 		return fault.New(fault.CodeInvalidConfig, "validate config", nil)
@@ -138,7 +144,7 @@ func (c Config) Validate() error {
 	if c.WireGuard.MTU < 576 || c.WireGuard.MTU > 1500 {
 		return fault.New(fault.CodeInvalidConfig, "validate config", nil)
 	}
-	if c.WireGuard.PersistentKeepalive < 0 || c.WireGuard.PersistentKeepalive > 65535 || net.ParseIP(c.WireGuard.GatewayWireGuardIP) == nil || !validCIDR(c.WireGuard.GatewayWireGuardCIDR) {
+	if c.WireGuard.PersistentKeepalive < 0 || c.WireGuard.PersistentKeepalive > 65535 || net.ParseIP(c.WireGuard.GatewayWireGuardIP) == nil || !validCIDR(c.WireGuard.GatewayWireGuardCIDR) || !validOptionalPort(c.WireGuard.GatewayWireGuardPort) {
 		return fault.New(fault.CodeInvalidConfig, "validate config", nil)
 	}
 	if err := requireLoopbackEndpoint(c.WireGuard.PeerEndpoint, c.Transport.LocalPort); err != nil {
@@ -153,6 +159,27 @@ func (c Config) Validate() error {
 func (c Config) CoreID() string { return CoreIDXray }
 
 func (c Config) AdapterID() string { return AdapterIDLibXray }
+
+func (t TransportConfig) VLESSAuthID() string {
+	if t.AuthID != "" {
+		return t.AuthID
+	}
+	return t.UUID
+}
+
+func (t TransportConfig) TLSServerName() string {
+	if strings.TrimSpace(t.ServerName) != "" {
+		return t.ServerName
+	}
+	return t.Server
+}
+
+func (w WireGuardConfig) RelayTargetPort() int {
+	if w.GatewayWireGuardPort != 0 {
+		return w.GatewayWireGuardPort
+	}
+	return 51820
+}
 
 func SupportedAdapterID(adapterID string) bool {
 	return adapterID == AdapterIDLibXray || adapterID == AdapterIDXrayCore
@@ -174,6 +201,10 @@ func validUUID(value string) bool {
 	decoded, err := hex.DecodeString(strings.ReplaceAll(value, "-", ""))
 	return err == nil && len(decoded) == 16
 }
+
+func validVLESSAuthID(value string) bool { return validUUID(value) }
+
+func validOptionalPort(port int) bool { return port == 0 || validPort(port) }
 
 func requireLoopbackEndpoint(endpoint string, expectedPort int) error {
 	host, port, err := net.SplitHostPort(endpoint)

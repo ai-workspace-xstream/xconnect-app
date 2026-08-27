@@ -73,6 +73,7 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	deviceName := flags.String("name", "", "device display name")
 	networkID := flags.String("network-id", "", "requested overlay network ID")
 	nodeID := flags.String("node-id", "", "preferred gateway node ID")
+	configContract := flags.String("config-contract", string(usecase.ConfigContractAuto), "config contract: auto, signed, or legacy")
 	tokenFile := flags.String("token-file", "", "path to a file containing the accounts access token")
 	if err := flags.Parse(args); err != nil {
 		return fault.New(fault.CodeInvalidInput, "parse join arguments", err)
@@ -98,6 +99,10 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	if err != nil {
 		return err
 	}
+	contract, err := usecase.ParseConfigContract(*configContract)
+	if err != nil {
+		return err
+	}
 	client, err := controlplane.New(target.Controller, token, httpClient)
 	if err != nil {
 		return err
@@ -105,7 +110,7 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	hostname, _ := os.Hostname()
 	store := state.NewStore(*stateDirectory)
 	tunnelRuntime := newRuntime(*stateDirectory)
-	result, err := usecase.NewJoiner(client, store, tunnelRuntime).Join(ctx, usecase.JoinRequest{
+	result, err := usecase.NewJoiner(client, store, tunnelRuntime).WithConfigContract(contract).Join(ctx, usecase.JoinRequest{
 		Server:     target.Controller,
 		DeviceID:   *deviceID,
 		DeviceName: *deviceName,
