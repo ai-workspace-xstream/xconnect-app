@@ -1,5 +1,10 @@
 # Unreleased
 
+- Added the first `xconnect` CLI enrollment slice with a versioned Overlay v1
+  HTTP client, resumable and idempotent Join checkpoints, private local state,
+  Xray/libXray runtime validation, and `join`, `status`, and `diagnose` commands.
+  Until a platform runtime is wired, the production CLI fails closed before
+  config acknowledgement instead of reporting a prepared profile as applied.
 - Added the XConnect-One built-in Product Plugin SDK baseline with versioned
   manifests, least-privilege HostServices capabilities, an atomic product
   registry, CLI/UI/profile contributions, and an Xray-core/libXray-only runtime

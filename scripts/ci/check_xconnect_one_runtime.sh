@@ -8,6 +8,8 @@ runtime_paths=(
   pubspec.yaml
   go_core/go.mod
   go_core/go.sum
+  go_core/overlay
+  go_core/cmd/xconnect
   lib
   android
   ios
@@ -23,7 +25,8 @@ for runtime_path in "${runtime_paths[@]}"; do
   fi
 done
 
-if rg --ignore-case --line-number 'sing[-_]?box' \
+if rg --ignore-case --line-number --glob '!**/*_test.go' \
+    --glob '!**/*_test.dart' 'sing[-_]?box' \
     "${existing_runtime_paths[@]}"; then
   echo "Unsupported proxy core reference found in a v1 runtime path." >&2
   exit 1

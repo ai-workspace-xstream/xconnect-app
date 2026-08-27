@@ -1,6 +1,6 @@
 # XConnect-One Overlay：客户端实施计划
 
-状态：Batch 01 / implementation in progress
+状态：Batch 02 / CLI shared core in progress
 
 长期特性分支：`codex/xconnect-overlay-productization`
 
@@ -158,6 +158,20 @@ OpenAPI client、SignedConfig/Policy/Runtime 状态模型、签名与 generation
 - 接入平台安全存储并保证日志脱敏。
 
 退出条件：Linux/macOS 从干净状态完成 Join；中断可恢复；重复 Join 幂等。
+
+首个 Batch 02 堆叠 PR 基线：
+
+- 分支 `codex/xconnect-batch-02-cli-join` 依赖 Batch 01
+  `codex/xconnect-batch-01-product-plugin`，最终 PR base 仍为长期特性分支。
+- 已实现 `/api/overlay/v1` HTTP client、0600 checkpoint/last-known state、可恢复
+  Join 状态机、Runtime interface/fake 及 `join/status/diagnose`。
+- 当前 controller 的 `/api/overlay/v1/config` 仍返回 legacy-compatible
+  `OverlayConfigV1`；SignedConfig projection 与验签接入是后续 migration，本批不把
+  当前响应误标为已签名。
+- 本批明确不移植 `overlayctl apply-playbooks-client` 或任何服务器 Playbook 命令。
+- 生产 CLI 尚未接入平台 Tunnel Runtime 时明确返回 `runtime_unavailable`，停在
+  `config_fetched` 且不 ACK；成功/恢复状态机仅通过注入 Fake Runtime 测试。
+  `up/down` 以及真实平台 Runtime 接入仍按后续 Batch 实施。
 
 ### Batch 03：Flutter 共用 Join Use Case
 
