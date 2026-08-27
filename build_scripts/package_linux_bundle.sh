@@ -27,7 +27,12 @@ FOUND=false
 
 # 查找并复制
 while IFS= read -r sofile; do
-    cp -u "$sofile" "$LIB_DIR/"
+    # Flutter already places the Linux bridge in the bundle's lib directory.
+    # Copying that file onto itself makes cp exit non-zero, which aborts the
+    # packaging job under `set -e`.
+    if [[ "$sofile" != "$LIB_DIR/libgo_native_bridge.so" ]]; then
+        cp -u "$sofile" "$LIB_DIR/"
+    fi
     FOUND=true
 done < <(find "$PROJECT_ROOT" -name 'libgo_native_bridge.so')
 
