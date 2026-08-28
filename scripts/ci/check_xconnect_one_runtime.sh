@@ -47,6 +47,16 @@ rg --quiet 'join-tokens/exchange' go_core/overlay/controlplane/enrollment.go
 rg --quiet 'enrollment/signed-config' go_core/overlay/controlplane/enrollment.go
 rg --quiet 'EnrollmentSecretPath' go_core/overlay/state/store.go
 rg --quiet 'allow-insecure-localhost' go_core/cmd/xconnect/main.go
+test -f go_core/overlay/invite/testdata/invite-url-cases.json
+rg --quiet 'overlay/invite' go_core/cmd/xconnect/main.go
+rg --quiet 'mobile_join_bridge_unavailable' \
+  android/app/src/main/kotlin/plus/svc/xconnect/MainActivity.kt \
+  ios/Runner/AppDelegate.swift macos/Runner/AppDelegate.swift
+if rg --line-number 'SharedPreferences|/api/overlay/v1|enrollment_token|wireguard_private_key' \
+    lib/product/xconnect_one; then
+  echo "Secret persistence or control-plane protocol leaked into Flutter product code." >&2
+  exit 1
+fi
 
 for artifact_root in build dist artifacts; do
   if [[ ! -d "$artifact_root" ]]; then

@@ -182,7 +182,7 @@ func TestJoinAcceptsInviteURLControllerAndSelection(t *testing.T) {
 func TestJoinRejectsCredentialsInInviteURL(t *testing.T) {
 	joinToken := "xjt_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
 	_, err := resolveJoinTarget("xconnect://join/"+joinToken+"?controller=https%3A%2F%2Faccounts.example&token=secret", "", false)
-	if fault.Code(err) != fault.CodeInvalidInput {
+	if fault.Code(err) != fault.CodeJoinInviteInvalid {
 		t.Fatalf("error code = %q, err=%v", fault.Code(err), err)
 	}
 }
@@ -201,7 +201,7 @@ func TestJoinInviteParserRejectsAmbiguousOrInsecureURLs(t *testing.T) {
 		"xconnect://join/" + joinToken + "?controller=http%3A%2F%2Flocalhost%3A8080",
 	}
 	for _, invite := range tests {
-		if _, err := resolveJoinTarget(invite, "", false); fault.Code(err) != fault.CodeInvalidInput {
+		if _, err := resolveJoinTarget(invite, "", false); fault.Code(err) != fault.CodeJoinInviteInvalid {
 			t.Fatalf("invite accepted %q: %v", invite, err)
 		}
 	}

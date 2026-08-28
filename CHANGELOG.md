@@ -1,5 +1,13 @@
 # Unreleased
 
+- Added the XConnect-One mobile enrollment product boundary: strict
+  `xconnect://join` lifecycle ingress on iOS, macOS, and Android; paste/import
+  and injectable QR inputs; a serialized, redacted Flutter enrollment model;
+  Keychain/Android Keystore capability probes with explicit Windows/Linux
+  integration gaps; and a single typed bridge to the shared Go Join use case.
+  This batch intentionally reports the mobile Join bridge unavailable until a
+  protected host runtime can apply the signed profile, so it cannot ACK or
+  claim a joined network prematurely.
 - Added one-command XConnect-One invite enrollment with strict
   `xconnect://join/<opaque>` parsing, public one-time atomic exchange,
   signed-only restricted enrollment config/ACK, private transient bearer

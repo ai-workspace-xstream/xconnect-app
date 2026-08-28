@@ -117,11 +117,13 @@ final class ProductManifest {
     required this.hostApi,
     required this.configSchemaVersion,
     required Set<HostCapability> requiredCapabilities,
+    Set<HostCapability> optionalCapabilities = const {},
     required this.runtimeCoreId,
     this.manifestSchemaVersion = 1,
     this.delivery = PluginDelivery.builtIn,
     this.signature,
-  }) : requiredCapabilities = Set.unmodifiable(requiredCapabilities) {
+  })  : requiredCapabilities = Set.unmodifiable(requiredCapabilities),
+        optionalCapabilities = Set.unmodifiable(optionalCapabilities) {
     _validate();
   }
 
@@ -132,6 +134,7 @@ final class ProductManifest {
   final HostApiRange hostApi;
   final int configSchemaVersion;
   final Set<HostCapability> requiredCapabilities;
+  final Set<HostCapability> optionalCapabilities;
   final String runtimeCoreId;
   final PluginDelivery delivery;
   final ProductPluginSignature? signature;
@@ -154,6 +157,11 @@ final class ProductManifest {
     if (manifestSchemaVersion < 1 || configSchemaVersion < 1) {
       throw const FormatException('Schema versions must be positive');
     }
+    if (requiredCapabilities.intersection(optionalCapabilities).isNotEmpty) {
+      throw const FormatException(
+        'Required and optional capabilities must be disjoint',
+      );
+    }
     if (delivery == PluginDelivery.signedBundle && signature == null) {
       throw const FormatException('Signed bundles require a signature');
     }
@@ -167,6 +175,8 @@ final class ProductManifest {
   Map<String, Object> toJson() {
     final capabilities = requiredCapabilities.map((item) => item.id).toList()
       ..sort();
+    final optional = optionalCapabilities.map((item) => item.id).toList()
+      ..sort();
     return {
       'manifest_schema_version': manifestSchemaVersion,
       'plugin_id': pluginId,
@@ -175,6 +185,7 @@ final class ProductManifest {
       'host_api': hostApi.toJson(),
       'config_schema_version': configSchemaVersion,
       'required_capabilities': capabilities,
+      if (optional.isNotEmpty) 'optional_capabilities': optional,
       'runtime_core_id': runtimeCoreId,
       'delivery': delivery.id,
       if (signature != null) 'signature': signature!.toJson(),
@@ -185,6 +196,10 @@ final class ProductManifest {
     final capabilities = (json['required_capabilities'] as List<Object?>)
         .map((item) => HostCapability.fromId(item as String))
         .toSet();
+    final optionalCapabilities =
+        (json['optional_capabilities'] as List<Object?>? ?? const [])
+            .map((item) => HostCapability.fromId(item as String))
+            .toSet();
     final signatureJson = json['signature'];
     return ProductManifest(
       manifestSchemaVersion: json['manifest_schema_version'] as int,
@@ -196,6 +211,7 @@ final class ProductManifest {
       ),
       configSchemaVersion: json['config_schema_version'] as int,
       requiredCapabilities: capabilities,
+      optionalCapabilities: optionalCapabilities,
       runtimeCoreId: json['runtime_core_id'] as String,
       delivery: PluginDelivery.fromId(json['delivery'] as String),
       signature: signatureJson == null

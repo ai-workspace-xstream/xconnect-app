@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 
 	"go_core/overlay/controlplane"
 	"go_core/overlay/fault"
+	"go_core/overlay/invite"
 	overlayruntime "go_core/overlay/runtime"
 	"go_core/overlay/state"
 	"go_core/overlay/usecase"
@@ -199,6 +199,13 @@ type joinTarget struct {
 }
 
 func resolveJoinTarget(value, fallbackController string, allowInsecureLocalhost bool) (joinTarget, error) {
+	if strings.HasPrefix(value, "xconnect:") {
+		target, err := invite.Parse(value, allowInsecureLocalhost)
+		if err != nil {
+			return joinTarget{}, err
+		}
+		return joinTarget{Controller: target.Controller, JoinToken: target.JoinToken}, nil
+	}
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return joinTarget{Controller: strings.TrimRight(strings.TrimSpace(fallbackController), "/")}, nil
@@ -213,23 +220,6 @@ func resolveJoinTarget(value, fallbackController string, allowInsecureLocalhost 
 			return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse invite URL", nil)
 		}
 	}
-	if parsed.Scheme == "xconnect" {
-		if parsed.Host != "join" || parsed.User != nil || parsed.Fragment != "" || parsed.Opaque != "" {
-			return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse invite URL", nil)
-		}
-		if len(query) != 1 || len(query["controller"]) != 1 {
-			return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse invite URL", nil)
-		}
-		joinToken := strings.TrimPrefix(parsed.Path, "/")
-		if parsed.Path != "/"+joinToken || parsed.EscapedPath() != parsed.Path || !validJoinToken(joinToken) {
-			return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse invite URL", nil)
-		}
-		controller, err := strictInviteController(query.Get("controller"), allowInsecureLocalhost)
-		if err != nil {
-			return joinTarget{}, err
-		}
-		return joinTarget{Controller: controller, JoinToken: joinToken}, nil
-	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse join target", nil)
 	}
@@ -237,26 +227,6 @@ func resolveJoinTarget(value, fallbackController string, allowInsecureLocalhost 
 		return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse join target", nil)
 	}
 	return joinTarget{Controller: strings.TrimRight(value, "/")}, nil
-}
-
-func strictInviteController(value string, allowInsecureLocalhost bool) (string, error) {
-	parsed, err := url.Parse(strings.TrimSpace(value))
-	if err != nil || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Opaque != "" {
-		return "", fault.New(fault.CodeInvalidInput, "parse invite controller", nil)
-	}
-	localDevelopment := parsed.Scheme == "http" && (parsed.Hostname() == "localhost" || parsed.Hostname() == "127.0.0.1") && allowInsecureLocalhost
-	if parsed.Scheme != "https" && !localDevelopment {
-		return "", fault.New(fault.CodeInvalidInput, "parse invite controller", nil)
-	}
-	return strings.TrimRight(parsed.String(), "/"), nil
-}
-
-func validJoinToken(value string) bool {
-	if !strings.HasPrefix(value, "xjt_") {
-		return false
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(value, "xjt_"))
-	return err == nil && len(raw) == 32
 }
 
 func defaultStateDirectory() string {

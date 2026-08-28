@@ -68,5 +68,42 @@ void main() {
       expect(range.supports(const ApiVersion(1, 9, 9)), isTrue);
       expect(range.supports(const ApiVersion(2, 0, 0)), isFalse);
     });
+
+    test('round-trips optional capabilities and rejects overlap', () {
+      final manifest = ProductManifest(
+        pluginId: 'com.xconnect.one',
+        displayName: 'XConnect-One',
+        version: '1.0.0',
+        hostApi: const HostApiRange(
+          minimum: ApiVersion(1, 0, 0),
+          maximumExclusive: ApiVersion(2, 0, 0),
+        ),
+        configSchemaVersion: 1,
+        requiredCapabilities: const {HostCapability.secretStore},
+        optionalCapabilities: const {HostCapability.qrScanner},
+        runtimeCoreId: 'xray',
+      );
+
+      expect(
+        ProductManifest.fromJson(manifest.toJson()).optionalCapabilities,
+        const {HostCapability.qrScanner},
+      );
+      expect(
+        () => ProductManifest(
+          pluginId: 'com.xconnect.one',
+          displayName: 'XConnect-One',
+          version: '1.0.0',
+          hostApi: const HostApiRange(
+            minimum: ApiVersion(1, 0, 0),
+            maximumExclusive: ApiVersion(2, 0, 0),
+          ),
+          configSchemaVersion: 1,
+          requiredCapabilities: const {HostCapability.qrScanner},
+          optionalCapabilities: const {HostCapability.qrScanner},
+          runtimeCoreId: 'xray',
+        ),
+        throwsFormatException,
+      );
+    });
   });
 }

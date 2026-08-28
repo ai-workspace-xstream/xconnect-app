@@ -31,6 +31,9 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image/image.dart' as img;
 import 'package:zxing2/qrcode.dart';
 import 'widgets/take_picture.dart';
+import 'product/xconnect_one/enrollment_screen.dart';
+import 'product/xconnect_one/mobile_enrollment.dart';
+import 'product/xconnect_one/mobile_product_host.dart';
 
 String getQrCodeData(img.Image image) {
   final source = RGBLuminanceSource(
@@ -60,6 +63,7 @@ void main(List<String> args) async {
   await TunSettingsService.init();
   await DesktopSyncService.instance.init();
   await NativeBridge.initializeLinuxDesktopIntegration();
+  final xconnectOneProductHost = await XConnectOneProductHost.create();
   final debug = args.contains('--debug') ||
       Platform.executableArguments.contains('--debug');
   GlobalState.debugMode.value = debug;
@@ -67,11 +71,13 @@ void main(List<String> args) async {
     debugPrint('🚀 Flutter main() started in debug mode');
   }
   await VpnConfig.load(); // ✅ 启动时加载 assets + 本地配置
-  runApp(const MyApp());
+  runApp(MyApp(xconnectOneProductHost: xconnectOneProductHost));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({required this.xconnectOneProductHost, super.key});
+
+  final XConnectOneProductHost xconnectOneProductHost;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +96,15 @@ class MyApp extends StatelessWidget {
           title: 'XConnect',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
-          home: const MainPage(),
+          routes: {
+            '/products/xconnect-one': (_) => XConnectOneEnrollmentScreen(
+                  controller: xconnectOneProductHost.enrollmentController,
+                ),
+          },
+          home: MainPage(
+            xconnectOneEnrollmentController:
+                xconnectOneProductHost.enrollmentController,
+          ),
         );
       },
     );
@@ -98,7 +112,9 @@ class MyApp extends StatelessWidget {
 }
 
 class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+  const MainPage({required this.xconnectOneEnrollmentController, super.key});
+
+  final XConnectOneEnrollmentController xconnectOneEnrollmentController;
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -107,6 +123,7 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   static const double _mobileBreakpoint = 900;
   int _currentIndex = 0;
+  bool _xconnectOneRouteVisible = false;
 
   DesktopPlatformCapabilities get _desktopCapabilities =>
       DesktopPlatformCapabilities.current;
@@ -133,7 +150,11 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     GlobalState.connectionMode.addListener(_onConnectionModeChanged);
     GlobalState.activeNodeName.addListener(_syncNativeMenuState);
     GlobalState.locale.addListener(_onLocaleChanged);
+    widget.xconnectOneEnrollmentController.addListener(
+      _onXConnectOneEnrollmentChanged,
+    );
     _syncNativeMenuState();
+    _onXConnectOneEnrollmentChanged();
   }
 
   @override
@@ -142,6 +163,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     GlobalState.connectionMode.removeListener(_onConnectionModeChanged);
     GlobalState.activeNodeName.removeListener(_syncNativeMenuState);
     GlobalState.locale.removeListener(_onLocaleChanged);
+    widget.xconnectOneEnrollmentController.removeListener(
+      _onXConnectOneEnrollmentChanged,
+    );
     super.dispose();
   }
 
@@ -166,6 +190,26 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         builder: (_) => SubscriptionScreen(initialVlessUri: uri),
       ),
     );
+  }
+
+  void _openXConnectOneEnrollment() {
+    if (_xconnectOneRouteVisible || !mounted) return;
+    _xconnectOneRouteVisible = true;
+    Navigator.of(context)
+        .pushNamed('/products/xconnect-one')
+        .whenComplete(() => _xconnectOneRouteVisible = false);
+  }
+
+  void _onXConnectOneEnrollmentChanged() {
+    final state = widget.xconnectOneEnrollmentController.state;
+    if (state.source != XConnectOneInviteSource.deepLink ||
+        (state.phase != XConnectOneEnrollmentPhase.inviteReady &&
+            state.phase != XConnectOneEnrollmentPhase.failed)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openXConnectOneEnrollment();
+    });
   }
 
   Future<void> _showAddNodeMenuAction(_AddNodeMenuAction action) async {
@@ -213,6 +257,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
       case _AddNodeMenuAction.readClipboard:
         await _importFromClipboard();
+        break;
+      case _AddNodeMenuAction.joinXConnectOne:
+        _openXConnectOneEnrollment();
         break;
     }
   }
@@ -539,21 +586,23 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.1),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
-              child: Icon(icon,
-                  size: 20, color: Theme.of(context).colorScheme.primary),
+              child: Icon(
+                icon,
+                size: 20,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
             const SizedBox(width: 14),
             Text(
               text,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -627,6 +676,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   itemBuilder: (context) => [
                     _buildAddNodeItem(
                       context,
+                      action: _AddNodeMenuAction.joinXConnectOne,
+                      icon: Icons.hub_outlined,
+                      text: context.l10n.get('xconnectOneJoinTitle'),
+                    ),
+                    _buildAddNodeItem(
+                      context,
                       action: _AddNodeMenuAction.manualInput,
                       icon: Icons.edit,
                       text: context.l10n.get('addNodeManualInput'),
@@ -658,12 +713,17 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_rounded,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 20),
+                        Icon(
+                          Icons.add_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
                         const SizedBox(width: 4),
-                        Icon(Icons.dns_rounded,
-                            color: context.xColors.mutedText, size: 16),
+                        Icon(
+                          Icons.dns_rounded,
+                          color: context.xColors.mutedText,
+                          size: 16,
+                        ),
                       ],
                     ),
                   ),
@@ -750,4 +810,4 @@ class _NavigationDestination {
   });
 }
 
-enum _AddNodeMenuAction { manualInput, scanQr, readClipboard }
+enum _AddNodeMenuAction { joinXConnectOne, manualInput, scanQr, readClipboard }

@@ -69,7 +69,11 @@ final class ProductRegistry {
     try {
       final scopedServices = ScopedHostServices(
         _hostServices,
-        manifest.requiredCapabilities,
+        manifest.requiredCapabilities.union(
+          manifest.optionalCapabilities.intersection(
+            _hostServices.grantedCapabilities,
+          ),
+        ),
       );
       final registration = await plugin.register(scopedServices);
       _validateRegistration(manifest, registration);
