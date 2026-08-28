@@ -1,6 +1,7 @@
 # XConnect-One Client/CLI 实施更新记录
 
-状态日期：2026-08-28  
+状态日期：2026-08-28
+
 本仓职责：`xconnect` CLI、XConnect-APP 产品插件、SignedConfig/policy consumer 和五平台宿主边界
 
 ## 产品边界
@@ -74,4 +75,3 @@
 - iOS/Android protected secret bridge 仍是 fail-closed stub；不声称移动端数据面完成。
 - 当前批次保留在特性分支，未创建新的 PR；后续 PR base 为
   `codex/xconnect-overlay-productization`，创建前需再次取得用户确认。
-
