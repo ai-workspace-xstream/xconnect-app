@@ -49,6 +49,16 @@ rg --quiet 'EnrollmentSecretPath' go_core/overlay/state/store.go
 rg --quiet 'allow-insecure-localhost' go_core/cmd/xconnect/main.go
 test -f go_core/overlay/invite/testdata/invite-url-cases.json
 rg --quiet 'overlay/invite' go_core/cmd/xconnect/main.go
+test -f go_core/overlay/policy/testdata/policy-enforcement-artifact.json
+rg --quiet '58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c' \
+  go_core/overlay/policy/consumer_test.go
+rg --quiet 'case "up"' go_core/cmd/xconnect/main.go
+rg --quiet 'case "down"' go_core/cmd/xconnect/main.go
+rg --quiet 'case "leave"' go_core/cmd/xconnect/main.go
+rg --quiet 'admin invite create' go_core/cmd/xconnect/main.go
+rg --quiet 'policy explain' go_core/cmd/xconnect/main.go
+rg --quiet 'macos_packet_tunnel_host_required' go_core/cmd/xconnect/main.go
+rg --quiet 'windows_service_host_required' go_core/cmd/xconnect/main.go
 rg --quiet 'mobile_join_bridge_unavailable' \
   android/app/src/main/kotlin/plus/svc/xconnect/MainActivity.kt \
   ios/Runner/AppDelegate.swift macos/Runner/AppDelegate.swift

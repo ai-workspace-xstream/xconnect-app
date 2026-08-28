@@ -89,6 +89,17 @@ func TestJoinAcceptsControllerPositionallyAndKeepsSecretsOutOfOutput(t *testing.
 	}
 }
 
+func TestLifecycleReadCommandsRejectUnexpectedPositionals(t *testing.T) {
+	for _, command := range []string{"status", "diagnose"} {
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		err := runWithRuntimeFactory(t.Context(), []string{command, "unexpected"}, &stdout, &stderr, http.DefaultClient, func(string) overlayruntime.Interface { return &overlayruntime.Fake{} })
+		if fault.Code(err) != fault.CodeInvalidInput {
+			t.Fatalf("%s code=%q err=%v", command, fault.Code(err), err)
+		}
+	}
+}
+
 func TestCLIInviteJoinUsesEnrollmentWithoutAccountTokenOrSecretOutput(t *testing.T) {
 	server, joinToken, enrollmentToken, exchangeCalls, ackCalls := newCLIInviteServer(t)
 	stateDirectory := t.TempDir()
@@ -157,11 +168,25 @@ func TestPlatformRuntimeSelectsLinuxOnlyExternalRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("darwin diagnose: %v", err)
 	}
-	if len(diagnostics) != 2 || diagnostics[1].Code != "protected_host_runtime_required" || !diagnostics[1].Healthy {
+	if len(diagnostics) != 2 || diagnostics[1].Code != "macos_packet_tunnel_host_required" || !diagnostics[1].Healthy {
 		t.Fatalf("darwin diagnostics = %#v", diagnostics)
 	}
 	if _, err := darwinRuntime.Apply(t.Context(), overlayruntime.ApplyRequest{}); fault.Code(err) != fault.CodeRuntimeUnavailable {
 		t.Fatalf("darwin apply code = %q, err=%v", fault.Code(err), err)
+	}
+	for _, test := range []struct{ goos, code string }{
+		{goos: "windows", code: "windows_service_host_required"},
+		{goos: "ios", code: "mobile_protected_tunnel_host_required"},
+		{goos: "android", code: "mobile_protected_tunnel_host_required"},
+	} {
+		runtimeHost := platformRuntime(test.goos, t.TempDir())
+		diagnostics, err := runtimeHost.Diagnose(t.Context())
+		if err != nil || len(diagnostics) != 2 || diagnostics[1].Code != test.code || !diagnostics[1].Healthy {
+			t.Fatalf("%s diagnostics=%#v err=%v", test.goos, diagnostics, err)
+		}
+		if _, err := runtimeHost.Apply(t.Context(), overlayruntime.ApplyRequest{}); fault.Code(err) != fault.CodeRuntimeUnavailable {
+			t.Fatalf("%s apply code=%q err=%v", test.goos, fault.Code(err), err)
+		}
 	}
 }
 
@@ -253,6 +278,114 @@ func TestJoinAuthenticationErrorDoesNotExposeTokenOrResponseBody(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), cliTestToken) || strings.Contains(err.Error(), "token_expired") {
 		t.Fatalf("authentication error leaked details: %v", err)
+	}
+}
+
+func TestCLILifecycleCommandsAreIdempotentAndLeaveRetainsUnknownFiles(t *testing.T) {
+	var ackCalls atomic.Int32
+	server := newCLITestServer(t, false, &ackCalls)
+	stateDirectory := t.TempDir()
+	t.Setenv("XCONNECT_TOKEN", cliTestToken)
+	runtimeFake := &overlayruntime.Fake{}
+	factory := func(string) overlayruntime.Interface { return runtimeFake }
+	var stdout, stderr bytes.Buffer
+	if err := runWithRuntimeFactory(t.Context(), []string{"join", server.URL, "--state-dir", stateDirectory, "--device-id", "dev_cli"}, &stdout, &stderr, server.Client(), factory); err != nil {
+		t.Fatal(err)
+	}
+	if ackCalls.Load() != 1 {
+		t.Fatalf("ACK calls=%d", ackCalls.Load())
+	}
+	for _, command := range [][]string{{"down", "--state-dir", stateDirectory}, {"down", "--state-dir", stateDirectory}, {"up", "--state-dir", stateDirectory}, {"up", "--state-dir", stateDirectory}} {
+		stdout.Reset()
+		if err := runWithRuntimeFactory(t.Context(), command, &stdout, &stderr, server.Client(), factory); err != nil {
+			t.Fatalf("%v: %v", command, err)
+		}
+	}
+	if runtimeFake.DownCalls != 1 || runtimeFake.ApplyCalls != 2 || ackCalls.Load() != 1 {
+		t.Fatalf("down=%d apply=%d ack=%d", runtimeFake.DownCalls, runtimeFake.ApplyCalls, ackCalls.Load())
+	}
+	unknown := filepath.Join(stateDirectory, "operator-note.txt")
+	if err := os.WriteFile(unknown, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWithRuntimeFactory(t.Context(), []string{"leave", "--state-dir", stateDirectory}, &stdout, &stderr, server.Client(), factory); fault.Code(err) != fault.CodeDeviceLifecyclePending {
+		t.Fatalf("default leave code=%q err=%v", fault.Code(err), err)
+	}
+	stdout.Reset()
+	if err := runWithRuntimeFactory(t.Context(), []string{"leave", "--local-only", "--state-dir", stateDirectory}, &stdout, &stderr, server.Client(), factory); err != nil {
+		t.Fatalf("local leave: %v", err)
+	}
+	if _, err := os.Stat(unknown); err != nil {
+		t.Fatalf("unknown file removed: %v", err)
+	}
+	if strings.Contains(stdout.String(), cliTestToken) {
+		t.Fatal("lifecycle output leaked token")
+	}
+}
+
+func TestAdminInviteCreatePrintsSecretExactlyOnceAndNeverToStderr(t *testing.T) {
+	secret := "xjt_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32))
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.Header().Set("Cache-Control", "no-store")
+		if request.URL.Path != "/api/overlay/v1/join-tokens" || request.Header.Get("Authorization") != "Bearer "+cliTestToken {
+			writer.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_ = json.NewEncoder(writer).Encode(map[string]any{"join_token": map[string]any{
+			"id": "join_01", "join_uri": "xconnect://join/" + secret + "?controller=" + url.QueryEscape(server.URL),
+			"network_id": "net_private", "device_id": "dev_cli", "platform": "linux", "remaining_uses": 1,
+			"expires_at": time.Now().UTC().Add(10 * time.Minute).Truncate(time.Second).Format(time.RFC3339),
+		}})
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("XCONNECT_TOKEN", cliTestToken)
+	var stdout, stderr bytes.Buffer
+	err := runWithRuntimeFactory(t.Context(), []string{"admin", "invite", "create", "--server", server.URL, "--network-id", "net_private", "--device-id", "dev_cli", "--platform", "linux"}, &stdout, &stderr, server.Client(), func(string) overlayruntime.Interface { return &overlayruntime.Fake{} })
+	if err != nil {
+		t.Fatalf("create invite: %v", err)
+	}
+	if strings.Count(stdout.String(), secret) != 1 || strings.Contains(stderr.String(), secret) || strings.Contains(stderr.String(), cliTestToken) {
+		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	stdout.Reset()
+	err = runWithRuntimeFactory(t.Context(), []string{"admin", "invite", "create", "--server", server.URL, "--network-id", "net_private", "--device-id", "dev_cli", "--platform", "linux", "--output", "uri"}, &stdout, &stderr, server.Client(), func(string) overlayruntime.Interface { return &overlayruntime.Fake{} })
+	if err != nil || strings.Count(stdout.String(), secret) != 1 {
+		t.Fatalf("URI output=%q err=%v", stdout.String(), err)
+	}
+}
+
+func TestPolicyExplainOutputsOnlyScopedRuleAndResolvedDevices(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		if request.Header.Get("Authorization") != "Bearer "+cliTestToken {
+			writer.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/api/overlay/v1/policies/7":
+			_, _ = writer.Write([]byte(`{"network_id":"net_private","revision":7,"name":"private","artifact_sha256":"58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c","compiler_version":"xconnect-acl-v1alpha1.1","warnings":[],"status":"active","generation":12,"created_at":"2026-08-28T12:00:00Z","validated_at":null,"activated_at":"2026-08-28T12:01:00Z"}`))
+		case "/api/overlay/v1/policies/7/explain":
+			_, _ = writer.Write([]byte(`{"action":"accept","rule_id":"allow-api","reason":"matched canonical rule","protected":false,"resolved_source_devices":["dev-a"],"resolved_destination_devices":["dev-b"]}`))
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("XCONNECT_TOKEN", cliTestToken)
+	var stdout, stderr bytes.Buffer
+	err := runWithRuntimeFactory(t.Context(), []string{"policy", "explain", "--server", server.URL, "--network-id", "net_private", "--revision", "7", "--source", "device:dev-a", "--destination", "device:dev-b", "--protocol", "tcp", "--port", "8787"}, &stdout, &stderr, server.Client(), func(string) overlayruntime.Interface { return &overlayruntime.Fake{} })
+	if err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	for _, expected := range []string{`"generation": 12`, `"rule_id": "allow-api"`, `"dev-a"`, `"dev-b"`} {
+		if !strings.Contains(stdout.String(), expected) {
+			t.Fatalf("missing %s: %s", expected, stdout.String())
+		}
+	}
+	if strings.Contains(stdout.String(), "@") || strings.Contains(stderr.String(), cliTestToken) {
+		t.Fatalf("unsafe output stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
 
@@ -386,7 +519,7 @@ func newCLIInviteServer(t *testing.T) (*httptest.Server, string, string, *atomic
 			writer.Header().Set("Cache-Control", "no-store")
 			_ = json.NewEncoder(writer).Encode(controlplane.JoinTokenExchangeResponse{
 				EnrollmentToken: enrollmentToken, TokenType: "Bearer", ExpiresAt: now.Add(10 * time.Minute),
-				Scope:   []string{"overlay:config:read", "overlay:config:ack"},
+				Scope:   []string{"overlay:config:read", "overlay:config:ack", "overlay:device:revoke"},
 				Device:  model.Device{ID: "dev_cli", NetworkID: "net_private", Platform: runtime.GOOS, WireGuardPublicKey: exchange.WireGuardPublicKey, WireGuardAddress: "10.77.0.20/32"},
 				Network: model.Network{ID: "net_private", CIDR: "10.77.0.0/16"}, SigningKeys: keys,
 			})

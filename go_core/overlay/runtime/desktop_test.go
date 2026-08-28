@@ -323,6 +323,77 @@ func TestDesktopApplySameRevisionIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestDesktopDownAndUpAreIdempotent(t *testing.T) {
+	backend := newFakeDesktopBackend()
+	tunnelRuntime := newDesktop(t.TempDir(), backend)
+	request := desktopApplyRequest("revision-1")
+	if _, err := tunnelRuntime.Apply(t.Context(), request); err != nil {
+		t.Fatal(err)
+	}
+	if err := tunnelRuntime.Down(t.Context()); err != nil {
+		t.Fatalf("down: %v", err)
+	}
+	downCalls := countRunPrefix(backend.runs, "wg-quick down ")
+	stops := len(backend.stops)
+	if err := tunnelRuntime.Down(t.Context()); err != nil {
+		t.Fatalf("repeat down: %v", err)
+	}
+	if countRunPrefix(backend.runs, "wg-quick down ") != downCalls || len(backend.stops) != stops {
+		t.Fatalf("repeat down changed runtime: runs=%v stops=%v", backend.runs, backend.stops)
+	}
+	if _, err := tunnelRuntime.Apply(t.Context(), request); err != nil {
+		t.Fatalf("up: %v", err)
+	}
+	status, err := tunnelRuntime.Status(t.Context())
+	if err != nil || !status.Applied || status.Revision != request.Config.Revision {
+		t.Fatalf("status=%#v err=%v", status, err)
+	}
+}
+
+func TestDesktopDownRefusesStalePIDAndCleanupRetainsUnknownFiles(t *testing.T) {
+	backend := newFakeDesktopBackend()
+	tunnelRuntime := newDesktop(t.TempDir(), backend)
+	if _, err := tunnelRuntime.Apply(t.Context(), desktopApplyRequest("revision-1")); err != nil {
+		t.Fatal(err)
+	}
+	active, err := tunnelRuntime.loadManifest(tunnelRuntime.activeManifestPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.stale[active.Xray.PID] = true
+	stops := len(backend.stops)
+	if err := tunnelRuntime.Down(t.Context()); fault.Code(err) != fault.CodeRuntimeProcessStale {
+		t.Fatalf("code=%q err=%v", fault.Code(err), err)
+	}
+	if len(backend.stops) != stops {
+		t.Fatalf("stale PID stopped: %v", backend.stops)
+	}
+	backend.stale[active.Xray.PID] = false
+	if err := tunnelRuntime.Down(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	unknown := filepath.Join(tunnelRuntime.dir, "operator-note.txt")
+	if err := os.WriteFile(unknown, []byte("retain"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	revisionUnknown := filepath.Join(filepath.Dir(active.XrayConfigPath), "operator-note.txt")
+	if err := os.WriteFile(revisionUnknown, []byte("retain"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := tunnelRuntime.Cleanup(t.Context()); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if _, err := os.Stat(unknown); err != nil {
+		t.Fatalf("unknown file removed: %v", err)
+	}
+	if _, err := os.Stat(revisionUnknown); err != nil {
+		t.Fatalf("unknown revision file removed: %v", err)
+	}
+	if _, err := os.Stat(tunnelRuntime.activeManifestPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("owned manifest remains: %v", err)
+	}
+}
+
 func TestDesktopApplyNewRevisionFailureRestoresLastKnownGood(t *testing.T) {
 	backend := newFakeDesktopBackend()
 	tunnelRuntime := newDesktop(t.TempDir(), backend)

@@ -42,7 +42,7 @@ func (f *inviteControlPlaneFixture) ExchangeJoinToken(_ context.Context, request
 	f.enrollmentTokens = append(f.enrollmentTokens, token)
 	return controlplane.JoinTokenExchangeResponse{
 		EnrollmentToken: token, TokenType: "Bearer", ExpiresAt: request.Now.Add(10 * time.Minute),
-		Scope:   []string{"overlay:config:read", "overlay:config:ack"},
+		Scope:   []string{"overlay:config:read", "overlay:config:ack", "overlay:device:revoke"},
 		Device:  model.Device{ID: request.DeviceID, NetworkID: "net_private", Platform: request.Platform, WireGuardPublicKey: request.WireGuardPublicKey, WireGuardAddress: "10.77.0.10/32"},
 		Network: model.Network{ID: "net_private", CIDR: "10.77.0.0/16"}, SigningKeys: append([]signedconfig.SigningKey(nil), f.keys.Keys...),
 	}, nil

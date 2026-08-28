@@ -36,6 +36,11 @@ const (
 	CodeRuntimeRollbackFailed   = "runtime_rollback_failed"
 	CodeRuntimeStatusFailed     = "runtime_status_failed"
 	CodeNotJoined               = "not_joined"
+	CodeOperationInProgress     = "operation_in_progress"
+	CodeDeviceLifecyclePending  = "device_lifecycle_contract_pending"
+	CodePolicyInvalid           = "policy_artifact_invalid"
+	CodePolicyExpired           = "policy_artifact_expired"
+	CodePolicyReplay            = "policy_generation_replay"
 )
 
 // Error exposes a stable code while deliberately withholding the wrapped

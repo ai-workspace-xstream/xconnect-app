@@ -42,23 +42,38 @@ func platformRuntime(goos, stateDirectory string) overlayruntime.Interface {
 	if goos == "linux" {
 		return overlayruntime.NewLinuxDesktop(stateDirectory)
 	}
-	if goos == "darwin" {
-		return overlayruntime.NewProtectedHostUnavailable()
+	switch goos {
+	case "darwin":
+		return overlayruntime.NewProtectedHost("macos_packet_tunnel_host_required", nil)
+	case "windows":
+		return overlayruntime.NewProtectedHost("windows_service_host_required", nil)
+	case "ios", "android":
+		return overlayruntime.NewProtectedHost("mobile_protected_tunnel_host_required", nil)
 	}
 	return overlayruntime.NewUnavailable()
 }
 
 func runWithRuntimeFactory(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory) error {
 	if len(args) == 0 {
-		return fault.New(fault.CodeInvalidInput, "expected join, status, or diagnose", nil)
+		return fault.New(fault.CodeInvalidInput, "expected join, up, down, leave, status, diagnose, admin, or policy", nil)
 	}
 	switch args[0] {
 	case "join":
 		return runJoin(ctx, args[1:], stdout, stderr, httpClient, newRuntime)
+	case "up":
+		return runUp(ctx, args[1:], stdout, stderr, newRuntime)
+	case "down":
+		return runDown(ctx, args[1:], stdout, stderr, newRuntime)
+	case "leave":
+		return runLeave(ctx, args[1:], stdout, stderr, newRuntime)
 	case "status":
 		return runStatus(ctx, args[1:], stdout, stderr, newRuntime)
 	case "diagnose":
 		return runDiagnose(ctx, args[1:], stdout, stderr, newRuntime)
+	case "admin":
+		return runAdmin(ctx, args[1:], stdout, stderr, httpClient)
+	case "policy":
+		return runPolicy(ctx, args[1:], stdout, stderr, httpClient)
 	default:
 		return fault.New(fault.CodeInvalidInput, "unknown command", nil)
 	}
@@ -120,6 +135,11 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	}
 	hostname, _ := os.Hostname()
 	store := state.NewStore(*stateDirectory)
+	operation, err := store.AcquireOperation(ctx, "join")
+	if err != nil {
+		return err
+	}
+	defer operation.Release()
 	tunnelRuntime := newRuntime(*stateDirectory)
 	result, err := usecase.NewJoiner(client, store, tunnelRuntime).WithConfigContract(contract).Join(ctx, usecase.JoinRequest{
 		Server:     target.Controller,
@@ -131,6 +151,119 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 		NodeID:     *nodeID,
 		JoinToken:  target.JoinToken,
 	})
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runUp(ctx context.Context, args []string, stdout, stderr io.Writer, newRuntime runtimeFactory) error {
+	flags := flag.NewFlagSet("xconnect up", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse up arguments", err)
+	}
+	result, err := usecase.Up(ctx, state.NewStore(*stateDirectory), newRuntime(*stateDirectory))
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runDown(ctx context.Context, args []string, stdout, stderr io.Writer, newRuntime runtimeFactory) error {
+	flags := flag.NewFlagSet("xconnect down", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse down arguments", err)
+	}
+	result, err := usecase.Down(ctx, state.NewStore(*stateDirectory), newRuntime(*stateDirectory))
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runLeave(ctx context.Context, args []string, stdout, stderr io.Writer, newRuntime runtimeFactory) error {
+	flags := flag.NewFlagSet("xconnect leave", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
+	localOnly := flags.Bool("local-only", false, "remove only local XConnect-owned state without server revocation")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse leave arguments", err)
+	}
+	result, err := usecase.Leave(ctx, state.NewStore(*stateDirectory), newRuntime(*stateDirectory), nil, *localOnly)
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runAdmin(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client) error {
+	if len(args) < 2 || args[0] != "invite" || args[1] != "create" {
+		return fault.New(fault.CodeInvalidInput, "expected admin invite create", nil)
+	}
+	flags := flag.NewFlagSet("xconnect admin invite create", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	server := flags.String("server", defaultAccountsServer, "accounts service base URL")
+	tokenFile := flags.String("token-file", "", "path to a file containing the accounts access token")
+	networkID := flags.String("network-id", "", "overlay network ID")
+	deviceID := flags.String("device-id", "", "optional constrained device ID")
+	platform := flags.String("platform", "", "optional constrained platform")
+	expiresIn := flags.Int64("expires-in", 900, "one-time invite lifetime in seconds")
+	output := flags.String("output", "json", "output format: json or uri")
+	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse invite create arguments", err)
+	}
+	if *output != "json" && *output != "uri" {
+		return fault.New(fault.CodeInvalidInput, "select invite output", nil)
+	}
+	token, err := readToken(*tokenFile)
+	if err != nil {
+		return err
+	}
+	client, err := controlplane.New(*server, token, httpClient)
+	if err != nil {
+		return err
+	}
+	response, err := client.CreateJoinToken(ctx, controlplane.CreateJoinTokenRequest{NetworkID: *networkID, DeviceID: *deviceID, Platform: *platform, ExpiresInSeconds: *expiresIn})
+	if err != nil {
+		return err
+	}
+	if *output == "uri" {
+		_, err = fmt.Fprintln(stdout, response.JoinToken.JoinURI)
+		return err
+	}
+	return writeJSON(stdout, response)
+}
+
+func runPolicy(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client) error {
+	if len(args) < 1 || args[0] != "explain" {
+		return fault.New(fault.CodeInvalidInput, "expected policy explain", nil)
+	}
+	flags := flag.NewFlagSet("xconnect policy explain", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	server := flags.String("server", defaultAccountsServer, "accounts service base URL")
+	tokenFile := flags.String("token-file", "", "path to a file containing the accounts access token")
+	networkID := flags.String("network-id", "", "overlay network ID")
+	revision := flags.Uint64("revision", 0, "policy revision")
+	source := flags.String("source", "", "source selector")
+	destination := flags.String("destination", "", "destination selector")
+	protocol := flags.String("protocol", "", "tcp, udp, or icmp")
+	port := flags.Int("port", 0, "destination port; zero only for ICMP")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse policy explain arguments", err)
+	}
+	token, err := readToken(*tokenFile)
+	if err != nil {
+		return err
+	}
+	client, err := controlplane.New(*server, token, httpClient)
+	if err != nil {
+		return err
+	}
+	result, err := client.ExplainPolicy(ctx, *revision, controlplane.PolicyExplainRequest{NetworkID: *networkID, Source: *source, Destination: *destination, Protocol: *protocol, Port: *port})
 	if err != nil {
 		return err
 	}
@@ -149,7 +282,7 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer, new
 	flags := flag.NewFlagSet("xconnect status", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
-	if err := flags.Parse(args); err != nil {
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return fault.New(fault.CodeInvalidInput, "parse status arguments", err)
 	}
 	store := state.NewStore(*stateDirectory)
@@ -164,7 +297,7 @@ func runDiagnose(ctx context.Context, args []string, stdout, stderr io.Writer, n
 	flags := flag.NewFlagSet("xconnect diagnose", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
-	if err := flags.Parse(args); err != nil {
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return fault.New(fault.CodeInvalidInput, "parse diagnose arguments", err)
 	}
 	store := state.NewStore(*stateDirectory)

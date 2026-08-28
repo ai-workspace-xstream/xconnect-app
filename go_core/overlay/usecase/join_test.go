@@ -455,13 +455,18 @@ func TestStatusReportsJoinedOnlyWhenAcknowledgedRuntimeIsHealthy(t *testing.T) {
 	store := state.NewStore(t.TempDir())
 	config := validConfig()
 	if err := store.SaveLastKnown(state.LastKnown{
-		Server:    "https://accounts.example",
-		DeviceID:  config.Device.ID,
-		NetworkID: config.Network.ID,
-		Phase:     state.PhaseAcknowledged,
-		Config:    config,
+		Server:           "https://accounts.example",
+		DeviceID:         config.Device.ID,
+		NetworkID:        config.Network.ID,
+		Phase:            state.PhaseAcknowledged,
+		Config:           config,
+		ConfigContract:   string(usecase.ConfigContractSigned),
+		SignedGeneration: 42,
 	}); err != nil {
 		t.Fatalf("save last-known: %v", err)
+	}
+	if err := store.SavePolicyState(state.PolicyState{NetworkID: config.Network.ID, Generation: 17, Digest: strings.Repeat("a", 64), Revision: 7, ExpiresAt: time.Now().UTC().Truncate(time.Second).Add(time.Hour), AcceptedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("save policy state: %v", err)
 	}
 	tunnelRuntime := &overlayruntime.Fake{StatusResult: overlayruntime.Status{
 		Available: true,
@@ -476,6 +481,9 @@ func TestStatusReportsJoinedOnlyWhenAcknowledgedRuntimeIsHealthy(t *testing.T) {
 	}
 	if result.Joined {
 		t.Fatalf("stopped runtime reported joined: %#v", result)
+	}
+	if result.Generations.State != 42 || result.Generations.RuntimeRevision != config.Revision || result.Generations.Policy != 17 || result.Generations.PolicyExpired {
+		t.Fatalf("generation status=%#v", result.Generations)
 	}
 	tunnelRuntime.StatusResult.Applied = true
 	result, err = usecase.Status(t.Context(), store, tunnelRuntime)

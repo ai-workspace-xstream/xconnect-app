@@ -1,5 +1,16 @@
 # Unreleased
 
+- Expanded the `xconnect` product CLI with idempotent `up` and `down`, an
+  ownership-safe `leave --local-only` recovery path, one-time
+  `admin invite create`, and tenant-scoped `policy explain`. Lifecycle
+  operations are serialized and never acknowledge configuration again;
+  macOS, Windows, and mobile remain behind typed protected-host boundaries.
+- Added the strict XConnect ACL enforcement consumer shared with the Accounts,
+  IaC, and Gateway golden: default-deny, fixed protected-flow order, deny-first
+  canonical rules, PII/unknown-field rejection, verified-reference expiry,
+  digest/network/generation binding, and persistent replay protection.
+  Server-backed durable device leave remains fail-closed until the Accounts
+  rotatable device refresh/revoke contract is finalized.
 - Added the XConnect-One mobile enrollment product boundary: strict
   `xconnect://join` lifecycle ingress on iOS, macOS, and Android; paste/import
   and injectable QR inputs; a serialized, redacted Flutter enrollment model;

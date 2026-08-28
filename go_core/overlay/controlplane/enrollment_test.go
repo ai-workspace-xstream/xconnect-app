@@ -153,5 +153,5 @@ func testOpaqueSecret(prefix string, fill byte) string {
 }
 
 func validExchangeJSON(enrollmentToken, deviceID string, expiresAt time.Time) string {
-	return `{"enrollment_token":"` + enrollmentToken + `","token_type":"Bearer","expires_at":"` + expiresAt.UTC().Format(time.RFC3339Nano) + `","scope":["overlay:config:read","overlay:config:ack"],"device":{"id":"` + deviceID + `","network_id":"net_private","name":"Laptop","platform":"linux","hostname":"laptop","wireguard_public_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","wireguard_address":"10.77.0.10/32"},"network":{"id":"net_private","display_name":"Private","cidr":"10.77.0.0/16"},"signing_keys":` + strings.TrimSuffix(strings.TrimPrefix(validSigningKeysJSON(), `{"keys":`), `}`) + `}`
+	return `{"enrollment_token":"` + enrollmentToken + `","token_type":"Bearer","expires_at":"` + expiresAt.UTC().Format(time.RFC3339Nano) + `","scope":["overlay:config:read","overlay:config:ack","overlay:device:revoke"],"device":{"id":"` + deviceID + `","network_id":"net_private","name":"Laptop","platform":"linux","hostname":"laptop","wireguard_public_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","wireguard_address":"10.77.0.10/32"},"network":{"id":"net_private","display_name":"Private","cidr":"10.77.0.0/16"},"signing_keys":` + strings.TrimSuffix(strings.TrimPrefix(validSigningKeysJSON(), `{"keys":`), `}`) + `}`
 }

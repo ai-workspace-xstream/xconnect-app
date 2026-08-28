@@ -147,7 +147,7 @@ func validEnrollmentSecret() state.EnrollmentSecret {
 	return state.EnrollmentSecret{
 		Controller: "https://accounts.example", DeviceID: "dev_laptop", NetworkID: "net_private", Platform: "linux",
 		WireGuardPublicKey: publicKey, EnrollmentToken: "xenr_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32)),
-		ExpiresAt: time.Date(2026, 8, 28, 12, 10, 0, 0, time.UTC), Scope: []string{"overlay:config:read", "overlay:config:ack"},
+		ExpiresAt: time.Date(2026, 8, 28, 12, 10, 0, 0, time.UTC), Scope: []string{"overlay:config:read", "overlay:config:ack", "overlay:device:revoke"},
 		Device:      model.Device{ID: "dev_laptop", NetworkID: "net_private", Platform: "linux", WireGuardPublicKey: publicKey, WireGuardAddress: "10.77.0.10/32"},
 		Network:     model.Network{ID: "net_private", CIDR: "10.77.0.0/16"},
 		SigningKeys: signedconfig.SigningKeys{Keys: []signedconfig.SigningKey{{KeyID: "signing_key_01", Algorithm: signedconfig.SignatureEd25519, PublicKey: publicKey, Status: "current", NotBefore: notBefore, NotAfter: &notAfter}}},

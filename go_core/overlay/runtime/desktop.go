@@ -45,6 +45,7 @@ type desktopManifest struct {
 	WGConfigSHA256  string          `json:"wireguard_config_sha256"`
 	Xray            processIdentity `json:"xray_process"`
 	WireGuardUp     bool            `json:"wireguard_up"`
+	Stopped         bool            `json:"stopped,omitempty"`
 	AppliedAt       time.Time       `json:"applied_at"`
 }
 
@@ -113,6 +114,20 @@ func (r *Desktop) Apply(ctx context.Context, request ApplyRequest) (ApplyResult,
 		return ApplyResult{}, activeErr
 	}
 	if activeErr == nil {
+		if active.Stopped && active.Revision == request.Config.Revision {
+			if !r.manifestMetadataTrusted(active, dependencies) {
+				return ApplyResult{}, fault.New(fault.CodeRuntimeProcessStale, "verify stopped runtime metadata ownership", nil)
+			}
+			activated, startErr := r.startManifest(ctx, active, dependencies)
+			if startErr != nil {
+				return ApplyResult{}, startErr
+			}
+			if err := r.saveManifest(r.activeManifestPath(), activated); err != nil {
+				_ = r.stopManifest(ctx, activated, dependencies)
+				return ApplyResult{}, err
+			}
+			return applyResult(request.Config), nil
+		}
 		healthy, healthErr := r.manifestHealthy(ctx, active, dependencies)
 		if healthErr != nil && fault.Code(healthErr) == fault.CodeRuntimeProcessStale {
 			return ApplyResult{}, healthErr
@@ -145,11 +160,13 @@ func (r *Desktop) Apply(ctx context.Context, request ApplyRequest) (ApplyResult,
 		if !r.manifestMetadataTrusted(active, dependencies) {
 			return ApplyResult{}, fault.New(fault.CodeRuntimeProcessStale, "verify runtime metadata ownership", nil)
 		}
-		if _, err := r.processTrusted(active); err != nil {
-			return ApplyResult{}, err
-		}
-		if err := r.stopManifest(ctx, active, dependencies); err != nil {
-			return ApplyResult{}, err
+		if !active.Stopped {
+			if _, err := r.processTrusted(active); err != nil {
+				return ApplyResult{}, err
+			}
+			if err := r.stopManifest(ctx, active, dependencies); err != nil {
+				return ApplyResult{}, err
+			}
 		}
 	}
 
@@ -197,6 +214,85 @@ func (r *Desktop) Status(ctx context.Context) (Status, error) {
 		CoreID:    manifest.CoreID,
 		AdapterID: manifest.AdapterID,
 	}, nil
+}
+
+// Down stops only the process and interface described by trusted XConnect
+// runtime metadata. The stopped manifest is retained so Up can recover without
+// refetching configuration or acknowledging it again.
+func (r *Desktop) Down(ctx context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	dependencies, err := r.dependencies()
+	if err != nil {
+		return err
+	}
+	if !r.backend.Privileged() {
+		return fault.New(fault.CodeRuntimePermission, "stop desktop runtime", nil)
+	}
+	manifest, err := r.loadManifest(r.activeManifestPath())
+	if errors.Is(err, errRuntimeArtifactNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !r.manifestMetadataTrusted(manifest, dependencies) {
+		return fault.New(fault.CodeRuntimeProcessStale, "verify runtime metadata ownership", nil)
+	}
+	if manifest.Stopped {
+		return nil
+	}
+	if err := r.stopManifest(ctx, manifest, dependencies); err != nil {
+		return err
+	}
+	manifest.Stopped = true
+	manifest.WireGuardUp = false
+	manifest.Xray.PID = 0
+	manifest.Xray.StartToken = ""
+	return r.saveManifest(r.activeManifestPath(), manifest)
+}
+
+// Cleanup removes only manifests and revision directories that are proven to
+// belong to this runtime. Unknown files are retained and make the parent
+// directory non-empty; they are never recursively deleted.
+func (r *Desktop) Cleanup(context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	manifests := make([]desktopManifest, 0, 2)
+	for _, path := range []string{r.activeManifestPath(), r.lastKnownGoodPath()} {
+		manifest, loadErr := r.loadManifest(path)
+		if errors.Is(loadErr, errRuntimeArtifactNotFound) {
+			continue
+		}
+		if loadErr != nil {
+			return loadErr
+		}
+		if !r.manifestMetadataTrusted(manifest, desktopDependencies{xray: manifest.Xray.Executable}) {
+			return fault.New(fault.CodeRuntimeProcessStale, "verify cleanup metadata ownership", nil)
+		}
+		if path == r.activeManifestPath() && !manifest.Stopped {
+			return fault.New(fault.CodeRuntimeApplyFailed, "cleanup active runtime", nil)
+		}
+		manifests = append(manifests, manifest)
+	}
+	for _, manifest := range manifests {
+		if directory, ok := r.revisionDirectory(manifest); ok {
+			for _, path := range []string{manifest.XrayConfigPath, manifest.WGConfigPath} {
+				if err := removeOwnedRegularFile(path); err != nil {
+					return err
+				}
+			}
+			_ = os.Remove(directory)
+		}
+	}
+	for _, path := range []string{r.activeManifestPath(), r.lastKnownGoodPath()} {
+		if err := removeOwnedRegularFile(path); err != nil {
+			return err
+		}
+	}
+	_ = os.Remove(filepath.Join(r.dir, "revisions"))
+	_ = os.Remove(r.dir)
+	return nil
 }
 
 func (r *Desktop) Diagnose(ctx context.Context) ([]Diagnostic, error) {
@@ -351,12 +447,16 @@ func (r *Desktop) startManifest(ctx context.Context, manifest desktopManifest, d
 		return desktopManifest{}, fault.New(fault.CodeRuntimeApplyFailed, "verify WireGuard runtime", nil)
 	}
 	manifest.AppliedAt = time.Now().UTC()
+	manifest.Stopped = false
 	return manifest, nil
 }
 
 func (r *Desktop) stopManifest(ctx context.Context, manifest desktopManifest, dependencies desktopDependencies) error {
 	if !r.manifestMetadataTrusted(manifest, dependencies) {
 		return fault.New(fault.CodeRuntimeProcessStale, "verify runtime metadata ownership", nil)
+	}
+	if manifest.Stopped {
+		return nil
 	}
 	trusted, err := r.processTrusted(manifest)
 	if err != nil {
@@ -397,6 +497,9 @@ func (r *Desktop) rollback(ctx context.Context, candidate desktopManifest, previ
 }
 
 func (r *Desktop) manifestHealthy(ctx context.Context, manifest desktopManifest, dependencies desktopDependencies) (bool, error) {
+	if manifest.Stopped {
+		return false, nil
+	}
 	if !r.manifestMetadataTrusted(manifest, dependencies) {
 		return false, fault.New(fault.CodeRuntimeProcessStale, "verify runtime metadata ownership", nil)
 	}
@@ -525,6 +628,20 @@ func (r *Desktop) loadManifest(path string) (desktopManifest, error) {
 func privateRegularFile(path string) bool {
 	info, err := os.Lstat(path)
 	return err == nil && info.Mode().IsRegular() && info.Mode().Perm() == 0o600
+}
+
+func removeOwnedRegularFile(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		return fault.New(fault.CodeStateIO, "validate owned runtime file", err)
+	}
+	if err := os.Remove(path); err != nil {
+		return fault.New(fault.CodeStateIO, "remove owned runtime file", err)
+	}
+	return nil
 }
 
 func (r *Desktop) saveManifest(path string, manifest desktopManifest) error {

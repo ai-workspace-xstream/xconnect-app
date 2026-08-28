@@ -313,17 +313,17 @@ func validateEnrollmentSecret(secret EnrollmentSecret) error {
 }
 
 func validEnrollmentScope(values []string) bool {
-	if len(values) != 2 {
+	if len(values) != 3 {
 		return false
 	}
 	seen := map[string]bool{}
 	for _, value := range values {
-		if value != "overlay:config:read" && value != "overlay:config:ack" || seen[value] {
+		if value != "overlay:config:read" && value != "overlay:config:ack" && value != "overlay:device:revoke" || seen[value] {
 			return false
 		}
 		seen[value] = true
 	}
-	return seen["overlay:config:read"] && seen["overlay:config:ack"]
+	return seen["overlay:config:read"] && seen["overlay:config:ack"] && seen["overlay:device:revoke"]
 }
 
 func readJSON(path string, target any) error {
