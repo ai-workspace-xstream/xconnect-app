@@ -43,6 +43,10 @@ rg --quiet 'ProxyCoreXray[[:space:]]*=[[:space:]]*"xray"' \
 rg --quiet 'RelayTargetPort[[:space:]]*=[[:space:]]*51820' \
   go_core/overlay/signedconfig/contract.go
 rg --quiet 'config-contract' go_core/cmd/xconnect/main.go
+rg --quiet 'join-tokens/exchange' go_core/overlay/controlplane/enrollment.go
+rg --quiet 'enrollment/signed-config' go_core/overlay/controlplane/enrollment.go
+rg --quiet 'EnrollmentSecretPath' go_core/overlay/state/store.go
+rg --quiet 'allow-insecure-localhost' go_core/cmd/xconnect/main.go
 
 for artifact_root in build dist artifacts; do
   if [[ ! -d "$artifact_root" ]]; then

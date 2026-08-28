@@ -13,18 +13,25 @@ downgrade floor。堆叠分支最终仍以 `codex/xconnect-overlay-productizatio
 xconnect join https://accounts.svc.plus --token-file /path/to/token
 ```
 
-当前命令读取 `XCONNECT_TOKEN` 环境变量或显式 `--token-file`。推荐使用 token
-文件：
+controller 入口读取 `XCONNECT_TOKEN` 环境变量或显式 `--token-file`；invite 入口则
+不需要 account token：
 
 ```bash
 xconnect join \
-  'xconnect://join?controller=https%3A%2F%2Faccounts.svc.plus&network_id=net_private' \
-  --config-contract auto \
-  --token-file /path/to/token
+  'xconnect://join/xjt_<opaque>?controller=https%3A%2F%2Faccounts.svc.plus'
 ```
 
-MVP invite URL 只携带 controller、`network_id` 和 `node_id`，不接受或持久化 URL
-中的访问 token。`--network-id` 和 `--node-id` 可覆盖 invite 中的选择。
+一次性 invite URL 只接受精确的 `xconnect://join/<opaque>?controller=https...`
+形态。CLI 拒绝 userinfo、fragment、未知/重复 query 参数、额外 path segment、转义
+token 和非 HTTPS controller。仅本地开发可显式加入
+`--allow-insecure-localhost`，并且只允许 `http://localhost` 或
+`http://127.0.0.1`；该开关不能放宽远端 HTTP。
+
+invite flow 不读取或发送 account access token。CLI 先在本机生成 WireGuard key，
+只把 public key 和设备信息发送到公开、限流的
+`POST /api/overlay/v1/join-tokens/exchange`。invite secret 不写入任何本地文件，
+也不进入错误、`status` 或 `diagnose` 输出。原有 controller + account token 命令
+保持兼容，用于已登录设备和迁移期 legacy controller。
 
 其他只读命令：
 
@@ -63,6 +70,21 @@ checkpoint 保持可恢复状态且不 ACK；ACK 中断重试不会重复 Apply�
 last-known state 可由 auto 模式原地升级，并复用本机 WireGuard key。旧的
 `/api/overlay/v1/config` 仍是 unsigned legacy-compatible response，文档与代码不会
 把它误称为 SignedConfig。
+
+invite exchange 会在 controller 的单一事务中消耗一次性 token、注册设备并返回
+短期 `xenr_` enrollment bearer；邀请路径强制 signed-only，无论默认 auto 设置如何
+都不允许 legacy fallback。客户端严格验证 exchange 的 `Cache-Control: no-store`、
+Bearer 类型、精确 read/ack scope、未来且有界的 expiry、device/network/platform、
+WireGuard public key、设备 IPv4 `/32`、网络 CIDR 和 signing-key set。enrollment bearer
+只能调用 `/enrollment/signed-config` 与对应 generation ACK。
+
+为了在一次性 exchange 后恢复 Runtime 或 ACK 中断，短期 bearer 单独原子写入
+`enrollment-secret.json`（0700 目录、0600 文件），并绑定 controller/device/network/
+platform/WireGuard public key/expiry；它不会混入普通 checkpoint 或 last-known state。
+完成 ACK 或确认过期后会删除该 transient 文件。重跑相同命令优先恢复现有 enrollment，
+不会重放已消费 invite。若 enrollment 在 ACK 前过期，未提供新 invite 时返回
+`enrollment_expired`；使用新的一次性 invite 可为同一设备/key/network 换取新 bearer，
+已健康 Apply 的 revision 不会重启，只补发 ACK。已消费的旧 invite 永远不能充当续期。
 
 canonical v1 的 `transport.loopback` 同时是本机 Xray UDP ingress 与 WireGuard peer
 endpoint。客户端将 Xray dokodemo relay target 固定编译为服务端本机
@@ -140,6 +162,8 @@ CLI 使用可机器识别的错误码，包括：
 - `signing_key_unknown` / `signing_key_window`
 - `signed_config_expired` / `signed_config_future` / `signed_config_unavailable`
 - `config_replay_detected` / `config_downgrade_blocked`
+- `join_invite_invalid` / `join_constraint_mismatch` / `join_rate_limited`
+- `enrollment_expired` / `enrollment_session_unavailable`
 - `unsupported_runtime_core`
 - `runtime_apply_failed`
 - `runtime_unavailable`

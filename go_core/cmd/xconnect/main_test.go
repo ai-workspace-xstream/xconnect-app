@@ -2,20 +2,26 @@ package main
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"go_core/overlay/controlplane"
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
 	overlayruntime "go_core/overlay/runtime"
+	"go_core/overlay/signedconfig"
 	"go_core/overlay/state"
 )
 
@@ -83,6 +89,35 @@ func TestJoinAcceptsControllerPositionallyAndKeepsSecretsOutOfOutput(t *testing.
 	}
 }
 
+func TestCLIInviteJoinUsesEnrollmentWithoutAccountTokenOrSecretOutput(t *testing.T) {
+	server, joinToken, enrollmentToken, exchangeCalls, ackCalls := newCLIInviteServer(t)
+	stateDirectory := t.TempDir()
+	t.Setenv("XCONNECT_TOKEN", "account-token-must-not-be-used")
+	invite := "xconnect://join/" + joinToken + "?controller=" + url.QueryEscape(server.URL)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	fakeRuntime := &overlayruntime.Fake{}
+	err := runWithRuntimeFactory(t.Context(), []string{
+		"join", invite, "--allow-insecure-localhost", "--state-dir", stateDirectory, "--device-id", "dev_cli",
+	}, &stdout, &stderr, server.Client(), func(string) overlayruntime.Interface { return fakeRuntime })
+	if err != nil {
+		t.Fatalf("invite join: %v", err)
+	}
+	if exchangeCalls.Load() != 1 || ackCalls.Load() != 1 || fakeRuntime.ApplyCalls != 1 {
+		t.Fatalf("exchange=%d ack=%d apply=%d", exchangeCalls.Load(), ackCalls.Load(), fakeRuntime.ApplyCalls)
+	}
+	for _, output := range []string{stdout.String(), stderr.String()} {
+		for _, secret := range []string{joinToken, enrollmentToken, "account-token-must-not-be-used"} {
+			if strings.Contains(output, secret) {
+				t.Fatalf("CLI output leaked secret: %s", output)
+			}
+		}
+	}
+	if _, err := os.Stat(state.NewStore(stateDirectory).EnrollmentSecretPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("completed transient secret remains: %v", err)
+	}
+}
+
 func TestProductionJoinFailsClosedWithoutPlatformRuntimeAndDoesNotAck(t *testing.T) {
 	var ackCalls atomic.Int32
 	server := newCLITestServer(t, false, &ackCalls)
@@ -132,21 +167,47 @@ func TestPlatformRuntimeSelectsLinuxOnlyExternalRuntime(t *testing.T) {
 
 func TestJoinAcceptsInviteURLControllerAndSelection(t *testing.T) {
 	controller := "https://accounts.example"
-	invite := "xconnect://join?controller=" + url.QueryEscape(controller) + "&network_id=net_private&node_id=gw_tokyo"
+	joinToken := "xjt_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
+	invite := "xconnect://join/" + joinToken + "?controller=" + url.QueryEscape(controller)
 
-	target, err := resolveJoinTarget(invite, "")
+	target, err := resolveJoinTarget(invite, "", false)
 	if err != nil {
 		t.Fatalf("resolve invite: %v", err)
 	}
-	if target.Controller != controller || target.NetworkID != "net_private" || target.NodeID != "gw_tokyo" {
+	if target.Controller != controller || target.JoinToken != joinToken || target.NetworkID != "" || target.NodeID != "" {
 		t.Fatalf("unexpected invite target: %#v", target)
 	}
 }
 
 func TestJoinRejectsCredentialsInInviteURL(t *testing.T) {
-	_, err := resolveJoinTarget("xconnect://join?controller=https%3A%2F%2Faccounts.example&token=secret", "")
+	joinToken := "xjt_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
+	_, err := resolveJoinTarget("xconnect://join/"+joinToken+"?controller=https%3A%2F%2Faccounts.example&token=secret", "", false)
 	if fault.Code(err) != fault.CodeInvalidInput {
 		t.Fatalf("error code = %q, err=%v", fault.Code(err), err)
+	}
+}
+
+func TestJoinInviteParserRejectsAmbiguousOrInsecureURLs(t *testing.T) {
+	joinToken := "xjt_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
+	tests := []string{
+		"xconnect://join?controller=https%3A%2F%2Faccounts.example",
+		"xconnect://user@join/" + joinToken + "?controller=https%3A%2F%2Faccounts.example",
+		"xconnect://join/" + joinToken + "/extra?controller=https%3A%2F%2Faccounts.example",
+		"xconnect://join/%78jt_invalid?controller=https%3A%2F%2Faccounts.example",
+		"xconnect://join/" + joinToken + "?controller=https%3A%2F%2Faccounts.example#fragment",
+		"xconnect://join/" + joinToken + "?controller=https%3A%2F%2Fuser%40accounts.example",
+		"xconnect://join/" + joinToken + "?controller=https%3A%2F%2Faccounts.example%3Fx%3D1",
+		"xconnect://join/" + joinToken + "?controller=http%3A%2F%2Faccounts.example",
+		"xconnect://join/" + joinToken + "?controller=http%3A%2F%2Flocalhost%3A8080",
+	}
+	for _, invite := range tests {
+		if _, err := resolveJoinTarget(invite, "", false); fault.Code(err) != fault.CodeInvalidInput {
+			t.Fatalf("invite accepted %q: %v", invite, err)
+		}
+	}
+	invite := "xconnect://join/" + joinToken + "?controller=http%3A%2F%2Flocalhost%3A8080"
+	if target, err := resolveJoinTarget(invite, "", true); err != nil || target.Controller != "http://localhost:8080" {
+		t.Fatalf("explicit localhost development invite = %#v, %v", target, err)
 	}
 }
 
@@ -157,6 +218,19 @@ func TestJoinRejectsUnknownConfigContractBeforeNetworkAccess(t *testing.T) {
 		"join", "https://accounts.example", "--config-contract", "future", "--state-dir", t.TempDir(), "--device-id", "dev_cli",
 	}, &stdout, &stderr, http.DefaultClient, func(string) overlayruntime.Interface { return &overlayruntime.Fake{} })
 	if fault.Code(err) != fault.CodeInvalidInput {
+		t.Fatalf("error code = %q, err=%v", fault.Code(err), err)
+	}
+}
+
+func TestInviteJoinRejectsLegacyContractBeforeNetworkAccess(t *testing.T) {
+	joinToken := "xjt_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
+	invite := "xconnect://join/" + joinToken + "?controller=https%3A%2F%2Faccounts.example"
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := runWithRuntimeFactory(t.Context(), []string{
+		"join", invite, "--config-contract", "legacy", "--state-dir", t.TempDir(), "--device-id", "dev_cli",
+	}, &stdout, &stderr, http.DefaultClient, func(string) overlayruntime.Interface { return &overlayruntime.Fake{} })
+	if fault.Code(err) != fault.CodeConfigDowngradeBlocked {
 		t.Fatalf("error code = %q, err=%v", fault.Code(err), err)
 	}
 }
@@ -263,4 +337,79 @@ func cliTestConfig() model.Config {
 			LocalPort:      51830,
 		},
 	}
+}
+
+func newCLIInviteServer(t *testing.T) (*httptest.Server, string, string, *atomic.Int32, *atomic.Int32) {
+	t.Helper()
+	joinToken := "xjt_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
+	enrollmentToken := "xenr_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32))
+	now := time.Now().UTC().Truncate(time.Second)
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{11}, ed25519.SeedSize))
+	notAfter := signedconfig.CanonicalTime{Time: now.Add(24 * time.Hour)}
+	keys := []signedconfig.SigningKey{{
+		KeyID: "signing_key_01", Algorithm: signedconfig.SignatureEd25519,
+		PublicKey: base64.StdEncoding.EncodeToString(privateKey.Public().(ed25519.PublicKey)), Status: "current",
+		NotBefore: signedconfig.CanonicalTime{Time: now.Add(-time.Hour)}, NotAfter: &notAfter,
+	}}
+	config := signedconfig.Config{
+		SchemaVersion: 1, ConfigID: "cfg_cli_invite", NetworkID: "net_private", DeviceID: "dev_cli", Generation: 1,
+		IssuedAt: signedconfig.CanonicalTime{Time: now.Add(-time.Minute)}, ExpiresAt: signedconfig.CanonicalTime{Time: now.Add(time.Hour)},
+		ProxyCore: signedconfig.ProxyCoreXray,
+		Transport: signedconfig.Transport{Kind: signedconfig.TransportVLESS, Loopback: signedconfig.Endpoint{Host: "127.0.0.1", Port: 51830}, Remote: signedconfig.RemoteEndpoint{Host: "gateway.example.net", Port: 443, ServerName: "gateway.example.net"}, AuthID: "11111111-1111-1111-1111-111111111111"},
+		WireGuard: signedconfig.WireGuard{InterfaceName: "wg-xco", Addresses: []string{"10.77.0.20/32"}, MTU: 1280, Peers: []signedconfig.Peer{{GatewayID: "gw_tokyo_01", PublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", AllowedIPs: []string{"10.77.0.0/16"}, Endpoint: signedconfig.Endpoint{Host: "127.0.0.1", Port: 51830}, PersistentKeepaliveSeconds: 25}}},
+		Signature: signedconfig.Signature{Algorithm: signedconfig.SignatureEd25519, KeyID: "signing_key_01"},
+	}
+	payload, err := config.SigningBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Signature.Value = base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, payload))
+	var exchangeCalls atomic.Int32
+	var ackCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/overlay/v1/join-tokens/exchange":
+			exchangeCalls.Add(1)
+			if request.Header.Get("Authorization") != "" {
+				t.Errorf("public exchange sent account bearer")
+			}
+			var exchange controlplane.JoinTokenExchangeRequest
+			if err := json.NewDecoder(request.Body).Decode(&exchange); err != nil {
+				t.Errorf("decode exchange: %v", err)
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if exchange.JoinToken != joinToken || exchange.DeviceID != "dev_cli" {
+				t.Errorf("unexpected exchange request")
+			}
+			writer.Header().Set("Cache-Control", "no-store")
+			_ = json.NewEncoder(writer).Encode(controlplane.JoinTokenExchangeResponse{
+				EnrollmentToken: enrollmentToken, TokenType: "Bearer", ExpiresAt: now.Add(10 * time.Minute),
+				Scope:   []string{"overlay:config:read", "overlay:config:ack"},
+				Device:  model.Device{ID: "dev_cli", NetworkID: "net_private", Platform: runtime.GOOS, WireGuardPublicKey: exchange.WireGuardPublicKey, WireGuardAddress: "10.77.0.20/32"},
+				Network: model.Network{ID: "net_private", CIDR: "10.77.0.0/16"}, SigningKeys: keys,
+			})
+		case "/api/overlay/v1/enrollment/signed-config":
+			if request.Header.Get("Authorization") != "Bearer "+enrollmentToken {
+				t.Errorf("signed config missing enrollment bearer")
+			}
+			writer.Header().Set("Cache-Control", "private, no-store")
+			writer.Header().Set("ETag", `"cfg_cli_invite"`)
+			_ = json.NewEncoder(writer).Encode(config)
+		case "/api/overlay/v1/enrollment/signed-config/1/ack":
+			ackCalls.Add(1)
+			if request.Header.Get("Authorization") != "Bearer "+enrollmentToken {
+				t.Errorf("ACK missing enrollment bearer")
+			}
+			_ = json.NewEncoder(writer).Encode(controlplane.SignedConfigAckResponse{Acked: true, Ack: controlplane.SignedConfigAck{
+				DeviceID: "dev_cli", ConfigID: "cfg_cli_invite", Generation: 1, AppliedAt: now, ReceivedAt: now.Add(time.Millisecond),
+			}})
+		default:
+			t.Errorf("unexpected invite API path %s", request.URL.Path)
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server, joinToken, enrollmentToken, &exchangeCalls, &ackCalls
 }

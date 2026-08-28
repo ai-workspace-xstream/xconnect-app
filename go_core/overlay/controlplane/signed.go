@@ -37,11 +37,11 @@ type SignedConfigAckRequest struct {
 }
 
 type SignedConfigAck struct {
-	DeviceID   string                     `json:"device_id"`
-	ConfigID   string                     `json:"config_id"`
-	Generation uint64                     `json:"generation"`
-	AppliedAt  signedconfig.CanonicalTime `json:"applied_at"`
-	ReceivedAt signedconfig.CanonicalTime `json:"received_at"`
+	DeviceID   string    `json:"device_id"`
+	ConfigID   string    `json:"config_id"`
+	Generation uint64    `json:"generation"`
+	AppliedAt  time.Time `json:"applied_at"`
+	ReceivedAt time.Time `json:"received_at"`
 }
 
 type SignedConfigAckResponse struct {
@@ -123,6 +123,23 @@ func (c *Client) AckSignedConfig(ctx context.Context, request SignedConfigAckReq
 }
 
 func (c *Client) doContract(ctx context.Context, method, path string, query url.Values, payload any, headers http.Header, signedCapability bool) (int, http.Header, []byte, error) {
+	mode := contractErrorDefault
+	if signedCapability {
+		mode = contractErrorSignedCapability
+	}
+	return c.doContractWithBearer(ctx, method, path, query, payload, headers, c.token, mode)
+}
+
+type contractErrorMode int
+
+const (
+	contractErrorDefault contractErrorMode = iota
+	contractErrorSignedCapability
+	contractErrorInviteExchange
+	contractErrorEnrollment
+)
+
+func (c *Client) doContractWithBearer(ctx context.Context, method, path string, query url.Values, payload any, headers http.Header, bearer string, errorMode contractErrorMode) (int, http.Header, []byte, error) {
 	endpoint := *c.baseURL
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + path
 	endpoint.RawQuery = query.Encode()
@@ -142,8 +159,8 @@ func (c *Client) doContract(ctx context.Context, method, path string, query url.
 	if payload != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	if c.token != "" {
-		request.Header.Set("Authorization", "Bearer "+c.token)
+	if strings.TrimSpace(bearer) != "" {
+		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(bearer))
 	}
 	for key, values := range headers {
 		for _, value := range values {
@@ -161,8 +178,23 @@ func (c *Client) doContract(ctx context.Context, method, path string, query url.
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
-		if signedCapability && (response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusServiceUnavailable) {
+		if errorMode == contractErrorSignedCapability && (response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusServiceUnavailable) {
 			return response.StatusCode, nil, nil, fault.New(fault.CodeSignedConfigUnavailable, "signed config capability unavailable", nil)
+		}
+		if errorMode == contractErrorInviteExchange {
+			switch response.StatusCode {
+			case http.StatusUnauthorized:
+				return response.StatusCode, nil, nil, fault.New(fault.CodeJoinInviteInvalid, "exchange join invite", nil)
+			case http.StatusForbidden:
+				return response.StatusCode, nil, nil, fault.New(fault.CodeJoinConstraint, "exchange join invite", nil)
+			case http.StatusConflict:
+				return response.StatusCode, nil, nil, fault.New(fault.CodeStateConflict, "exchange join invite", nil)
+			case http.StatusTooManyRequests:
+				return response.StatusCode, nil, nil, fault.New(fault.CodeJoinRateLimited, "exchange join invite", nil)
+			}
+		}
+		if errorMode == contractErrorEnrollment && response.StatusCode == http.StatusUnauthorized {
+			return response.StatusCode, nil, nil, fault.New(fault.CodeEnrollmentExpired, "use enrollment session", nil)
 		}
 		return response.StatusCode, nil, nil, statusError(response.StatusCode)
 	}

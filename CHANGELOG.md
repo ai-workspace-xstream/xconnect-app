@@ -1,5 +1,10 @@
 # Unreleased
 
+- Added one-command XConnect-One invite enrollment with strict
+  `xconnect://join/<opaque>` parsing, public one-time atomic exchange,
+  signed-only restricted enrollment config/ACK, private transient bearer
+  recovery, expiry cleanup, and safe renewal with a new invite without
+  reapplying an already healthy runtime revision.
 - Migrated the XConnect-One CLI join path to the canonical Ed25519 SignedConfig
   contract with strict key discovery caching, signature/time/ownership checks,
   persistent generation replay and downgrade protection, resumable generation

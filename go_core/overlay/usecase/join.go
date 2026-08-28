@@ -29,6 +29,12 @@ type SignedControlPlane interface {
 	AckSignedConfig(context.Context, controlplane.SignedConfigAckRequest) (controlplane.SignedConfigAckResponse, error)
 }
 
+type InviteControlPlane interface {
+	ExchangeJoinToken(context.Context, controlplane.JoinTokenExchangeRequest) (controlplane.JoinTokenExchangeResponse, error)
+	GetEnrollmentSignedConfig(context.Context, string, controlplane.SignedConfigRequest) (signedconfig.Config, error)
+	AckEnrollmentSignedConfig(context.Context, string, controlplane.SignedConfigAckRequest) (controlplane.SignedConfigAckResponse, error)
+}
+
 type ConfigContract string
 
 const (
@@ -66,6 +72,7 @@ type JoinRequest struct {
 	Hostname   string
 	NetworkID  string
 	NodeID     string
+	JoinToken  string
 }
 
 type JoinResult struct {
@@ -124,6 +131,11 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 				return JoinResult{}, fault.New(fault.CodeConfigDowngradeBlocked, "join signed device with legacy config", nil)
 			}
 			if lastContract == ConfigContractSigned || j.contract == ConfigContractLegacy {
+				if lastContract == ConfigContractSigned {
+					if err := j.store.ClearEnrollmentSecret(); err != nil {
+						return JoinResult{}, err
+					}
+				}
 				return j.recoverLastKnown(ctx, lastKnown)
 			}
 			if err := j.seedMigrationCheckpoint(lastKnown); err != nil {
@@ -146,21 +158,34 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 	}
 
 	if !phaseAtLeast(checkpoint.Phase, state.PhaseDeviceRegistered) {
-		response, err := j.controlPlane.RegisterDevice(ctx, controlplane.RegisterDeviceRequest{
-			DeviceID:           checkpoint.DeviceID,
-			Name:               checkpoint.DeviceName,
-			Platform:           checkpoint.Platform,
-			Hostname:           checkpoint.Hostname,
-			NetworkID:          checkpoint.NetworkID,
-			WireGuardPublicKey: checkpoint.WireGuardPublicKey,
-		})
-		if err != nil {
-			return JoinResult{}, err
+		if checkpoint.InviteEnrollment {
+			enrollment, err := j.loadOrRenewEnrollment(ctx, &checkpoint, request.JoinToken)
+			if err != nil {
+				return JoinResult{}, err
+			}
+			if checkpoint.NetworkID != "" && checkpoint.NetworkID != enrollment.NetworkID {
+				return JoinResult{}, fault.New(fault.CodeStateConflict, "validate invite network", nil)
+			}
+			checkpoint.NetworkID = enrollment.NetworkID
+			checkpoint.ConfigContract = string(ConfigContractSigned)
+			checkpoint.EnrollmentExpiresAt = enrollment.ExpiresAt
+		} else {
+			response, err := j.controlPlane.RegisterDevice(ctx, controlplane.RegisterDeviceRequest{
+				DeviceID:           checkpoint.DeviceID,
+				Name:               checkpoint.DeviceName,
+				Platform:           checkpoint.Platform,
+				Hostname:           checkpoint.Hostname,
+				NetworkID:          checkpoint.NetworkID,
+				WireGuardPublicKey: checkpoint.WireGuardPublicKey,
+			})
+			if err != nil {
+				return JoinResult{}, err
+			}
+			if response.Device.ID == "" || response.Device.ID != checkpoint.DeviceID || response.Device.NetworkID == "" || response.Network.ID != response.Device.NetworkID {
+				return JoinResult{}, fault.New(fault.CodeInvalidResponse, "register overlay device", nil)
+			}
+			checkpoint.NetworkID = response.Device.NetworkID
 		}
-		if response.Device.ID == "" || response.Device.ID != checkpoint.DeviceID || response.Device.NetworkID == "" || response.Network.ID != response.Device.NetworkID {
-			return JoinResult{}, fault.New(fault.CodeInvalidResponse, "register overlay device", nil)
-		}
-		checkpoint.NetworkID = response.Device.NetworkID
 		checkpoint.Phase = state.PhaseDeviceRegistered
 		checkpoint.LastErrorCode = ""
 		checkpoint.UpdatedAt = j.now().UTC()
@@ -170,7 +195,7 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 	}
 
 	if !phaseAtLeast(checkpoint.Phase, state.PhaseConfigFetched) {
-		fetched, err := j.fetchRuntimeConfig(ctx, checkpoint)
+		fetched, err := j.fetchRuntimeConfig(ctx, &checkpoint, request.JoinToken)
 		if err != nil {
 			return JoinResult{}, err
 		}
@@ -220,7 +245,26 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 	}
 
 	if !phaseAtLeast(checkpoint.Phase, state.PhaseAcknowledged) {
-		if checkpoint.ConfigContract == string(ConfigContractSigned) {
+		if checkpoint.InviteEnrollment {
+			enrollment, err := j.loadOrRenewEnrollment(ctx, &checkpoint, request.JoinToken)
+			if err != nil {
+				return JoinResult{}, err
+			}
+			inviteControlPlane, ok := j.controlPlane.(InviteControlPlane)
+			if !ok {
+				return JoinResult{}, fault.New(fault.CodeEnrollmentUnavailable, "ack enrollment signed config", nil)
+			}
+			ack, err := inviteControlPlane.AckEnrollmentSignedConfig(ctx, enrollment.EnrollmentToken, controlplane.SignedConfigAckRequest{
+				Generation: checkpoint.SignedGeneration, ConfigID: checkpoint.SignedConfigID,
+				DeviceID: checkpoint.DeviceID, AppliedAt: j.now().UTC(),
+			})
+			if err != nil {
+				return JoinResult{}, j.handleEnrollmentError(err)
+			}
+			if !ack.Acked || ack.Ack.DeviceID != checkpoint.DeviceID || ack.Ack.ConfigID != checkpoint.SignedConfigID || ack.Ack.Generation != checkpoint.SignedGeneration {
+				return JoinResult{}, fault.New(fault.CodeInvalidResponse, "acknowledge enrollment signed config", nil)
+			}
+		} else if checkpoint.ConfigContract == string(ConfigContractSigned) {
 			signedControlPlane, ok := j.controlPlane.(SignedControlPlane)
 			if !ok {
 				return JoinResult{}, fault.New(fault.CodeSignedConfigUnavailable, "ack signed config", nil)
@@ -276,6 +320,11 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 	if err := j.store.ClearCheckpoint(); err != nil {
 		return JoinResult{}, err
 	}
+	if checkpoint.InviteEnrollment {
+		if err := j.store.ClearEnrollmentSecret(); err != nil {
+			return JoinResult{}, err
+		}
+	}
 	return JoinResult{
 		DeviceID:  lastKnown.DeviceID,
 		NetworkID: lastKnown.NetworkID,
@@ -290,7 +339,10 @@ type fetchedRuntimeConfig struct {
 	SignedGeneration uint64
 }
 
-func (j *Joiner) fetchRuntimeConfig(ctx context.Context, checkpoint state.Checkpoint) (fetchedRuntimeConfig, error) {
+func (j *Joiner) fetchRuntimeConfig(ctx context.Context, checkpoint *state.Checkpoint, joinToken string) (fetchedRuntimeConfig, error) {
+	if checkpoint.InviteEnrollment {
+		return j.fetchEnrollmentSignedConfig(ctx, checkpoint, joinToken)
+	}
 	locked, err := j.store.IsSignedLocked(checkpoint.Server, checkpoint.DeviceID, checkpoint.NetworkID)
 	if err != nil {
 		return fetchedRuntimeConfig{}, err
@@ -300,11 +352,11 @@ func (j *Joiner) fetchRuntimeConfig(ctx context.Context, checkpoint state.Checkp
 		if locked {
 			return fetchedRuntimeConfig{}, fault.New(fault.CodeConfigDowngradeBlocked, "fetch legacy config after signed lock", nil)
 		}
-		return j.fetchLegacyConfig(ctx, checkpoint)
+		return j.fetchLegacyConfig(ctx, *checkpoint)
 	case ConfigContractSigned:
-		return j.fetchSignedConfig(ctx, checkpoint)
+		return j.fetchSignedConfig(ctx, *checkpoint)
 	case ConfigContractAuto:
-		fetched, signedErr := j.fetchSignedConfig(ctx, checkpoint)
+		fetched, signedErr := j.fetchSignedConfig(ctx, *checkpoint)
 		if signedErr == nil {
 			return fetched, nil
 		}
@@ -314,10 +366,109 @@ func (j *Joiner) fetchRuntimeConfig(ctx context.Context, checkpoint state.Checkp
 		if locked {
 			return fetchedRuntimeConfig{}, fault.New(fault.CodeConfigDowngradeBlocked, "signed config capability unavailable after lock", nil)
 		}
-		return j.fetchLegacyConfig(ctx, checkpoint)
+		return j.fetchLegacyConfig(ctx, *checkpoint)
 	default:
 		return fetchedRuntimeConfig{}, fault.New(fault.CodeInvalidInput, "select config contract", nil)
 	}
+}
+
+func (j *Joiner) exchangeEnrollment(ctx context.Context, checkpoint state.Checkpoint, joinToken string) (state.EnrollmentSecret, error) {
+	if strings.TrimSpace(joinToken) == "" {
+		return state.EnrollmentSecret{}, fault.New(fault.CodeEnrollmentUnavailable, "renew enrollment with a new invite", nil)
+	}
+	inviteControlPlane, ok := j.controlPlane.(InviteControlPlane)
+	if !ok {
+		return state.EnrollmentSecret{}, fault.New(fault.CodeEnrollmentUnavailable, "exchange join invite", nil)
+	}
+	response, err := inviteControlPlane.ExchangeJoinToken(ctx, controlplane.JoinTokenExchangeRequest{
+		JoinToken: joinToken, DeviceID: checkpoint.DeviceID, Name: checkpoint.DeviceName,
+		Platform: checkpoint.Platform, Hostname: checkpoint.Hostname,
+		WireGuardPublicKey: checkpoint.WireGuardPublicKey, Now: j.now().UTC(),
+	})
+	if err != nil {
+		return state.EnrollmentSecret{}, err
+	}
+	enrollment := state.EnrollmentSecret{
+		Controller: checkpoint.Server, DeviceID: checkpoint.DeviceID, NetworkID: response.Network.ID,
+		Platform: checkpoint.Platform, WireGuardPublicKey: checkpoint.WireGuardPublicKey,
+		EnrollmentToken: response.EnrollmentToken, ExpiresAt: response.ExpiresAt, Scope: append([]string(nil), response.Scope...),
+		Device: response.Device, Network: response.Network,
+		SigningKeys: signedconfig.SigningKeys{Keys: append([]signedconfig.SigningKey(nil), response.SigningKeys...)}, CreatedAt: j.now().UTC(),
+	}
+	if err := j.store.SaveEnrollmentSecret(enrollment); err != nil {
+		return state.EnrollmentSecret{}, err
+	}
+	return enrollment, nil
+}
+
+func (j *Joiner) loadOrRenewEnrollment(ctx context.Context, checkpoint *state.Checkpoint, joinToken string) (state.EnrollmentSecret, error) {
+	enrollment, err := j.store.LoadEnrollmentSecret(checkpoint.Server, checkpoint.DeviceID, checkpoint.WireGuardPublicKey)
+	if err == nil {
+		if enrollment.ExpiresAt.After(j.now().UTC()) && (checkpoint.NetworkID == "" || enrollment.NetworkID == checkpoint.NetworkID) {
+			return enrollment, nil
+		}
+		_ = j.store.ClearEnrollmentSecret()
+	}
+	if err != nil && !errors.Is(err, state.ErrNotFound) {
+		return state.EnrollmentSecret{}, err
+	}
+	if strings.TrimSpace(joinToken) == "" {
+		return state.EnrollmentSecret{}, fault.New(fault.CodeEnrollmentExpired, "enrollment expired; a new invite is required", nil)
+	}
+	enrollment, err = j.exchangeEnrollment(ctx, *checkpoint, joinToken)
+	if err != nil {
+		return state.EnrollmentSecret{}, err
+	}
+	if checkpoint.NetworkID != "" && enrollment.NetworkID != checkpoint.NetworkID {
+		_ = j.store.ClearEnrollmentSecret()
+		return state.EnrollmentSecret{}, fault.New(fault.CodeStateConflict, "validate renewed enrollment network", nil)
+	}
+	checkpoint.NetworkID = enrollment.NetworkID
+	checkpoint.ConfigContract = string(ConfigContractSigned)
+	checkpoint.EnrollmentExpiresAt = enrollment.ExpiresAt
+	checkpoint.UpdatedAt = j.now().UTC()
+	if err := j.store.SaveCheckpoint(*checkpoint); err != nil {
+		return state.EnrollmentSecret{}, err
+	}
+	return enrollment, nil
+}
+
+func (j *Joiner) fetchEnrollmentSignedConfig(ctx context.Context, checkpoint *state.Checkpoint, joinToken string) (fetchedRuntimeConfig, error) {
+	enrollment, err := j.loadOrRenewEnrollment(ctx, checkpoint, joinToken)
+	if err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	inviteControlPlane, ok := j.controlPlane.(InviteControlPlane)
+	if !ok {
+		return fetchedRuntimeConfig{}, fault.New(fault.CodeEnrollmentUnavailable, "use enrollment signed config", nil)
+	}
+	config, err := inviteControlPlane.GetEnrollmentSignedConfig(ctx, enrollment.EnrollmentToken, controlplane.SignedConfigRequest{
+		DeviceID: checkpoint.DeviceID, NetworkID: checkpoint.NetworkID, NodeID: checkpoint.NodeID,
+	})
+	if err != nil {
+		return fetchedRuntimeConfig{}, j.handleEnrollmentError(err)
+	}
+	if err := signedconfig.Verify(config, enrollment.SigningKeys, j.now()); err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	if config.DeviceID != checkpoint.DeviceID || config.NetworkID != checkpoint.NetworkID {
+		return fetchedRuntimeConfig{}, fault.New(fault.CodeInvalidSignedConfig, "validate enrollment signed config ownership", nil)
+	}
+	compiled, err := signedconfig.Compile(config)
+	if err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	if err := j.store.AcceptSignedConfig(checkpoint.Server, checkpoint.DeviceID, checkpoint.NetworkID, config.ConfigID, compiled.Digest, config.Generation, j.now()); err != nil {
+		return fetchedRuntimeConfig{}, err
+	}
+	return fetchedRuntimeConfig{Config: compiled, Contract: ConfigContractSigned, SignedConfigID: config.ConfigID, SignedGeneration: config.Generation}, nil
+}
+
+func (j *Joiner) handleEnrollmentError(err error) error {
+	if fault.Code(err) == fault.CodeEnrollmentExpired {
+		_ = j.store.ClearEnrollmentSecret()
+	}
+	return err
 }
 
 func (j *Joiner) fetchLegacyConfig(ctx context.Context, checkpoint state.Checkpoint) (fetchedRuntimeConfig, error) {
@@ -453,6 +604,9 @@ func (j *Joiner) loadOrCreateCheckpoint(request JoinRequest) (state.Checkpoint, 
 		if checkpoint.Server != request.Server || checkpoint.DeviceID != request.DeviceID {
 			return state.Checkpoint{}, fault.New(fault.CodeStateConflict, "resume join", nil)
 		}
+		if strings.TrimSpace(request.JoinToken) != "" && !checkpoint.InviteEnrollment {
+			return state.Checkpoint{}, fault.New(fault.CodeStateConflict, "resume join enrollment mode", nil)
+		}
 		return checkpoint, nil
 	}
 	if !errors.Is(err, state.ErrNotFound) {
@@ -470,6 +624,7 @@ func (j *Joiner) loadOrCreateCheckpoint(request JoinRequest) (state.Checkpoint, 
 		Hostname:            strings.TrimSpace(request.Hostname),
 		NetworkID:           strings.TrimSpace(request.NetworkID),
 		NodeID:              strings.TrimSpace(request.NodeID),
+		InviteEnrollment:    strings.TrimSpace(request.JoinToken) != "",
 		WireGuardPrivateKey: privateKey,
 		WireGuardPublicKey:  publicKey,
 		Phase:               state.PhaseStarted,

@@ -1,6 +1,7 @@
 package state
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -46,6 +47,8 @@ type Checkpoint struct {
 	ConfigContract      string        `json:"config_contract,omitempty"`
 	SignedConfigID      string        `json:"signed_config_id,omitempty"`
 	SignedGeneration    uint64        `json:"signed_generation,omitempty"`
+	InviteEnrollment    bool          `json:"invite_enrollment,omitempty"`
+	EnrollmentExpiresAt time.Time     `json:"enrollment_expires_at,omitempty"`
 	LastErrorCode       string        `json:"last_error_code,omitempty"`
 	UpdatedAt           time.Time     `json:"updated_at"`
 }
@@ -95,6 +98,25 @@ type SigningKeyCache struct {
 	FetchedAt     time.Time                `json:"fetched_at"`
 }
 
+// EnrollmentSecret is the only local artifact allowed to contain the
+// short-lived enrollment bearer. It is deliberately separate from checkpoint
+// and last-known state so status and diagnostics never need to decode it.
+type EnrollmentSecret struct {
+	SchemaVersion      int                      `json:"schema_version"`
+	Controller         string                   `json:"controller"`
+	DeviceID           string                   `json:"device_id"`
+	NetworkID          string                   `json:"network_id"`
+	Platform           string                   `json:"platform"`
+	WireGuardPublicKey string                   `json:"wireguard_public_key"`
+	EnrollmentToken    string                   `json:"enrollment_token"`
+	ExpiresAt          time.Time                `json:"expires_at"`
+	Scope              []string                 `json:"scope"`
+	Device             model.Device             `json:"device"`
+	Network            model.Network            `json:"network"`
+	SigningKeys        signedconfig.SigningKeys `json:"signing_keys"`
+	CreatedAt          time.Time                `json:"created_at"`
+}
+
 func NewStore(dir string) *Store { return &Store{dir: dir} }
 
 func (s *Store) Directory() string { return s.dir }
@@ -113,6 +135,10 @@ func (s *Store) ContractStatePath() string {
 
 func (s *Store) SigningKeyCachePath() string {
 	return filepath.Join(s.dir, "signing-keys.json")
+}
+
+func (s *Store) EnrollmentSecretPath() string {
+	return filepath.Join(s.dir, "enrollment-secret.json")
 }
 
 func (s *Store) LoadCheckpoint() (Checkpoint, error) {
@@ -241,6 +267,63 @@ func (s *Store) SaveSigningKeyCache(cache SigningKeyCache) error {
 	cache.SchemaVersion = SchemaVersion
 	cache.Keys.ETag = ""
 	return writeJSON0600(s.SigningKeyCachePath(), cache)
+}
+
+func (s *Store) LoadEnrollmentSecret(controller, deviceID, wireGuardPublicKey string) (EnrollmentSecret, error) {
+	var secret EnrollmentSecret
+	if err := readJSON(s.EnrollmentSecretPath(), &secret); err != nil {
+		return EnrollmentSecret{}, err
+	}
+	if secret.Controller != controller || secret.DeviceID != deviceID || secret.WireGuardPublicKey != wireGuardPublicKey {
+		return EnrollmentSecret{}, fault.New(fault.CodeStateConflict, "load enrollment secret binding", nil)
+	}
+	if err := validateEnrollmentSecret(secret); err != nil {
+		return EnrollmentSecret{}, err
+	}
+	return secret, nil
+}
+
+func (s *Store) SaveEnrollmentSecret(secret EnrollmentSecret) error {
+	secret.SchemaVersion = SchemaVersion
+	secret.SigningKeys.ETag = ""
+	if err := validateEnrollmentSecret(secret); err != nil {
+		return err
+	}
+	return writeJSON0600(s.EnrollmentSecretPath(), secret)
+}
+
+func (s *Store) ClearEnrollmentSecret() error {
+	err := os.Remove(s.EnrollmentSecretPath())
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return fault.New(fault.CodeStateIO, "clear enrollment secret", err)
+}
+
+func validateEnrollmentSecret(secret EnrollmentSecret) error {
+	tokenRaw, tokenErr := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(secret.EnrollmentToken, "xenr_"))
+	publicKey, publicKeyErr := base64.StdEncoding.DecodeString(secret.WireGuardPublicKey)
+	if secret.SchemaVersion != SchemaVersion || strings.TrimSpace(secret.Controller) == "" || strings.TrimSpace(secret.DeviceID) == "" || strings.TrimSpace(secret.NetworkID) == "" || strings.TrimSpace(secret.Platform) == "" || !strings.HasPrefix(secret.EnrollmentToken, "xenr_") || tokenErr != nil || len(tokenRaw) != 32 || publicKeyErr != nil || len(publicKey) != 32 || secret.CreatedAt.IsZero() || secret.ExpiresAt.IsZero() || !secret.ExpiresAt.After(secret.CreatedAt) || secret.ExpiresAt.Location() != time.UTC || secret.Device.ID != secret.DeviceID || secret.Device.NetworkID != secret.NetworkID || secret.Device.Platform != secret.Platform || secret.Device.WireGuardPublicKey != secret.WireGuardPublicKey || secret.Network.ID != secret.NetworkID || !validEnrollmentScope(secret.Scope) {
+		return fault.New(fault.CodeStateIO, "validate enrollment secret", nil)
+	}
+	if err := secret.SigningKeys.Validate(); err != nil {
+		return fault.New(fault.CodeStateIO, "validate enrollment signing keys", err)
+	}
+	return nil
+}
+
+func validEnrollmentScope(values []string) bool {
+	if len(values) != 2 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, value := range values {
+		if value != "overlay:config:read" && value != "overlay:config:ack" || seen[value] {
+			return false
+		}
+		seen[value] = true
+	}
+	return seen["overlay:config:read"] && seen["overlay:config:ack"]
 }
 
 func readJSON(path string, target any) error {

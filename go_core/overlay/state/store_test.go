@@ -1,6 +1,7 @@
 package state_test
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"go_core/overlay/fault"
+	"go_core/overlay/model"
 	"go_core/overlay/signedconfig"
 	"go_core/overlay/state"
 )
@@ -34,6 +36,41 @@ func TestCheckpointAndLastKnownUsePrivatePermissions(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o700 {
 		t.Fatalf("state directory permissions = %04o", info.Mode().Perm())
+	}
+}
+
+func TestEnrollmentSecretUsesSeparatePrivateBoundArtifact(t *testing.T) {
+	store := state.NewStore(t.TempDir())
+	secret := validEnrollmentSecret()
+	if err := store.SaveEnrollmentSecret(secret); err != nil {
+		t.Fatalf("save enrollment secret: %v", err)
+	}
+	if err := state.ValidatePermissions(store.EnrollmentSecretPath(), 0o600); err != nil {
+		t.Fatalf("enrollment secret permissions: %v", err)
+	}
+	loaded, err := store.LoadEnrollmentSecret(secret.Controller, secret.DeviceID, secret.WireGuardPublicKey)
+	if err != nil || loaded.EnrollmentToken != secret.EnrollmentToken || loaded.ExpiresAt != secret.ExpiresAt {
+		t.Fatalf("loaded enrollment=%#v err=%v", loaded, err)
+	}
+	if _, err := store.LoadEnrollmentSecret(secret.Controller, "dev_other", secret.WireGuardPublicKey); fault.Code(err) != fault.CodeStateConflict {
+		t.Fatalf("cross-device binding code=%q err=%v", fault.Code(err), err)
+	}
+	checkpoint := state.Checkpoint{Server: secret.Controller, DeviceID: secret.DeviceID, WireGuardPublicKey: secret.WireGuardPublicKey, WireGuardPrivateKey: "private", Phase: state.PhaseDeviceRegistered, InviteEnrollment: true, EnrollmentExpiresAt: secret.ExpiresAt, UpdatedAt: secret.CreatedAt}
+	if err := store.SaveCheckpoint(checkpoint); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(store.CheckpointPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte(secret.EnrollmentToken)) {
+		t.Fatal("ordinary checkpoint contains enrollment bearer")
+	}
+	if err := store.ClearEnrollmentSecret(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(store.EnrollmentSecretPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("transient secret was not removed: %v", err)
 	}
 }
 
@@ -100,5 +137,20 @@ func TestSigningKeyCacheIsScopedAndPrivate(t *testing.T) {
 	}
 	if _, err := store.LoadSigningKeyCache(cache.Controller, "dev_other"); !errors.Is(err, state.ErrNotFound) {
 		t.Fatalf("cross-device cache err=%v", err)
+	}
+}
+
+func validEnrollmentSecret() state.EnrollmentSecret {
+	notBefore := signedconfig.CanonicalTime{Time: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)}
+	notAfter := signedconfig.CanonicalTime{Time: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)}
+	publicKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+	return state.EnrollmentSecret{
+		Controller: "https://accounts.example", DeviceID: "dev_laptop", NetworkID: "net_private", Platform: "linux",
+		WireGuardPublicKey: publicKey, EnrollmentToken: "xenr_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32)),
+		ExpiresAt: time.Date(2026, 8, 28, 12, 10, 0, 0, time.UTC), Scope: []string{"overlay:config:read", "overlay:config:ack"},
+		Device:      model.Device{ID: "dev_laptop", NetworkID: "net_private", Platform: "linux", WireGuardPublicKey: publicKey, WireGuardAddress: "10.77.0.10/32"},
+		Network:     model.Network{ID: "net_private", CIDR: "10.77.0.0/16"},
+		SigningKeys: signedconfig.SigningKeys{Keys: []signedconfig.SigningKey{{KeyID: "signing_key_01", Algorithm: signedconfig.SignatureEd25519, PublicKey: publicKey, Status: "current", NotBefore: notBefore, NotAfter: &notAfter}}},
+		CreatedAt:   time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC),
 	}
 }

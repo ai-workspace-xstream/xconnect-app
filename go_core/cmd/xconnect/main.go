@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -74,6 +75,7 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	networkID := flags.String("network-id", "", "requested overlay network ID")
 	nodeID := flags.String("node-id", "", "preferred gateway node ID")
 	configContract := flags.String("config-contract", string(usecase.ConfigContractAuto), "config contract: auto, signed, or legacy")
+	allowInsecureLocalhost := flags.Bool("allow-insecure-localhost", false, "allow HTTP localhost controller for invite development")
 	tokenFile := flags.String("token-file", "", "path to a file containing the accounts access token")
 	if err := flags.Parse(args); err != nil {
 		return fault.New(fault.CodeInvalidInput, "parse join arguments", err)
@@ -85,7 +87,7 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	if flags.NArg() == 1 {
 		targetValue = flags.Arg(0)
 	}
-	target, err := resolveJoinTarget(targetValue, *server)
+	target, err := resolveJoinTarget(targetValue, *server, *allowInsecureLocalhost)
 	if err != nil {
 		return err
 	}
@@ -95,13 +97,22 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	if *nodeID == "" {
 		*nodeID = target.NodeID
 	}
-	token, err := readToken(*tokenFile)
-	if err != nil {
-		return err
+	token := ""
+	if target.JoinToken == "" {
+		token, err = readToken(*tokenFile)
+		if err != nil {
+			return err
+		}
 	}
 	contract, err := usecase.ParseConfigContract(*configContract)
 	if err != nil {
 		return err
+	}
+	if target.JoinToken != "" {
+		if contract == usecase.ConfigContractLegacy {
+			return fault.New(fault.CodeConfigDowngradeBlocked, "join invite requires signed config", nil)
+		}
+		contract = usecase.ConfigContractSigned
 	}
 	client, err := controlplane.New(target.Controller, token, httpClient)
 	if err != nil {
@@ -118,6 +129,7 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 		Hostname:   hostname,
 		NetworkID:  *networkID,
 		NodeID:     *nodeID,
+		JoinToken:  target.JoinToken,
 	})
 	if err != nil {
 		return err
@@ -183,9 +195,10 @@ type joinTarget struct {
 	Controller string
 	NetworkID  string
 	NodeID     string
+	JoinToken  string
 }
 
-func resolveJoinTarget(value, fallbackController string) (joinTarget, error) {
+func resolveJoinTarget(value, fallbackController string, allowInsecureLocalhost bool) (joinTarget, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return joinTarget{Controller: strings.TrimRight(strings.TrimSpace(fallbackController), "/")}, nil
@@ -201,33 +214,49 @@ func resolveJoinTarget(value, fallbackController string) (joinTarget, error) {
 		}
 	}
 	if parsed.Scheme == "xconnect" {
-		if parsed.Host != "join" {
+		if parsed.Host != "join" || parsed.User != nil || parsed.Fragment != "" || parsed.Opaque != "" {
 			return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse invite URL", nil)
 		}
-		controller := strings.TrimRight(strings.TrimSpace(query.Get("controller")), "/")
-		if controller == "" {
+		if len(query) != 1 || len(query["controller"]) != 1 {
 			return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse invite URL", nil)
 		}
-		return joinTarget{
-			Controller: controller,
-			NetworkID:  strings.TrimSpace(query.Get("network_id")),
-			NodeID:     strings.TrimSpace(query.Get("node_id")),
-		}, nil
+		joinToken := strings.TrimPrefix(parsed.Path, "/")
+		if parsed.Path != "/"+joinToken || parsed.EscapedPath() != parsed.Path || !validJoinToken(joinToken) {
+			return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse invite URL", nil)
+		}
+		controller, err := strictInviteController(query.Get("controller"), allowInsecureLocalhost)
+		if err != nil {
+			return joinTarget{}, err
+		}
+		return joinTarget{Controller: controller, JoinToken: joinToken}, nil
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse join target", nil)
-	}
-	if controller := strings.TrimSpace(query.Get("controller")); controller != "" {
-		return joinTarget{
-			Controller: strings.TrimRight(controller, "/"),
-			NetworkID:  strings.TrimSpace(query.Get("network_id")),
-			NodeID:     strings.TrimSpace(query.Get("node_id")),
-		}, nil
 	}
 	if parsed.RawQuery != "" {
 		return joinTarget{}, fault.New(fault.CodeInvalidInput, "parse join target", nil)
 	}
 	return joinTarget{Controller: strings.TrimRight(value, "/")}, nil
+}
+
+func strictInviteController(value string, allowInsecureLocalhost bool) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Opaque != "" {
+		return "", fault.New(fault.CodeInvalidInput, "parse invite controller", nil)
+	}
+	localDevelopment := parsed.Scheme == "http" && (parsed.Hostname() == "localhost" || parsed.Hostname() == "127.0.0.1") && allowInsecureLocalhost
+	if parsed.Scheme != "https" && !localDevelopment {
+		return "", fault.New(fault.CodeInvalidInput, "parse invite controller", nil)
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+func validJoinToken(value string) bool {
+	if !strings.HasPrefix(value, "xjt_") {
+		return false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(value, "xjt_"))
+	return err == nil && len(raw) == 32
 }
 
 func defaultStateDirectory() string {

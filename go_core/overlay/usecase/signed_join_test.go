@@ -83,8 +83,8 @@ func (f *signedControlPlaneFixture) AckSignedConfig(_ context.Context, request c
 	}
 	return controlplane.SignedConfigAckResponse{Acked: true, Ack: controlplane.SignedConfigAck{
 		DeviceID: request.DeviceID, ConfigID: request.ConfigID, Generation: request.Generation,
-		AppliedAt:  signedconfig.CanonicalTime{Time: request.AppliedAt.UTC().Truncate(time.Second)},
-		ReceivedAt: signedconfig.CanonicalTime{Time: request.AppliedAt.UTC().Truncate(time.Second)},
+		AppliedAt:  request.AppliedAt.UTC().Truncate(time.Second),
+		ReceivedAt: request.AppliedAt.UTC().Truncate(time.Second),
 	}}, nil
 }
 
