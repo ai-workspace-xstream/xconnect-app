@@ -140,6 +140,14 @@ const (
 )
 
 func (c *Client) doContractWithBearer(ctx context.Context, method, path string, query url.Values, payload any, headers http.Header, bearer string, errorMode contractErrorMode) (int, http.Header, []byte, error) {
+	authorization := ""
+	if strings.TrimSpace(bearer) != "" {
+		authorization = "Bearer " + strings.TrimSpace(bearer)
+	}
+	return c.doContractWithAuthorization(ctx, method, path, query, payload, headers, authorization, errorMode)
+}
+
+func (c *Client) doContractWithAuthorization(ctx context.Context, method, path string, query url.Values, payload any, headers http.Header, authorization string, errorMode contractErrorMode) (int, http.Header, []byte, error) {
 	endpoint := *c.baseURL
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + path
 	endpoint.RawQuery = query.Encode()
@@ -159,8 +167,8 @@ func (c *Client) doContractWithBearer(ctx context.Context, method, path string, 
 	if payload != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	if strings.TrimSpace(bearer) != "" {
-		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(bearer))
+	if strings.TrimSpace(authorization) != "" {
+		request.Header.Set("Authorization", strings.TrimSpace(authorization))
 	}
 	for key, values := range headers {
 		for _, value := range values {

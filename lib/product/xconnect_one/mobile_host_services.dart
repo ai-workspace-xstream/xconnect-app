@@ -14,6 +14,28 @@ abstract interface class XConnectOnePlatformChannel {
   void setEventHandler(XConnectOnePlatformEventHandler? handler);
 }
 
+final class XConnectOneDeviceOperationResult {
+  const XConnectOneDeviceOperationResult({
+    required this.completed,
+    required this.code,
+    required this.retryable,
+  });
+
+  final bool completed;
+  final String code;
+  final bool retryable;
+}
+
+/// Operation-level bridge owned by the protected native host. Raw device,
+/// enrollment, and WireGuard credentials never cross into Dart.
+abstract interface class XConnectOneDeviceSessionService {
+  Future<XConnectOneDeviceOperationResult> sync();
+
+  Future<XConnectOneDeviceOperationResult> rotateCredential();
+
+  Future<XConnectOneDeviceOperationResult> leave({bool localOnly = false});
+}
+
 final class MethodChannelXConnectOnePlatformChannel
     implements XConnectOnePlatformChannel {
   MethodChannelXConnectOnePlatformChannel({MethodChannel? channel})
@@ -40,7 +62,8 @@ final class PlatformXConnectOneHostServices
     implements
         XConnectOneJoinService,
         XConnectOneInviteIngress,
-        XConnectOneSecureStorageProbe {
+        XConnectOneSecureStorageProbe,
+        XConnectOneDeviceSessionService {
   PlatformXConnectOneHostServices({
     XConnectOnePlatformChannel? channel,
     TargetPlatform? targetPlatform,
@@ -141,6 +164,18 @@ final class PlatformXConnectOneHostServices
   Future<XConnectOneJoinResult> resume() => _invokeJoin('resumeEnrollment');
 
   @override
+  Future<XConnectOneDeviceOperationResult> sync() =>
+      _invokeDeviceOperation('syncDeviceSession');
+
+  @override
+  Future<XConnectOneDeviceOperationResult> rotateCredential() =>
+      _invokeDeviceOperation('rotateDeviceCredential');
+
+  @override
+  Future<XConnectOneDeviceOperationResult> leave({bool localOnly = false}) =>
+      _invokeDeviceOperation('leaveDevice', {'local_only': localOnly});
+
+  @override
   Future<void> clearTransient() async {
     try {
       final response = await _channel.invoke('clearEnrollmentTransient');
@@ -186,6 +221,40 @@ final class PlatformXConnectOneHostServices
       return const XConnectOneJoinResult(
         outcome: XConnectOneJoinOutcome.failed,
         code: 'mobile_join_bridge_unavailable',
+      );
+    }
+  }
+
+  Future<XConnectOneDeviceOperationResult> _invokeDeviceOperation(
+    String method, [
+    Map<String, Object?>? arguments,
+  ]) async {
+    try {
+      final response = await _channel.invoke(method, arguments);
+      final map = _strictMap(response, const {
+        'completed',
+        'code',
+        'retryable',
+      });
+      final completed = map['completed'];
+      final code = map['code'];
+      final retryable = map['retryable'];
+      if (completed is! bool ||
+          code is! String ||
+          !_validCode(code) ||
+          retryable is! bool) {
+        throw const FormatException('invalid device operation response');
+      }
+      return XConnectOneDeviceOperationResult(
+        completed: completed,
+        code: code,
+        retryable: retryable,
+      );
+    } on Object {
+      return const XConnectOneDeviceOperationResult(
+        completed: false,
+        code: 'protected_device_session_unavailable',
+        retryable: false,
       );
     }
   }

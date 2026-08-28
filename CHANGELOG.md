@@ -1,5 +1,12 @@
 # Unreleased
 
+- Added the durable XConnect-One device credential lifecycle. Invite Join now
+  protects the device-bound `xdc_` credential before Apply/ACK; `xconnect sync`
+  mints a short config-only session; `credential rotate` is crash-recoverable;
+  and normal `leave` requires a terminal device-bound revoke receipt before
+  deleting runtime or local state. Linux uses an atomic owner-only file,
+  macOS uses Keychain, Windows uses Credential Manager, and mobile exposes only
+  a fail-closed protected-host operation boundary with no raw secrets in Dart.
 - Expanded the `xconnect` product CLI with idempotent `up` and `down`, an
   ownership-safe `leave --local-only` recovery path, one-time
   `admin invite create`, and tenant-scoped `policy explain`. Lifecycle

@@ -31,6 +31,19 @@ void main() {
       expect(androidActivity, contains('validateInvite'));
       expect(androidActivity, contains('AndroidKeyStore'));
       expect(androidActivity, isNot(contains('"parser"')));
+      for (final method in [
+        'syncDeviceSession',
+        'rotateDeviceCredential',
+        'leaveDevice',
+      ]) {
+        expect(androidActivity, contains(method));
+        expect(iosDelegate, contains(method));
+        expect(macDelegate, contains(method));
+      }
+      for (final source in [androidActivity, iosDelegate, macDelegate]) {
+        expect(source, contains('protected_device_session_unavailable'));
+        expect(source, isNot(contains('device_credential"')));
+      }
 
       for (final info in [iosInfo, macInfo]) {
         expect(info, contains('<key>CFBundleURLSchemes</key>'));

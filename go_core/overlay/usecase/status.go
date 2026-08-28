@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
 	"go_core/overlay/runtime"
@@ -18,6 +19,17 @@ type StatusResult struct {
 	Revision    string           `json:"revision,omitempty"`
 	Generations GenerationStatus `json:"generations"`
 	Runtime     runtime.Status   `json:"runtime"`
+	Credential  CredentialStatus `json:"credential"`
+}
+
+type CredentialStatus struct {
+	Backend      string    `json:"backend"`
+	Present      bool      `json:"present"`
+	CredentialID string    `json:"credential_id,omitempty"`
+	ExpiresAt    time.Time `json:"expires_at,omitempty"`
+	Expired      bool      `json:"expired"`
+	RotationDue  bool      `json:"rotation_due"`
+	Pending      bool      `json:"rotation_pending"`
 }
 
 type GenerationStatus struct {
@@ -35,6 +47,10 @@ type DiagnosticResult struct {
 }
 
 func Status(ctx context.Context, store *state.Store, tunnelRuntime runtime.Interface) (StatusResult, error) {
+	return StatusWithCredential(ctx, store, tunnelRuntime, nil)
+}
+
+func StatusWithCredential(ctx context.Context, store *state.Store, tunnelRuntime runtime.Interface, credentials credential.Store) (StatusResult, error) {
 	lastKnown, err := store.LoadLastKnown()
 	statePresent := err == nil
 	if err != nil && !errors.Is(err, state.ErrNotFound) {
@@ -44,9 +60,13 @@ func Status(ctx context.Context, store *state.Store, tunnelRuntime runtime.Inter
 	if err != nil {
 		return StatusResult{}, fault.New(fault.CodeRuntimeStatusFailed, "read runtime status", err)
 	}
+	credentialStatus, err := inspectCredential(ctx, credentials, time.Now().UTC())
+	if err != nil {
+		return StatusResult{}, err
+	}
 	generations := GenerationStatus{State: lastKnown.SignedGeneration, RuntimeRevision: runtimeStatus.Revision}
 	if !statePresent {
-		return StatusResult{Generations: generations, Runtime: runtimeStatus}, nil
+		return StatusResult{Generations: generations, Runtime: runtimeStatus, Credential: credentialStatus}, nil
 	}
 	policyState, policyErr := store.LoadPolicyState()
 	if policyErr == nil && policyState.NetworkID == lastKnown.NetworkID {
@@ -66,10 +86,15 @@ func Status(ctx context.Context, store *state.Store, tunnelRuntime runtime.Inter
 		Revision:    lastKnown.Config.Revision,
 		Generations: generations,
 		Runtime:     runtimeStatus,
+		Credential:  credentialStatus,
 	}, nil
 }
 
 func Diagnose(ctx context.Context, store *state.Store, tunnelRuntime runtime.Interface) ([]DiagnosticResult, error) {
+	return DiagnoseWithCredential(ctx, store, tunnelRuntime, nil)
+}
+
+func DiagnoseWithCredential(ctx context.Context, store *state.Store, tunnelRuntime runtime.Interface, credentials credential.Store) ([]DiagnosticResult, error) {
 	results := make([]DiagnosticResult, 0, 6)
 	lastKnown, err := store.LoadLastKnown()
 	statePresent := err == nil
@@ -96,6 +121,15 @@ func Diagnose(ctx context.Context, store *state.Store, tunnelRuntime runtime.Int
 		return nil, fault.New(fault.CodeRuntimeStatusFailed, "diagnose runtime generation", statusErr)
 	}
 	results = append(results, DiagnosticResult{Code: "runtime_revision", Healthy: runtimeStatus.Revision != "", Revision: runtimeStatus.Revision})
+	credentialStatus, credentialErr := inspectCredential(ctx, credentials, time.Now().UTC())
+	if credentialErr != nil {
+		return nil, credentialErr
+	}
+	results = append(results,
+		DiagnosticResult{Code: "credential_storage_available", Healthy: credentials != nil},
+		DiagnosticResult{Code: "device_credential_present", Healthy: credentialStatus.Present},
+		DiagnosticResult{Code: "device_credential_not_expired", Healthy: credentialStatus.Present && !credentialStatus.Expired},
+	)
 	policyState, policyErr := store.LoadPolicyState()
 	if errors.Is(policyErr, state.ErrNotFound) {
 		results = append(results, DiagnosticResult{Code: "policy_generation", Healthy: false})
@@ -106,4 +140,25 @@ func Diagnose(ctx context.Context, store *state.Store, tunnelRuntime runtime.Int
 		results = append(results, DiagnosticResult{Code: "policy_generation", Healthy: healthy, Generation: policyState.Generation})
 	}
 	return results, nil
+}
+
+func inspectCredential(ctx context.Context, credentials credential.Store, now time.Time) (CredentialStatus, error) {
+	if credentials == nil {
+		return CredentialStatus{Backend: "unavailable"}, nil
+	}
+	result := CredentialStatus{Backend: credentials.Backend()}
+	record, err := credentials.Load(ctx)
+	if errors.Is(err, credential.ErrNotFound) {
+		return result, nil
+	}
+	if err != nil {
+		return CredentialStatus{}, err
+	}
+	result.Present = true
+	result.CredentialID = record.CredentialID
+	result.ExpiresAt = record.ExpiresAt
+	result.Expired = record.Expired(now)
+	result.RotationDue = record.RotationDue(now)
+	result.Pending = record.Pending != nil
+	return result, nil
 }

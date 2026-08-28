@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
 	"go_core/overlay/signedconfig"
@@ -31,17 +32,27 @@ type JoinTokenExchangeRequest struct {
 }
 
 type JoinTokenExchangeResponse struct {
-	EnrollmentToken string                    `json:"enrollment_token"`
-	TokenType       string                    `json:"token_type"`
-	ExpiresAt       time.Time                 `json:"expires_at"`
-	Scope           []string                  `json:"scope"`
-	Device          model.Device              `json:"device"`
-	Network         model.Network             `json:"network"`
-	SigningKeys     []signedconfig.SigningKey `json:"signing_keys"`
+	EnrollmentToken  string                    `json:"enrollment_token"`
+	TokenType        string                    `json:"token_type"`
+	ExpiresAt        time.Time                 `json:"expires_at"`
+	Scope            []string                  `json:"scope"`
+	DeviceCredential DeviceCredential          `json:"device_credential"`
+	Device           model.Device              `json:"device"`
+	Network          model.Network             `json:"network"`
+	SigningKeys      []signedconfig.SigningKey `json:"signing_keys"`
+}
+
+type DeviceCredential struct {
+	CredentialID string    `json:"credential_id"`
+	Credential   string    `json:"credential"`
+	TokenType    string    `json:"token_type"`
+	IssuedAt     time.Time `json:"issued_at"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	Scope        []string  `json:"scope"`
 }
 
 func (c *Client) ExchangeJoinToken(ctx context.Context, request JoinTokenExchangeRequest) (JoinTokenExchangeResponse, error) {
-	if !validOpaqueSecret(request.JoinToken, "xjt_") || !enrollmentDeviceIDPattern.MatchString(request.DeviceID) || !validEnrollmentPlatform(request.Platform) || !validWireGuardPublicKey(request.WireGuardPublicKey) || len(request.Name) > 255 || len(request.Hostname) > 255 {
+	if c.baseURL.Scheme != "https" || !validOpaqueSecret(request.JoinToken, "xjt_") || !enrollmentDeviceIDPattern.MatchString(request.DeviceID) || !validEnrollmentPlatform(request.Platform) || !validWireGuardPublicKey(request.WireGuardPublicKey) || len(request.Name) > 255 || len(request.Hostname) > 255 {
 		return JoinTokenExchangeResponse{}, fault.New(fault.CodeInvalidInput, "exchange join invite", nil)
 	}
 	now := request.Now.UTC()
@@ -60,13 +71,32 @@ func (c *Client) ExchangeJoinToken(ctx context.Context, request JoinTokenExchang
 		return JoinTokenExchangeResponse{}, fault.New(fault.CodeInvalidResponse, "decode join exchange", nil)
 	}
 	keys := signedconfig.SigningKeys{Keys: response.SigningKeys}
-	if !validOpaqueSecret(response.EnrollmentToken, "xenr_") || response.TokenType != "Bearer" || !validEnrollmentScope(response.Scope) || response.ExpiresAt.Location() != time.UTC || !response.ExpiresAt.After(now) || response.ExpiresAt.Sub(now) > maximumEnrollmentLifetime || response.Device.ID != request.DeviceID || response.Device.Platform != request.Platform || response.Device.WireGuardPublicKey != request.WireGuardPublicKey || response.Device.NetworkID == "" || response.Network.ID != response.Device.NetworkID || !validIPv4HostPrefix(response.Device.WireGuardAddress) || !validIPv4Prefix(response.Network.CIDR) {
+	deviceSecret, deviceSecretErr := credential.Parse(response.DeviceCredential.Credential)
+	if !validOpaqueSecret(response.EnrollmentToken, "xenr_") || response.TokenType != "Bearer" || !validEnrollmentScope(response.Scope) || response.ExpiresAt.Location() != time.UTC || !response.ExpiresAt.After(now) || response.ExpiresAt.Sub(now) > maximumEnrollmentLifetime || deviceSecretErr != nil || deviceSecret.CredentialID != response.DeviceCredential.CredentialID || response.DeviceCredential.TokenType != credential.TokenType || !validDeviceCredentialScope(response.DeviceCredential.Scope) || !canonicalCredentialWindow(response.DeviceCredential.IssuedAt, response.DeviceCredential.ExpiresAt, now) || response.Device.ID != request.DeviceID || response.Device.Platform != request.Platform || response.Device.WireGuardPublicKey != request.WireGuardPublicKey || response.Device.NetworkID == "" || response.Network.ID != response.Device.NetworkID || !validIPv4HostPrefix(response.Device.WireGuardAddress) || !validIPv4Prefix(response.Network.CIDR) {
 		return JoinTokenExchangeResponse{}, fault.New(fault.CodeInvalidResponse, "validate join exchange", nil)
 	}
 	if err := keys.Validate(); err != nil {
 		return JoinTokenExchangeResponse{}, err
 	}
 	return response, nil
+}
+
+func validDeviceCredentialScope(values []string) bool {
+	if len(values) != 3 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, value := range values {
+		if value != credential.ScopeSessionMint && value != credential.ScopeRotate && value != credential.ScopeDeviceRevoke || seen[value] {
+			return false
+		}
+		seen[value] = true
+	}
+	return seen[credential.ScopeSessionMint] && seen[credential.ScopeRotate] && seen[credential.ScopeDeviceRevoke]
+}
+
+func canonicalCredentialWindow(issuedAt, expiresAt, now time.Time) bool {
+	return issuedAt.Location() == time.UTC && issuedAt.Nanosecond() == 0 && expiresAt.Location() == time.UTC && expiresAt.Nanosecond() == 0 && !issuedAt.After(now.Add(30*time.Second)) && expiresAt.After(now) && expiresAt.After(issuedAt) && expiresAt.Sub(issuedAt) <= 31*24*time.Hour
 }
 
 func (c *Client) GetEnrollmentSignedConfig(ctx context.Context, enrollmentToken string, request SignedConfigRequest) (signedconfig.Config, error) {

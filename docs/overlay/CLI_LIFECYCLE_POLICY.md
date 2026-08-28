@@ -5,7 +5,9 @@
 ```text
 xconnect up [--state-dir DIR]
 xconnect down [--state-dir DIR]
+xconnect sync [--state-dir DIR]
 xconnect leave [--state-dir DIR] [--local-only]
+xconnect credential rotate [--state-dir DIR]
 xconnect admin invite create --network-id ID [--device-id ID]
     [--platform PLATFORM] [--expires-in SECONDS] [--output json|uri]
 xconnect policy explain --network-id ID --revision N
@@ -24,28 +26,27 @@ A live operation returns `operation_in_progress`; a lock older than five
 minutes is recoverable after a crash. State and runtime writes retain their
 existing 0700-directory, 0600-file, and atomic-rename requirements.
 
-## Leave safety and Accounts dependency
+## Durable session and leave safety
 
-Normal `leave` is fail-closed with
-`device_lifecycle_contract_pending` until the versioned Accounts enrollment
-self-revoke endpoint is final. The client intentionally does not call the
-current user/admin device CAS path: invite-enrolled devices normally do not
-have an account bearer or expected state version.
+Invite exchange returns both the short `xenr_` registration bearer and one
+device-bound durable credential. The durable credential is written to the
+platform protected store before configuration Apply. ACK then removes the
+short bearer; it never removes the durable credential.
 
-Once that contract lands, the implementation behind
-`DeviceLifecycleControlPlane` must use the device-bound enrollment lifecycle
-credential, wait for a successful or idempotent server revocation, and only
-then run protected-host `Down`, runtime cleanup, and local cleanup.
+`sync` authenticates with the durable credential only to mint a maximum
+15-minute `xenr_` with the exact config read/ACK scopes. It validates the
+nonce, device/network binding, lifetime, and signing-key ring. A candidate ring
+must overlap the Join-trusted ring by `key_id + public_key`; SignedConfig is
+still verified under the old durable ring, and the candidate ring is committed
+only after runtime Apply, generation ACK, and last-known-state commit. Failed
+fetch, signature, Apply, or ACK therefore cannot poison durable trust.
 
-Accounts Batch 07 extends the short-lived enrollment scope to the exact set
-`overlay:config:read`, `overlay:config:ack`, and
-`overlay:device:revoke`. The client accepts that closed set for join-window
-self-revoke. It still deletes the enrollment bearer after successful ACK, so
-this is not a durable `leave` credential. Default long-lived leave remains
-blocked on the Batch 08 hash-only, rotatable device refresh credential. Until
-then, normal `leave` always returns `device_lifecycle_contract_pending`, even
-when local state is absent, rather than claiming remote revocation without
-proof.
+Normal `leave` calls the device-bound revoke route with a persisted UUID nonce
+and canonical request idempotency key. A terminal or replayed receipt is
+required before runtime cleanup. The credential and replay checkpoint remain
+available across interrupted cleanup. Local state is removed only after remote
+commit and protected credential deletion. Missing/expired credentials fail
+closed; they never fall back to account/admin or legacy enrollment routes.
 
 `leave --local-only` is an explicit recovery operation. It stops and cleans
 the local runtime, and can clear an interrupted Join checkpoint even before a
@@ -58,6 +59,7 @@ as server-revoked. Local cleanup removes only these known XConnect files:
 - `signing-keys.json`
 - `enrollment-secret.json`
 - `policy-state.json`
+- `device-operation.json`
 
 Unknown files, symlinks, directories, and non-0600 state artifacts are never
 deleted. Cleanup fails closed or reports retained unknown files.

@@ -6,7 +6,10 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
+	"go_core/overlay/controlplane"
+	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/runtime"
 	"go_core/overlay/state"
@@ -17,6 +20,22 @@ type fakeDeviceLifecycle struct {
 	mu    sync.Mutex
 	calls int
 	err   error
+}
+
+type fakeDurableRevoke struct {
+	calls int
+	err   error
+	nonce string
+}
+
+func (f *fakeDurableRevoke) RevokeDevice(_ context.Context, record credential.Record, request controlplane.DeviceRevokeRequest, _ time.Time) (controlplane.DeviceRevokeResponse, error) {
+	f.calls++
+	f.nonce = request.ClientNonce
+	if f.err != nil {
+		return controlplane.DeviceRevokeResponse{}, f.err
+	}
+	revokedAt := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	return controlplane.DeviceRevokeResponse{Revoked: true, Duplicate: f.calls > 1, Device: controlplane.LifecycleDevice{ID: record.DeviceID, NetworkID: record.NetworkID, Status: "revoked", RevokedAt: &revokedAt}}, nil
 }
 
 func (f *fakeDeviceLifecycle) RevokeDevice(_ context.Context, _ usecase.DeviceLifecycleRequest) (usecase.DeviceLifecycleResponse, error) {
@@ -171,5 +190,73 @@ func TestLocalLeaveClearsInterruptedJoinWithoutClaimingServerRevocation(t *testi
 	repeat, err := usecase.Leave(t.Context(), store, runtimeFake, nil, true)
 	if err != nil || !repeat.AlreadyInState {
 		t.Fatalf("repeat=%#v err=%v", repeat, err)
+	}
+}
+
+func TestDurableLeaveCommitsRemoteBeforeCleanupAndResumesWithoutSecondRevoke(t *testing.T) {
+	stateStore := state.NewStore(t.TempDir())
+	lastKnown := lifecycleLastKnown()
+	if err := stateStore.SaveLastKnown(lastKnown); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	credentials := &credential.MemoryStore{}
+	if err := credentials.Save(t.Context(), durableRecord(t, newSignedControlPlaneFixture(t).keys, now)); err != nil {
+		t.Fatal(err)
+	}
+	revoker := &fakeDurableRevoke{}
+	runtimeFake := &runtime.Fake{StatusResult: runtime.Status{Available: true, Applied: true, Revision: lastKnown.Config.Revision, CoreID: "xray", AdapterID: "xray-core"}, DownError: fault.New(fault.CodeRuntimeApplyFailed, "down failed", nil)}
+	if _, err := usecase.LeaveWithDeviceCredential(t.Context(), stateStore, runtimeFake, credentials, revoker, false); fault.Code(err) != fault.CodeRuntimeApplyFailed {
+		t.Fatalf("first leave code=%q err=%v", fault.Code(err), err)
+	}
+	operation, err := stateStore.LoadDeviceOperation()
+	if err != nil || !operation.RemoteCommitted || operation.ClientNonce != revoker.nonce || revoker.calls != 1 {
+		t.Fatalf("operation=%#v calls=%d err=%v", operation, revoker.calls, err)
+	}
+	if _, err := credentials.Load(t.Context()); err != nil {
+		t.Fatalf("credential removed before local cleanup: %v", err)
+	}
+	runtimeFake.DownError = nil
+	result, err := usecase.LeaveWithDeviceCredential(t.Context(), stateStore, runtimeFake, credentials, revoker, false)
+	if err != nil || result.State != "left" || revoker.calls != 1 {
+		t.Fatalf("resume=%#v calls=%d err=%v", result, revoker.calls, err)
+	}
+	if _, err := credentials.Load(t.Context()); !errors.Is(err, credential.ErrNotFound) {
+		t.Fatalf("credential remains: %v", err)
+	}
+	if _, err := stateStore.LoadLastKnown(); !errors.Is(err, state.ErrNotFound) {
+		t.Fatalf("last known remains: %v", err)
+	}
+}
+
+func TestDurableLeaveFailsClosedWhenCredentialMissing(t *testing.T) {
+	stateStore := state.NewStore(t.TempDir())
+	if err := stateStore.SaveLastKnown(lifecycleLastKnown()); err != nil {
+		t.Fatal(err)
+	}
+	runtimeFake := &runtime.Fake{StatusResult: runtime.Status{Available: true, Applied: true}}
+	_, err := usecase.LeaveWithDeviceCredential(t.Context(), stateStore, runtimeFake, &credential.MemoryStore{}, &fakeDurableRevoke{}, false)
+	if fault.Code(err) != fault.CodeCredentialMissing || runtimeFake.DownCalls != 0 || runtimeFake.CleanupCalls != 0 {
+		t.Fatalf("code=%q down=%d cleanup=%d err=%v", fault.Code(err), runtimeFake.DownCalls, runtimeFake.CleanupCalls, err)
+	}
+}
+
+func TestLocalOnlyLeaveDeletesDurableCredentialWithoutRemoteClaim(t *testing.T) {
+	stateStore := state.NewStore(t.TempDir())
+	if err := stateStore.SaveLastKnown(lifecycleLastKnown()); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	credentials := &credential.MemoryStore{}
+	if err := credentials.Save(t.Context(), durableRecord(t, newSignedControlPlaneFixture(t).keys, now)); err != nil {
+		t.Fatal(err)
+	}
+	runtimeFake := &runtime.Fake{StatusResult: runtime.Status{Available: true, Applied: true, Revision: lifecycleLastKnown().Config.Revision}}
+	result, err := usecase.LeaveWithDeviceCredential(t.Context(), stateStore, runtimeFake, credentials, nil, true)
+	if err != nil || !result.LocalOnly {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	if _, err := credentials.Load(t.Context()); !errors.Is(err, credential.ErrNotFound) {
+		t.Fatalf("credential remains: %v", err)
 	}
 }

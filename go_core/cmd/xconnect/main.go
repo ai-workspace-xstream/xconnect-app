@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"strings"
 
 	"go_core/overlay/controlplane"
+	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/invite"
 	overlayruntime "go_core/overlay/runtime"
@@ -24,6 +26,7 @@ import (
 const defaultAccountsServer = "https://accounts.svc.plus"
 
 type runtimeFactory func(stateDirectory string) overlayruntime.Interface
+type credentialFactory func(stateDirectory string) credential.Store
 
 func main() {
 	if err := run(context.Background(), os.Args[1:], os.Stdout, os.Stderr, http.DefaultClient); err != nil {
@@ -33,9 +36,9 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client) error {
-	return runWithRuntimeFactory(ctx, args, stdout, stderr, httpClient, func(stateDirectory string) overlayruntime.Interface {
+	return runWithFactories(ctx, args, stdout, stderr, httpClient, func(stateDirectory string) overlayruntime.Interface {
 		return platformRuntime(runtime.GOOS, stateDirectory)
-	})
+	}, credential.NewPlatformStore)
 }
 
 func platformRuntime(goos, stateDirectory string) overlayruntime.Interface {
@@ -54,22 +57,30 @@ func platformRuntime(goos, stateDirectory string) overlayruntime.Interface {
 }
 
 func runWithRuntimeFactory(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory) error {
+	return runWithFactories(ctx, args, stdout, stderr, httpClient, newRuntime, func(string) credential.Store { return &credential.MemoryStore{} })
+}
+
+func runWithFactories(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {
 	if len(args) == 0 {
-		return fault.New(fault.CodeInvalidInput, "expected join, up, down, leave, status, diagnose, admin, or policy", nil)
+		return fault.New(fault.CodeInvalidInput, "expected join, sync, up, down, leave, status, diagnose, credential, admin, or policy", nil)
 	}
 	switch args[0] {
 	case "join":
-		return runJoin(ctx, args[1:], stdout, stderr, httpClient, newRuntime)
+		return runJoin(ctx, args[1:], stdout, stderr, httpClient, newRuntime, newCredentials)
+	case "sync":
+		return runSync(ctx, args[1:], stdout, stderr, httpClient, newRuntime, newCredentials)
 	case "up":
 		return runUp(ctx, args[1:], stdout, stderr, newRuntime)
 	case "down":
 		return runDown(ctx, args[1:], stdout, stderr, newRuntime)
 	case "leave":
-		return runLeave(ctx, args[1:], stdout, stderr, newRuntime)
+		return runLeave(ctx, args[1:], stdout, stderr, httpClient, newRuntime, newCredentials)
 	case "status":
-		return runStatus(ctx, args[1:], stdout, stderr, newRuntime)
+		return runStatus(ctx, args[1:], stdout, stderr, newRuntime, newCredentials)
 	case "diagnose":
-		return runDiagnose(ctx, args[1:], stdout, stderr, newRuntime)
+		return runDiagnose(ctx, args[1:], stdout, stderr, newRuntime, newCredentials)
+	case "credential":
+		return runCredential(ctx, args[1:], stdout, stderr, httpClient, newRuntime, newCredentials)
 	case "admin":
 		return runAdmin(ctx, args[1:], stdout, stderr, httpClient)
 	case "policy":
@@ -79,7 +90,7 @@ func runWithRuntimeFactory(ctx context.Context, args []string, stdout, stderr io
 	}
 }
 
-func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory) error {
+func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {
 	args = moveLeadingJoinTargetAfterFlags(args)
 	flags := flag.NewFlagSet("xconnect join", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -141,7 +152,7 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	}
 	defer operation.Release()
 	tunnelRuntime := newRuntime(*stateDirectory)
-	result, err := usecase.NewJoiner(client, store, tunnelRuntime).WithConfigContract(contract).Join(ctx, usecase.JoinRequest{
+	result, err := usecase.NewJoiner(client, store, tunnelRuntime).WithCredentialStore(newCredentials(*stateDirectory)).WithConfigContract(contract).Join(ctx, usecase.JoinRequest{
 		Server:     target.Controller,
 		DeviceID:   *deviceID,
 		DeviceName: *deviceName,
@@ -151,6 +162,32 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 		NodeID:     *nodeID,
 		JoinToken:  target.JoinToken,
 	})
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runSync(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {
+	flags := flag.NewFlagSet("xconnect sync", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse sync arguments", err)
+	}
+	credentials := newCredentials(*stateDirectory)
+	record, err := credentials.Load(ctx)
+	if errors.Is(err, credential.ErrNotFound) {
+		return fault.New(fault.CodeCredentialMissing, "load device credential for sync", nil)
+	}
+	if err != nil {
+		return err
+	}
+	client, err := controlplane.New(record.Controller, "", httpClient)
+	if err != nil {
+		return err
+	}
+	result, err := usecase.NewDeviceSessionManager(client, state.NewStore(*stateDirectory), credentials, newRuntime(*stateDirectory)).Sync(ctx)
 	if err != nil {
 		return err
 	}
@@ -185,7 +222,7 @@ func runDown(ctx context.Context, args []string, stdout, stderr io.Writer, newRu
 	return writeJSON(stdout, result)
 }
 
-func runLeave(ctx context.Context, args []string, stdout, stderr io.Writer, newRuntime runtimeFactory) error {
+func runLeave(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {
 	flags := flag.NewFlagSet("xconnect leave", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
@@ -193,7 +230,50 @@ func runLeave(ctx context.Context, args []string, stdout, stderr io.Writer, newR
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return fault.New(fault.CodeInvalidInput, "parse leave arguments", err)
 	}
-	result, err := usecase.Leave(ctx, state.NewStore(*stateDirectory), newRuntime(*stateDirectory), nil, *localOnly)
+	credentials := newCredentials(*stateDirectory)
+	var client *controlplane.Client
+	var err error
+	if !*localOnly {
+		record, loadErr := credentials.Load(ctx)
+		if loadErr == nil {
+			client, err = controlplane.New(record.Controller, "", httpClient)
+			if err != nil {
+				return err
+			}
+		} else if !errors.Is(loadErr, credential.ErrNotFound) {
+			return loadErr
+		}
+	}
+	result, err := usecase.LeaveWithDeviceCredential(ctx, state.NewStore(*stateDirectory), newRuntime(*stateDirectory), credentials, client, *localOnly)
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runCredential(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {
+	if len(args) == 0 || args[0] != "rotate" {
+		return fault.New(fault.CodeInvalidInput, "expected credential rotate", nil)
+	}
+	flags := flag.NewFlagSet("xconnect credential rotate", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse credential rotate arguments", err)
+	}
+	credentials := newCredentials(*stateDirectory)
+	record, err := credentials.Load(ctx)
+	if errors.Is(err, credential.ErrNotFound) {
+		return fault.New(fault.CodeCredentialMissing, "load device credential for rotation", nil)
+	}
+	if err != nil {
+		return err
+	}
+	client, err := controlplane.New(record.Controller, "", httpClient)
+	if err != nil {
+		return err
+	}
+	result, err := usecase.NewDeviceSessionManager(client, state.NewStore(*stateDirectory), credentials, newRuntime(*stateDirectory)).Rotate(ctx)
 	if err != nil {
 		return err
 	}
@@ -278,7 +358,7 @@ func moveLeadingJoinTargetAfterFlags(args []string) []string {
 	return append(reordered, args[0])
 }
 
-func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer, newRuntime runtimeFactory) error {
+func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer, newRuntime runtimeFactory, newCredentials credentialFactory) error {
 	flags := flag.NewFlagSet("xconnect status", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
@@ -286,14 +366,14 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer, new
 		return fault.New(fault.CodeInvalidInput, "parse status arguments", err)
 	}
 	store := state.NewStore(*stateDirectory)
-	result, err := usecase.Status(ctx, store, newRuntime(*stateDirectory))
+	result, err := usecase.StatusWithCredential(ctx, store, newRuntime(*stateDirectory), newCredentials(*stateDirectory))
 	if err != nil {
 		return err
 	}
 	return writeJSON(stdout, result)
 }
 
-func runDiagnose(ctx context.Context, args []string, stdout, stderr io.Writer, newRuntime runtimeFactory) error {
+func runDiagnose(ctx context.Context, args []string, stdout, stderr io.Writer, newRuntime runtimeFactory, newCredentials credentialFactory) error {
 	flags := flag.NewFlagSet("xconnect diagnose", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
@@ -301,7 +381,7 @@ func runDiagnose(ctx context.Context, args []string, stdout, stderr io.Writer, n
 		return fault.New(fault.CodeInvalidInput, "parse diagnose arguments", err)
 	}
 	store := state.NewStore(*stateDirectory)
-	result, err := usecase.Diagnose(ctx, store, newRuntime(*stateDirectory))
+	result, err := usecase.DiagnoseWithCredential(ctx, store, newRuntime(*stateDirectory), newCredentials(*stateDirectory))
 	if err != nil {
 		return err
 	}

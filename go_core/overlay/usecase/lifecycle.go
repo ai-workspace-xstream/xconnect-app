@@ -3,7 +3,10 @@ package usecase
 import (
 	"context"
 	"errors"
+	"time"
 
+	"go_core/overlay/controlplane"
+	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
 	"go_core/overlay/runtime"
@@ -28,15 +31,20 @@ type DeviceLifecycleControlPlane interface {
 	RevokeDevice(context.Context, DeviceLifecycleRequest) (DeviceLifecycleResponse, error)
 }
 
+type DurableRevokeControlPlane interface {
+	RevokeDevice(context.Context, credential.Record, controlplane.DeviceRevokeRequest, time.Time) (controlplane.DeviceRevokeResponse, error)
+}
+
 type LifecycleResult struct {
-	State          string   `json:"state"`
-	DeviceID       string   `json:"device_id,omitempty"`
-	NetworkID      string   `json:"network_id,omitempty"`
-	Revision       string   `json:"revision,omitempty"`
-	AlreadyInState bool     `json:"already_in_state"`
-	LocalOnly      bool     `json:"local_only,omitempty"`
-	Removed        []string `json:"removed,omitempty"`
-	RetainedFiles  bool     `json:"retained_unknown_files,omitempty"`
+	State                  string   `json:"state"`
+	DeviceID               string   `json:"device_id,omitempty"`
+	NetworkID              string   `json:"network_id,omitempty"`
+	Revision               string   `json:"revision,omitempty"`
+	AlreadyInState         bool     `json:"already_in_state"`
+	LocalOnly              bool     `json:"local_only,omitempty"`
+	Removed                []string `json:"removed,omitempty"`
+	RetainedFiles          bool     `json:"retained_unknown_files,omitempty"`
+	PolicyReconcilePending bool     `json:"policy_reconcile_pending,omitempty"`
 }
 
 func Up(ctx context.Context, store *state.Store, tunnelRuntime runtime.Interface) (LifecycleResult, error) {
@@ -154,6 +162,126 @@ func Leave(ctx context.Context, store *state.Store, tunnelRuntime runtime.Interf
 	result.Removed = append([]string(nil), cleaned.Removed...)
 	result.RetainedFiles = cleaned.Retained
 	return result, nil
+}
+
+// LeaveWithDeviceCredential is the durable device-bound leave path. It keeps
+// the credential and replay nonce until the server receipt and local runtime
+// cleanup have both completed.
+func LeaveWithDeviceCredential(ctx context.Context, store *state.Store, tunnelRuntime runtime.Interface, credentials credential.Store, controlPlane DurableRevokeControlPlane, localOnly bool) (LifecycleResult, error) {
+	lock, err := store.AcquireOperation(ctx, "leave")
+	if err != nil {
+		return LifecycleResult{}, err
+	}
+	defer lock.Release()
+
+	lastKnown, lastErr := store.LoadLastKnown()
+	statePresent := lastErr == nil
+	if lastErr != nil && !errors.Is(lastErr, state.ErrNotFound) {
+		return LifecycleResult{}, lastErr
+	}
+	var record credential.Record
+	credentialPresent := false
+	if credentials != nil {
+		record, err = credentials.Load(ctx)
+		credentialPresent = err == nil
+		if err != nil && !errors.Is(err, credential.ErrNotFound) {
+			return LifecycleResult{}, err
+		}
+	}
+	operation, operationErr := store.LoadDeviceOperation()
+	operationPresent := operationErr == nil
+	if operationErr != nil && !errors.Is(operationErr, state.ErrNotFound) {
+		return LifecycleResult{}, operationErr
+	}
+	if !statePresent && !credentialPresent && !operationPresent {
+		return LifecycleResult{State: "left", AlreadyInState: true, LocalOnly: localOnly}, nil
+	}
+
+	controller, deviceID, networkID := record.Controller, record.DeviceID, record.NetworkID
+	if statePresent {
+		if credentialPresent && (record.Controller != lastKnown.Server || record.DeviceID != lastKnown.DeviceID || record.NetworkID != lastKnown.NetworkID || record.WireGuardPublicKey != lastKnown.WireGuardPublicKey) {
+			return LifecycleResult{}, fault.New(fault.CodeStateConflict, "validate leave credential binding", nil)
+		}
+		controller, deviceID, networkID = lastKnown.Server, lastKnown.DeviceID, lastKnown.NetworkID
+	}
+	if controller == "" && operationPresent {
+		controller, deviceID, networkID = operation.Controller, operation.DeviceID, operation.NetworkID
+	}
+	if operationPresent && (operation.Controller != controller || operation.DeviceID != deviceID || operation.NetworkID != networkID) {
+		return LifecycleResult{}, fault.New(fault.CodeStateConflict, "resume device leave", nil)
+	}
+	if !localOnly && !operation.RemoteCommitted {
+		if !credentialPresent {
+			return LifecycleResult{}, fault.New(fault.CodeCredentialMissing, "revoke overlay device", nil)
+		}
+		if record.Expired(time.Now().UTC()) {
+			return LifecycleResult{}, fault.New(fault.CodeCredentialExpired, "revoke overlay device", nil)
+		}
+		if controlPlane == nil {
+			return LifecycleResult{}, fault.New(fault.CodeDeviceLifecyclePending, "revoke overlay device", nil)
+		}
+		if !operationPresent {
+			nonce, nonceErr := generateUUIDv4()
+			if nonceErr != nil {
+				return LifecycleResult{}, fault.New(fault.CodeStateIO, "create leave replay identity", nonceErr)
+			}
+			operation = state.DeviceOperation{Kind: "leave", Controller: controller, DeviceID: deviceID, NetworkID: networkID, ClientNonce: nonce, UpdatedAt: time.Now().UTC()}
+			if err := store.SaveDeviceOperation(operation); err != nil {
+				return LifecycleResult{}, err
+			}
+			operationPresent = true
+		}
+		response, revokeErr := controlPlane.RevokeDevice(ctx, record, controlplane.DeviceRevokeRequest{ClientNonce: operation.ClientNonce}, time.Now().UTC())
+		if revokeErr != nil {
+			return LifecycleResult{}, revokeErr
+		}
+		if !response.Revoked {
+			return LifecycleResult{}, fault.New(fault.CodeInvalidResponse, "validate durable device revocation", nil)
+		}
+		operation.RemoteCommitted = true
+		operation.PolicyReconcilePending = response.PolicyReconcilePending
+		operation.UpdatedAt = time.Now().UTC()
+		if err := store.SaveDeviceOperation(operation); err != nil {
+			return LifecycleResult{}, err
+		}
+	}
+	if err := cleanupOwnedRuntime(ctx, tunnelRuntime); err != nil {
+		return LifecycleResult{}, err
+	}
+	if credentialPresent {
+		if err := credentials.Delete(ctx); err != nil {
+			return LifecycleResult{}, err
+		}
+	}
+	cleaned, err := store.ClearOwnedState()
+	if err != nil {
+		return LifecycleResult{}, err
+	}
+	result := LifecycleResult{State: "left", DeviceID: deviceID, NetworkID: networkID, LocalOnly: localOnly, Removed: cleaned.Removed, RetainedFiles: cleaned.Retained, PolicyReconcilePending: operation.PolicyReconcilePending}
+	if statePresent {
+		result.Revision = lastKnown.Config.Revision
+	}
+	return result, nil
+}
+
+func cleanupOwnedRuntime(ctx context.Context, tunnelRuntime runtime.Interface) error {
+	status, err := tunnelRuntime.Status(ctx)
+	if err != nil {
+		return fault.New(fault.CodeRuntimeStatusFailed, "read runtime before leave", err)
+	}
+	if !status.Applied && status.Revision == "" {
+		return nil
+	}
+	lifecycle, ok := tunnelRuntime.(runtime.Lifecycle)
+	if !ok || !status.Available {
+		return fault.New(fault.CodeRuntimeUnavailable, "leave overlay runtime", nil)
+	}
+	if status.Applied {
+		if err := lifecycle.Down(ctx); err != nil {
+			return err
+		}
+	}
+	return lifecycle.Cleanup(ctx)
 }
 
 func leaveWithoutLastKnown(ctx context.Context, store *state.Store, tunnelRuntime runtime.Interface, localOnly bool) (LifecycleResult, error) {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"go_core/overlay/controlplane"
+	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
 	overlayruntime "go_core/overlay/runtime"
@@ -29,6 +30,27 @@ type inviteControlPlaneFixture struct {
 	exchangedJoinTokens   []string
 	enrollmentTokens      []string
 	enrollmentAckErrors   []error
+	enrollmentConfigError error
+	deviceSessionCalls    int
+	sessionKeys           []signedconfig.SigningKey
+	rotateCalls           int
+	rotateErrors          []error
+}
+
+func (f *inviteControlPlaneFixture) RotateDeviceCredential(_ context.Context, record credential.Record, request controlplane.DeviceCredentialRotateRequest, now time.Time) (controlplane.DeviceCredentialRotateResponse, error) {
+	f.rotateCalls++
+	if len(f.rotateErrors) > 0 {
+		err := f.rotateErrors[0]
+		f.rotateErrors = f.rotateErrors[1:]
+		if err != nil {
+			return controlplane.DeviceCredentialRotateResponse{}, err
+		}
+	}
+	return controlplane.DeviceCredentialRotateResponse{
+		CredentialID: request.NewCredentialID, ReplacesCredentialID: record.CredentialID, TokenType: credential.TokenType,
+		IssuedAt: now.UTC().Truncate(time.Second), ExpiresAt: now.UTC().Truncate(time.Second).Add(30 * 24 * time.Hour),
+		Scope: []string{credential.ScopeSessionMint, credential.ScopeRotate, credential.ScopeDeviceRevoke},
+	}, nil
 }
 
 func newInviteControlPlaneFixture(t *testing.T) *inviteControlPlaneFixture {
@@ -42,18 +64,41 @@ func (f *inviteControlPlaneFixture) ExchangeJoinToken(_ context.Context, request
 	f.enrollmentTokens = append(f.enrollmentTokens, token)
 	return controlplane.JoinTokenExchangeResponse{
 		EnrollmentToken: token, TokenType: "Bearer", ExpiresAt: request.Now.Add(10 * time.Minute),
-		Scope:   []string{"overlay:config:read", "overlay:config:ack", "overlay:device:revoke"},
-		Device:  model.Device{ID: request.DeviceID, NetworkID: "net_private", Platform: request.Platform, WireGuardPublicKey: request.WireGuardPublicKey, WireGuardAddress: "10.77.0.10/32"},
-		Network: model.Network{ID: "net_private", CIDR: "10.77.0.0/16"}, SigningKeys: append([]signedconfig.SigningKey(nil), f.keys.Keys...),
+		Scope:            []string{"overlay:config:read", "overlay:config:ack", "overlay:device:revoke"},
+		DeviceCredential: fixtureDeviceCredential(request.Now),
+		Device:           model.Device{ID: request.DeviceID, NetworkID: "net_private", Platform: request.Platform, WireGuardPublicKey: request.WireGuardPublicKey, WireGuardAddress: "10.77.0.10/32"},
+		Network:          model.Network{ID: "net_private", CIDR: "10.77.0.0/16"}, SigningKeys: append([]signedconfig.SigningKey(nil), f.keys.Keys...),
+	}, nil
+}
+
+func (f *inviteControlPlaneFixture) MintDeviceSession(_ context.Context, record credential.Record, request controlplane.DeviceSessionRequest) (controlplane.DeviceSessionResponse, error) {
+	f.deviceSessionCalls++
+	token := opaqueUsecaseSecret("xenr_", byte(60+f.deviceSessionCalls))
+	f.enrollmentTokens = append(f.enrollmentTokens, token)
+	return controlplane.DeviceSessionResponse{
+		ClientNonce: request.ClientNonce, EnrollmentToken: token, TokenType: "Bearer",
+		IssuedAt: request.Now, ExpiresAt: request.Now.Add(10 * time.Minute),
+		Scope: []string{"overlay:config:read", "overlay:config:ack"}, DeviceID: record.DeviceID, NetworkID: record.NetworkID,
+		SigningKeys: sessionSigningKeys(record.SigningKeys.Keys, f.sessionKeys),
 	}, nil
 }
 
 func (f *inviteControlPlaneFixture) GetEnrollmentSignedConfig(_ context.Context, enrollmentToken string, _ controlplane.SignedConfigRequest) (signedconfig.Config, error) {
 	f.enrollmentConfigCalls++
+	if f.enrollmentConfigError != nil {
+		return signedconfig.Config{}, f.enrollmentConfigError
+	}
 	if len(f.enrollmentTokens) == 0 || enrollmentToken != f.enrollmentTokens[len(f.enrollmentTokens)-1] {
 		return signedconfig.Config{}, fault.New(fault.CodeEnrollmentExpired, "invalid enrollment", nil)
 	}
 	return f.config, nil
+}
+
+func sessionSigningKeys(fallback, override []signedconfig.SigningKey) []signedconfig.SigningKey {
+	if len(override) > 0 {
+		return append([]signedconfig.SigningKey(nil), override...)
+	}
+	return append([]signedconfig.SigningKey(nil), fallback...)
 }
 
 func (f *inviteControlPlaneFixture) AckEnrollmentSignedConfig(_ context.Context, enrollmentToken string, request controlplane.SignedConfigAckRequest) (controlplane.SignedConfigAckResponse, error) {
@@ -134,7 +179,7 @@ func TestInviteJoinRuntimeFailureResumesWithoutReplayingInvite(t *testing.T) {
 	}
 }
 
-func TestExpiredAfterApplyRenewsWithNewInviteWithoutReapply(t *testing.T) {
+func TestExpiredAfterApplyMintsDurableSessionWithoutReplayingInviteOrRuntime(t *testing.T) {
 	controlPlane := newInviteControlPlaneFixture(t)
 	controlPlane.enrollmentAckErrors = []error{fault.New(fault.CodeControlPlaneUnavailable, "ack unavailable", nil)}
 	tunnelRuntime := &overlayruntime.Fake{}
@@ -150,20 +195,16 @@ func TestExpiredAfterApplyRenewsWithNewInviteWithoutReapply(t *testing.T) {
 		t.Fatalf("checkpoint=%#v err=%v", checkpoint, err)
 	}
 	clock = clock.Add(11 * time.Minute)
-	if _, err := joiner.Join(t.Context(), inviteJoinRequest("")); fault.Code(err) != fault.CodeEnrollmentExpired {
-		t.Fatalf("expired without new invite code=%q err=%v", fault.Code(err), err)
+	if _, err := joiner.Join(t.Context(), inviteJoinRequest("")); err != nil {
+		t.Fatalf("resume through durable session: %v", err)
 	}
 	if _, err := os.Stat(store.EnrollmentSecretPath()); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expired transient was not removed: %v", err)
+		t.Fatalf("completed transient was not removed: %v", err)
 	}
-	secondInvite := opaqueUsecaseSecret("xjt_", 8)
-	if _, err := joiner.Join(t.Context(), inviteJoinRequest(secondInvite)); err != nil {
-		t.Fatalf("renew enrollment: %v", err)
+	if controlPlane.exchangeCalls != 1 || controlPlane.deviceSessionCalls != 1 || tunnelRuntime.ApplyCalls != 1 || controlPlane.enrollmentConfigCalls != 1 || controlPlane.enrollmentAckCalls != 2 {
+		t.Fatalf("resume exchange=%d mint=%d apply=%d config=%d ack=%d", controlPlane.exchangeCalls, controlPlane.deviceSessionCalls, tunnelRuntime.ApplyCalls, controlPlane.enrollmentConfigCalls, controlPlane.enrollmentAckCalls)
 	}
-	if controlPlane.exchangeCalls != 2 || tunnelRuntime.ApplyCalls != 1 || controlPlane.enrollmentConfigCalls != 1 || controlPlane.enrollmentAckCalls != 2 {
-		t.Fatalf("renew exchange=%d apply=%d config=%d ack=%d", controlPlane.exchangeCalls, tunnelRuntime.ApplyCalls, controlPlane.enrollmentConfigCalls, controlPlane.enrollmentAckCalls)
-	}
-	if controlPlane.exchangedJoinTokens[0] != firstInvite || controlPlane.exchangedJoinTokens[1] != secondInvite {
+	if len(controlPlane.exchangedJoinTokens) != 1 || controlPlane.exchangedJoinTokens[0] != firstInvite {
 		t.Fatalf("exchanged invites=%#v", controlPlane.exchangedJoinTokens)
 	}
 }
@@ -171,8 +212,17 @@ func TestExpiredAfterApplyRenewsWithNewInviteWithoutReapply(t *testing.T) {
 func newInviteJoiner(t *testing.T, controlPlane *inviteControlPlaneFixture, tunnelRuntime overlayruntime.Interface, clock func() time.Time) (*usecase.Joiner, *state.Store) {
 	t.Helper()
 	store := state.NewStore(t.TempDir())
-	joiner := usecase.NewJoiner(controlPlane, store, tunnelRuntime).WithKeyGenerator(fixedKeys).WithClock(clock).WithConfigContract(usecase.ConfigContractSigned)
+	joiner := usecase.NewJoiner(controlPlane, store, tunnelRuntime).WithCredentialStore(&credential.MemoryStore{}).WithKeyGenerator(fixedKeys).WithClock(clock).WithConfigContract(usecase.ConfigContractSigned)
 	return joiner, store
+}
+
+func fixtureDeviceCredential(now time.Time) controlplane.DeviceCredential {
+	return controlplane.DeviceCredential{
+		CredentialID: "xdcid_0123456789abcdef0123456789abcdef",
+		Credential:   "xdc_0123456789abcdef0123456789abcdef." + strings.Repeat("A", 43),
+		TokenType:    credential.TokenType, IssuedAt: now.UTC().Truncate(time.Second), ExpiresAt: now.UTC().Truncate(time.Second).Add(30 * 24 * time.Hour),
+		Scope: []string{credential.ScopeSessionMint, credential.ScopeRotate, credential.ScopeDeviceRevoke},
+	}
 }
 
 func inviteJoinRequest(joinToken string) usecase.JoinRequest {

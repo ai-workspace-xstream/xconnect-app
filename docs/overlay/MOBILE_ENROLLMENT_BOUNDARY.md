@@ -70,9 +70,14 @@ mobile transient credentials safely.
 
 No enrollment bearer, WireGuard private key, or invitation is persisted through
 Dart preferences. The existing Go transient file store is not invoked by the
-mobile product while the protected bridge is unavailable. The eventual bridge
-must replace mobile transient secret persistence with Keychain/Keystore-backed
-HostServices before enabling exchange.
+mobile product while the protected bridge is unavailable.
+
+Batch 07 adds an operation-level `XConnectOneDeviceSessionService` for sync,
+credential rotation, and leave. Its Dart results contain only
+`completed/code/retryable`; no raw credential, verifier, enrollment bearer, or
+WireGuard key may cross the channel. Native iOS/macOS/Android handlers remain
+explicitly unavailable until the protected host owns Keychain/Keystore storage
+and the complete Go Apply/ACK transaction.
 
 ## QR and protected runtime gates
 

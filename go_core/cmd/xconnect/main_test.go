@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"go_core/overlay/controlplane"
+	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
 	overlayruntime "go_core/overlay/runtime"
@@ -308,7 +310,7 @@ func TestCLILifecycleCommandsAreIdempotentAndLeaveRetainsUnknownFiles(t *testing
 	if err := os.WriteFile(unknown, []byte("keep"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := runWithRuntimeFactory(t.Context(), []string{"leave", "--state-dir", stateDirectory}, &stdout, &stderr, server.Client(), factory); fault.Code(err) != fault.CodeDeviceLifecyclePending {
+	if err := runWithRuntimeFactory(t.Context(), []string{"leave", "--state-dir", stateDirectory}, &stdout, &stderr, server.Client(), factory); fault.Code(err) != fault.CodeCredentialMissing {
 		t.Fatalf("default leave code=%q err=%v", fault.Code(err), err)
 	}
 	stdout.Reset()
@@ -356,8 +358,127 @@ func TestAdminInviteCreatePrintsSecretExactlyOnceAndNeverToStderr(t *testing.T) 
 	}
 }
 
+func TestCLICredentialRotateAndDurableLeaveUseProtectedDeviceAuthorization(t *testing.T) {
+	stateDirectory := t.TempDir()
+	stateStore := state.NewStore(stateDirectory)
+	now := time.Now().UTC().Truncate(time.Second)
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	signingPublicKey := base64.StdEncoding.EncodeToString(privateKey.Public().(ed25519.PublicKey))
+	secret, err := credential.GenerateWithReader(bytes.NewReader(bytes.Repeat([]byte{0x44}, 48)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials := &credential.MemoryStore{}
+	record := credential.Record{
+		SchemaVersion: credential.SchemaVersion, Controller: "https://accounts.example", DeviceID: "dev_cli", NetworkID: "net_private", Platform: "linux",
+		WireGuardPublicKey: base64.StdEncoding.EncodeToString(make([]byte, 32)), CredentialID: secret.CredentialID, Credential: secret.Value,
+		IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(30 * 24 * time.Hour), Scope: []string{credential.ScopeSessionMint, credential.ScopeRotate, credential.ScopeDeviceRevoke},
+		SigningKeys: signedconfig.SigningKeys{Keys: []signedconfig.SigningKey{{KeyID: "signing_key_01", Algorithm: signedconfig.SignatureEd25519, PublicKey: signingPublicKey, Status: "current", NotBefore: signedconfig.CanonicalTime{Time: now.Add(-time.Hour)}}}},
+	}
+	if err := credentials.Save(t.Context(), record); err != nil {
+		t.Fatal(err)
+	}
+	lastKnown := state.LastKnown{Server: record.Controller, DeviceID: record.DeviceID, NetworkID: record.NetworkID, WireGuardPrivateKey: base64.StdEncoding.EncodeToString(make([]byte, 32)), WireGuardPublicKey: record.WireGuardPublicKey, Phase: state.PhaseAcknowledged, Config: cliTestConfig(), ConfigContract: "signed", SignedConfigID: "cfg_cli", SignedGeneration: 1}
+	if err := stateStore.SaveLastKnown(lastKnown); err != nil {
+		t.Fatal(err)
+	}
+	enrollmentToken := "xenr_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0x55}, 32))
+	syncConfig := signedconfig.Config{
+		SchemaVersion: 1, ConfigID: "cfg_cli_sync", NetworkID: record.NetworkID, DeviceID: record.DeviceID, Generation: 2,
+		IssuedAt: signedconfig.CanonicalTime{Time: now.Add(-time.Minute)}, ExpiresAt: signedconfig.CanonicalTime{Time: now.Add(time.Hour)}, ProxyCore: signedconfig.ProxyCoreXray,
+		Transport: signedconfig.Transport{Kind: signedconfig.TransportVLESS, Loopback: signedconfig.Endpoint{Host: "127.0.0.1", Port: 51830}, Remote: signedconfig.RemoteEndpoint{Host: "gateway.example.net", Port: 443, ServerName: "gateway.example.net"}, AuthID: "11111111-1111-4111-8111-111111111111"},
+		WireGuard: signedconfig.WireGuard{InterfaceName: "wg-xco", Addresses: []string{"10.77.0.20/32"}, MTU: 1280, Peers: []signedconfig.Peer{{GatewayID: "gw_cli", PublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", AllowedIPs: []string{"10.77.0.0/16"}, Endpoint: signedconfig.Endpoint{Host: "127.0.0.1", Port: 51830}, PersistentKeepaliveSeconds: 25}}},
+		Signature: signedconfig.Signature{Algorithm: signedconfig.SignatureEd25519, KeyID: "signing_key_01"},
+	}
+	payload, err := syncConfig.SigningBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	syncConfig.Signature.Value = base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, payload))
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var body string
+		headers := http.Header{"Content-Type": {"application/json"}, "Cache-Control": {"no-store"}}
+		switch request.URL.Path {
+		case "/api/overlay/v1/device/session":
+			if !strings.HasPrefix(request.Header.Get("Authorization"), "Device xdc_") {
+				t.Fatalf("session missing device authorization")
+			}
+			var session controlplane.DeviceSessionRequest
+			if err := json.NewDecoder(request.Body).Decode(&session); err != nil {
+				t.Fatal(err)
+			}
+			body = `{"client_nonce":"` + session.ClientNonce + `","enrollment_token":"` + enrollmentToken + `","token_type":"Bearer","issued_at":"` + now.Format(time.RFC3339) + `","expires_at":"` + now.Add(10*time.Minute).Format(time.RFC3339) + `","scope":["overlay:config:read","overlay:config:ack"],"device_id":"dev_cli","network_id":"net_private","signing_keys":[{"key_id":"signing_key_01","algorithm":"Ed25519","public_key":"` + signingPublicKey + `","status":"current","not_before":"` + now.Add(-time.Hour).Format(time.RFC3339) + `"}]}`
+		case "/api/overlay/v1/enrollment/signed-config":
+			if request.Header.Get("Authorization") != "Bearer "+enrollmentToken {
+				t.Fatalf("config missing enrollment authorization")
+			}
+			raw, _ := json.Marshal(syncConfig)
+			body = string(raw)
+			headers.Set("Cache-Control", "private, no-store")
+			headers.Set("ETag", `"cfg_cli_sync"`)
+		case "/api/overlay/v1/enrollment/signed-config/2/ack":
+			if request.Header.Get("Authorization") != "Bearer "+enrollmentToken {
+				t.Fatalf("ack missing enrollment authorization")
+			}
+			body = `{"acked":true,"ack":{"device_id":"dev_cli","config_id":"cfg_cli_sync","generation":2,"applied_at":"` + now.Format(time.RFC3339) + `","received_at":"` + now.Format(time.RFC3339) + `"}}`
+		case "/api/overlay/v1/device/credential/rotate":
+			if !strings.HasPrefix(request.Header.Get("Authorization"), "Device xdc_") {
+				t.Fatalf("rotate missing device authorization")
+			}
+			var payload controlplane.DeviceCredentialRotateRequest
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatal(err)
+			}
+			body = `{"credential_id":"` + payload.NewCredentialID + `","replaces_credential_id":"` + record.CredentialID + `","token_type":"Device","issued_at":"` + now.Format(time.RFC3339) + `","expires_at":"` + now.Add(30*24*time.Hour).Format(time.RFC3339) + `","scope":["overlay:session:mint","overlay:credential:rotate","overlay:device:revoke"]}`
+		case "/api/overlay/v1/device/revoke":
+			if !strings.HasPrefix(request.Header.Get("Authorization"), "Device xdc_") {
+				t.Fatalf("revoke missing device authorization")
+			}
+			body = `{"revoked":true,"duplicate":false,"device":{"id":"dev_cli","user_id":"11111111-1111-4111-8111-111111111111","network_id":"net_private","name":"CLI","platform":"linux","hostname":"host","wireguard_public_key":"` + record.WireGuardPublicKey + `","wireguard_address":"10.77.0.20/32","created_at":"` + now.Add(-time.Hour).Format(time.RFC3339) + `","updated_at":"` + now.Format(time.RFC3339) + `","last_seen_at":null,"status":"revoked","state_version":2,"key_version":1,"revoked_at":"` + now.Format(time.RFC3339) + `","revoked_reason":"explicit_leave"},"policy_generation":2,"policy_digest":"` + strings.Repeat("a", 64) + `"}`
+		default:
+			t.Fatalf("unexpected path %s", request.URL.Path)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: headers, Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+	})
+	httpClient := &http.Client{Transport: transport}
+	runtimeFake := &overlayruntime.Fake{}
+	credentialFactory := func(string) credential.Store { return credentials }
+	runtimeFactory := func(string) overlayruntime.Interface { return runtimeFake }
+	var stdout, stderr bytes.Buffer
+	if err := runWithFactories(t.Context(), []string{"sync", "--state-dir", stateDirectory}, &stdout, &stderr, httpClient, runtimeFactory, credentialFactory); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if runtimeFake.ApplyCalls != 1 || strings.Contains(stdout.String(), record.Credential) || strings.Contains(stderr.String(), record.Credential) {
+		t.Fatalf("sync apply=%d stdout=%q stderr=%q", runtimeFake.ApplyCalls, stdout.String(), stderr.String())
+	}
+	stdout.Reset()
+	if err := runWithFactories(t.Context(), []string{"credential", "rotate", "--state-dir", stateDirectory}, &stdout, &stderr, httpClient, runtimeFactory, credentialFactory); err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	rotated, err := credentials.Load(t.Context())
+	if err != nil || rotated.CredentialID == record.CredentialID || strings.Contains(stdout.String(), rotated.Credential) || strings.Contains(stderr.String(), rotated.Credential) {
+		t.Fatalf("rotated=%#v stdout=%q stderr=%q err=%v", rotated, stdout.String(), stderr.String(), err)
+	}
+	stdout.Reset()
+	if err := runWithFactories(t.Context(), []string{"leave", "--state-dir", stateDirectory}, &stdout, &stderr, httpClient, runtimeFactory, credentialFactory); err != nil {
+		t.Fatalf("leave: %v", err)
+	}
+	if _, err := credentials.Load(t.Context()); !errors.Is(err, credential.ErrNotFound) {
+		t.Fatalf("credential remains after leave: %v", err)
+	}
+	if strings.Contains(stdout.String(), rotated.Credential) || strings.Contains(stderr.String(), rotated.Credential) {
+		t.Fatal("leave output exposed device credential")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
 func TestPolicyExplainOutputsOnlyScopedRuleAndResolvedDevices(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Header.Get("Authorization") != "Bearer "+cliTestToken {
 			writer.WriteHeader(http.StatusUnauthorized)
@@ -499,7 +620,7 @@ func newCLIInviteServer(t *testing.T) (*httptest.Server, string, string, *atomic
 	config.Signature.Value = base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, payload))
 	var exchangeCalls atomic.Int32
 	var ackCalls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
 		case "/api/overlay/v1/join-tokens/exchange":
@@ -519,7 +640,13 @@ func newCLIInviteServer(t *testing.T) (*httptest.Server, string, string, *atomic
 			writer.Header().Set("Cache-Control", "no-store")
 			_ = json.NewEncoder(writer).Encode(controlplane.JoinTokenExchangeResponse{
 				EnrollmentToken: enrollmentToken, TokenType: "Bearer", ExpiresAt: now.Add(10 * time.Minute),
-				Scope:   []string{"overlay:config:read", "overlay:config:ack", "overlay:device:revoke"},
+				Scope: []string{"overlay:config:read", "overlay:config:ack", "overlay:device:revoke"},
+				DeviceCredential: controlplane.DeviceCredential{
+					CredentialID: "xdcid_0123456789abcdef0123456789abcdef",
+					Credential:   "xdc_0123456789abcdef0123456789abcdef." + strings.Repeat("A", 43),
+					TokenType:    "Device", IssuedAt: now, ExpiresAt: now.Add(30 * 24 * time.Hour),
+					Scope: []string{"overlay:session:mint", "overlay:credential:rotate", "overlay:device:revoke"},
+				},
 				Device:  model.Device{ID: "dev_cli", NetworkID: "net_private", Platform: runtime.GOOS, WireGuardPublicKey: exchange.WireGuardPublicKey, WireGuardAddress: "10.77.0.20/32"},
 				Network: model.Network{ID: "net_private", CIDR: "10.77.0.0/16"}, SigningKeys: keys,
 			})

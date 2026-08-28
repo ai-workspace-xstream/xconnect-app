@@ -127,6 +127,35 @@ void main() {
       await host.dispose();
     },
   );
+
+  test('device session bridge is operation-level and fail-closed', () async {
+    final channel = FakePlatformChannel()
+      ..responses['syncDeviceSession'] = {
+        'completed': true,
+        'code': 'synchronized',
+        'retryable': false,
+      }
+      ..responses['rotateDeviceCredential'] = {
+        'completed': false,
+        'code': 'credential_rotation_pending',
+        'retryable': true,
+        'device_credential': 'must-not-cross-dart-boundary',
+      };
+    final host = PlatformXConnectOneHostServices(
+      channel: channel,
+      targetPlatform: TargetPlatform.android,
+    );
+
+    final sync = await host.sync();
+    final rotate = await host.rotateCredential();
+
+    expect(sync.completed, isTrue);
+    expect(sync.code, 'synchronized');
+    expect(rotate.completed, isFalse);
+    expect(rotate.code, 'protected_device_session_unavailable');
+    expect(rotate.code, isNot(contains('xdc_')));
+    await host.dispose();
+  });
 }
 
 final class FakePlatformChannel implements XConnectOnePlatformChannel {

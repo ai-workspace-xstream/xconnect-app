@@ -18,7 +18,7 @@ func TestExchangeJoinTokenIsPublicStrictAndNoStore(t *testing.T) {
 	joinToken := testOpaqueSecret("xjt_", 7)
 	enrollmentToken := testOpaqueSecret("xenr_", 9)
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/api/overlay/v1/join-tokens/exchange" || request.Header.Get("Authorization") != "" {
 			t.Fatalf("exchange request path/auth = %s %q", request.URL.Path, request.Header.Get("Authorization"))
 		}
@@ -63,7 +63,7 @@ func TestExchangeJoinTokenRejectsCacheableMalformedOrUnboundResponse(t *testing.
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
 				writer.Header().Set("Cache-Control", test.cache)
 				_, _ = writer.Write([]byte(test.body))
@@ -135,7 +135,7 @@ func TestInviteAndEnrollmentErrorsAreStableAndSecretFree(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				writer.WriteHeader(http.StatusUnauthorized)
 				_, _ = writer.Write([]byte(`{"error":"invalid","message":"` + joinToken + enrollmentToken + `"}`))
 			}))
@@ -153,5 +153,7 @@ func testOpaqueSecret(prefix string, fill byte) string {
 }
 
 func validExchangeJSON(enrollmentToken, deviceID string, expiresAt time.Time) string {
-	return `{"enrollment_token":"` + enrollmentToken + `","token_type":"Bearer","expires_at":"` + expiresAt.UTC().Format(time.RFC3339Nano) + `","scope":["overlay:config:read","overlay:config:ack","overlay:device:revoke"],"device":{"id":"` + deviceID + `","network_id":"net_private","name":"Laptop","platform":"linux","hostname":"laptop","wireguard_public_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","wireguard_address":"10.77.0.10/32"},"network":{"id":"net_private","display_name":"Private","cidr":"10.77.0.0/16"},"signing_keys":` + strings.TrimSuffix(strings.TrimPrefix(validSigningKeysJSON(), `{"keys":`), `}`) + `}`
+	issuedAt := expiresAt.Add(-10 * time.Minute).UTC().Truncate(time.Second)
+	credentialExpiresAt := issuedAt.Add(30 * 24 * time.Hour)
+	return `{"enrollment_token":"` + enrollmentToken + `","token_type":"Bearer","expires_at":"` + expiresAt.UTC().Format(time.RFC3339Nano) + `","scope":["overlay:config:read","overlay:config:ack","overlay:device:revoke"],"device_credential":{"credential_id":"xdcid_0123456789abcdef0123456789abcdef","credential":"xdc_0123456789abcdef0123456789abcdef.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","token_type":"Device","issued_at":"` + issuedAt.Format(time.RFC3339) + `","expires_at":"` + credentialExpiresAt.Format(time.RFC3339) + `","scope":["overlay:session:mint","overlay:credential:rotate","overlay:device:revoke"]},"device":{"id":"` + deviceID + `","network_id":"net_private","name":"Laptop","platform":"linux","hostname":"laptop","wireguard_public_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","wireguard_address":"10.77.0.10/32"},"network":{"id":"net_private","display_name":"Private","cidr":"10.77.0.0/16"},"signing_keys":` + strings.TrimSuffix(strings.TrimPrefix(validSigningKeysJSON(), `{"keys":`), `}`) + `}`
 }

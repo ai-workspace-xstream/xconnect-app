@@ -313,7 +313,7 @@ func validateEnrollmentSecret(secret EnrollmentSecret) error {
 }
 
 func validEnrollmentScope(values []string) bool {
-	if len(values) != 3 {
+	if len(values) != 2 && len(values) != 3 {
 		return false
 	}
 	seen := map[string]bool{}
@@ -323,7 +323,10 @@ func validEnrollmentScope(values []string) bool {
 		}
 		seen[value] = true
 	}
-	return seen["overlay:config:read"] && seen["overlay:config:ack"] && seen["overlay:device:revoke"]
+	if !seen["overlay:config:read"] || !seen["overlay:config:ack"] {
+		return false
+	}
+	return len(values) == 2 || seen["overlay:device:revoke"]
 }
 
 func readJSON(path string, target any) error {

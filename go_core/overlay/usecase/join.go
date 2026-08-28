@@ -5,11 +5,13 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
 
 	"go_core/overlay/controlplane"
+	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
 	"go_core/overlay/runtime"
@@ -35,6 +37,10 @@ type InviteControlPlane interface {
 	AckEnrollmentSignedConfig(context.Context, string, controlplane.SignedConfigAckRequest) (controlplane.SignedConfigAckResponse, error)
 }
 
+type DeviceSessionControlPlane interface {
+	MintDeviceSession(context.Context, credential.Record, controlplane.DeviceSessionRequest) (controlplane.DeviceSessionResponse, error)
+}
+
 type ConfigContract string
 
 const (
@@ -56,12 +62,14 @@ func ParseConfigContract(value string) (ConfigContract, error) {
 type KeyGenerator func() (privateKey string, publicKey string, err error)
 
 type Joiner struct {
-	controlPlane ControlPlane
-	store        *state.Store
-	runtime      runtime.Interface
-	now          func() time.Time
-	generateKey  KeyGenerator
-	contract     ConfigContract
+	controlPlane  ControlPlane
+	store         *state.Store
+	credentials   credential.Store
+	runtime       runtime.Interface
+	now           func() time.Time
+	generateKey   KeyGenerator
+	generateNonce func() (string, error)
+	contract      ConfigContract
 }
 
 type JoinRequest struct {
@@ -84,13 +92,19 @@ type JoinResult struct {
 
 func NewJoiner(controlPlane ControlPlane, store *state.Store, tunnelRuntime runtime.Interface) *Joiner {
 	return &Joiner{
-		controlPlane: controlPlane,
-		store:        store,
-		runtime:      tunnelRuntime,
-		now:          time.Now,
-		generateKey:  generateWireGuardKeyPair,
-		contract:     ConfigContractLegacy,
+		controlPlane:  controlPlane,
+		store:         store,
+		runtime:       tunnelRuntime,
+		now:           time.Now,
+		generateKey:   generateWireGuardKeyPair,
+		generateNonce: generateUUIDv4,
+		contract:      ConfigContractLegacy,
 	}
+}
+
+func (j *Joiner) WithCredentialStore(store credential.Store) *Joiner {
+	j.credentials = store
+	return j
 }
 
 func (j *Joiner) WithConfigContract(contract ConfigContract) *Joiner {
@@ -149,6 +163,9 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 	checkpoint, err := j.loadOrCreateCheckpoint(request)
 	if err != nil {
 		return JoinResult{}, err
+	}
+	if checkpoint.InviteEnrollment && j.credentials == nil {
+		return JoinResult{}, fault.New(fault.CodeCredentialStorage, "use protected device credential storage", nil)
 	}
 	if checkpoint.ConfigContract == string(ConfigContractSigned) && j.contract == ConfigContractLegacy {
 		return JoinResult{}, fault.New(fault.CodeConfigDowngradeBlocked, "resume signed config with legacy contract", nil)
@@ -263,6 +280,16 @@ func (j *Joiner) Join(ctx context.Context, request JoinRequest) (JoinResult, err
 			}
 			if !ack.Acked || ack.Ack.DeviceID != checkpoint.DeviceID || ack.Ack.ConfigID != checkpoint.SignedConfigID || ack.Ack.Generation != checkpoint.SignedGeneration {
 				return JoinResult{}, fault.New(fault.CodeInvalidResponse, "acknowledge enrollment signed config", nil)
+			}
+			if exactSessionScope(enrollment.Scope) && j.credentials != nil {
+				record, loadErr := j.credentials.Load(ctx)
+				if loadErr != nil {
+					return JoinResult{}, loadErr
+				}
+				record.SigningKeys = enrollment.SigningKeys
+				if saveErr := j.credentials.Save(ctx, record); saveErr != nil {
+					return JoinResult{}, fault.New(fault.CodeCredentialStorage, "commit verified signing keys", saveErr)
+				}
 			}
 		} else if checkpoint.ConfigContract == string(ConfigContractSigned) {
 			signedControlPlane, ok := j.controlPlane.(SignedControlPlane)
@@ -388,12 +415,52 @@ func (j *Joiner) exchangeEnrollment(ctx context.Context, checkpoint state.Checkp
 	if err != nil {
 		return state.EnrollmentSecret{}, err
 	}
+	record := credential.Record{
+		SchemaVersion: credential.SchemaVersion, Controller: checkpoint.Server, DeviceID: checkpoint.DeviceID,
+		NetworkID: response.Network.ID, Platform: checkpoint.Platform, WireGuardPublicKey: checkpoint.WireGuardPublicKey,
+		CredentialID: response.DeviceCredential.CredentialID, Credential: response.DeviceCredential.Credential,
+		IssuedAt: response.DeviceCredential.IssuedAt, ExpiresAt: response.DeviceCredential.ExpiresAt,
+		Scope:       append([]string(nil), response.DeviceCredential.Scope...),
+		SigningKeys: signedconfig.SigningKeys{Keys: append([]signedconfig.SigningKey(nil), response.SigningKeys...)},
+	}
+	if err := j.credentials.Save(ctx, record); err != nil {
+		return state.EnrollmentSecret{}, fault.New(fault.CodeCredentialStorage, "persist device credential before enrollment", err)
+	}
 	enrollment := state.EnrollmentSecret{
 		Controller: checkpoint.Server, DeviceID: checkpoint.DeviceID, NetworkID: response.Network.ID,
 		Platform: checkpoint.Platform, WireGuardPublicKey: checkpoint.WireGuardPublicKey,
 		EnrollmentToken: response.EnrollmentToken, ExpiresAt: response.ExpiresAt, Scope: append([]string(nil), response.Scope...),
 		Device: response.Device, Network: response.Network,
 		SigningKeys: signedconfig.SigningKeys{Keys: append([]signedconfig.SigningKey(nil), response.SigningKeys...)}, CreatedAt: j.now().UTC(),
+	}
+	if err := j.store.SaveEnrollmentSecret(enrollment); err != nil {
+		return state.EnrollmentSecret{}, err
+	}
+	return enrollment, nil
+}
+
+func (j *Joiner) mintEnrollment(ctx context.Context, checkpoint state.Checkpoint, record credential.Record) (state.EnrollmentSecret, error) {
+	if record.Controller != checkpoint.Server || record.DeviceID != checkpoint.DeviceID || record.WireGuardPublicKey != checkpoint.WireGuardPublicKey || checkpoint.NetworkID != "" && record.NetworkID != checkpoint.NetworkID {
+		return state.EnrollmentSecret{}, fault.New(fault.CodeStateConflict, "validate device credential binding", nil)
+	}
+	deviceControlPlane, ok := j.controlPlane.(DeviceSessionControlPlane)
+	if !ok {
+		return state.EnrollmentSecret{}, fault.New(fault.CodeEnrollmentUnavailable, "mint device enrollment session", nil)
+	}
+	nonce, err := j.generateNonce()
+	if err != nil {
+		return state.EnrollmentSecret{}, fault.New(fault.CodeDeviceSessionInvalid, "generate device session nonce", err)
+	}
+	response, err := deviceControlPlane.MintDeviceSession(ctx, record, controlplane.DeviceSessionRequest{ClientNonce: nonce, Now: j.now().UTC()})
+	if err != nil {
+		return state.EnrollmentSecret{}, err
+	}
+	enrollment := state.EnrollmentSecret{
+		Controller: checkpoint.Server, DeviceID: checkpoint.DeviceID, NetworkID: record.NetworkID,
+		Platform: checkpoint.Platform, WireGuardPublicKey: checkpoint.WireGuardPublicKey,
+		EnrollmentToken: response.EnrollmentToken, ExpiresAt: response.ExpiresAt, Scope: append([]string(nil), response.Scope...),
+		Device:  model.Device{ID: record.DeviceID, NetworkID: record.NetworkID, Platform: record.Platform, WireGuardPublicKey: record.WireGuardPublicKey},
+		Network: model.Network{ID: record.NetworkID}, SigningKeys: signedconfig.SigningKeys{Keys: append([]signedconfig.SigningKey(nil), response.SigningKeys...)}, CreatedAt: j.now().UTC(),
 	}
 	if err := j.store.SaveEnrollmentSecret(enrollment); err != nil {
 		return state.EnrollmentSecret{}, err
@@ -411,6 +478,29 @@ func (j *Joiner) loadOrRenewEnrollment(ctx context.Context, checkpoint *state.Ch
 	}
 	if err != nil && !errors.Is(err, state.ErrNotFound) {
 		return state.EnrollmentSecret{}, err
+	}
+	if j.credentials != nil {
+		record, credentialErr := j.credentials.Load(ctx)
+		if credentialErr == nil {
+			if record.Expired(j.now()) {
+				_ = j.credentials.Delete(ctx)
+			} else {
+				enrollment, mintErr := j.mintEnrollment(ctx, *checkpoint, record)
+				if mintErr != nil {
+					return state.EnrollmentSecret{}, mintErr
+				}
+				checkpoint.NetworkID = enrollment.NetworkID
+				checkpoint.ConfigContract = string(ConfigContractSigned)
+				checkpoint.EnrollmentExpiresAt = enrollment.ExpiresAt
+				checkpoint.UpdatedAt = j.now().UTC()
+				if err := j.store.SaveCheckpoint(*checkpoint); err != nil {
+					return state.EnrollmentSecret{}, err
+				}
+				return enrollment, nil
+			}
+		} else if !errors.Is(credentialErr, credential.ErrNotFound) {
+			return state.EnrollmentSecret{}, credentialErr
+		}
 	}
 	if strings.TrimSpace(joinToken) == "" {
 		return state.EnrollmentSecret{}, fault.New(fault.CodeEnrollmentExpired, "enrollment expired; a new invite is required", nil)
@@ -448,7 +538,15 @@ func (j *Joiner) fetchEnrollmentSignedConfig(ctx context.Context, checkpoint *st
 	if err != nil {
 		return fetchedRuntimeConfig{}, j.handleEnrollmentError(err)
 	}
-	if err := signedconfig.Verify(config, enrollment.SigningKeys, j.now()); err != nil {
+	verificationKeys := enrollment.SigningKeys
+	if exactSessionScope(enrollment.Scope) && j.credentials != nil {
+		record, loadErr := j.credentials.Load(ctx)
+		if loadErr != nil {
+			return fetchedRuntimeConfig{}, loadErr
+		}
+		verificationKeys = record.SigningKeys
+	}
+	if err := signedconfig.Verify(config, verificationKeys, j.now()); err != nil {
 		return fetchedRuntimeConfig{}, err
 	}
 	if config.DeviceID != checkpoint.DeviceID || config.NetworkID != checkpoint.NetworkID {
@@ -642,6 +740,17 @@ func generateWireGuardKeyPair() (string, string, error) {
 		return "", "", err
 	}
 	return base64.StdEncoding.EncodeToString(privateKey.Bytes()), base64.StdEncoding.EncodeToString(privateKey.PublicKey().Bytes()), nil
+}
+
+func generateUUIDv4() (string, error) {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	raw[6] = raw[6]&0x0f | 0x40
+	raw[8] = raw[8]&0x3f | 0x80
+	encoded := hex.EncodeToString(raw)
+	return encoded[:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:], nil
 }
 
 func phaseAtLeast(current, target state.Phase) bool {

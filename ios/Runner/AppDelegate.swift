@@ -73,6 +73,12 @@ import UIKit
           "code": "mobile_join_bridge_unavailable",
           "retryable": false,
         ])
+      case "syncDeviceSession", "rotateDeviceCredential", "leaveDevice":
+        result([
+          "completed": false,
+          "code": "protected_device_session_unavailable",
+          "retryable": false,
+        ])
       default:
         result(FlutterMethodNotImplemented)
       }

@@ -7,12 +7,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"go_core/overlay/fault"
 )
 
 const staleOperationAge = 5 * time.Minute
+
+var operationNoncePattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type PolicyState struct {
 	SchemaVersion int       `json:"schema_version"`
@@ -22,6 +25,18 @@ type PolicyState struct {
 	Revision      uint64    `json:"revision"`
 	ExpiresAt     time.Time `json:"expires_at"`
 	AcceptedAt    time.Time `json:"accepted_at"`
+}
+
+type DeviceOperation struct {
+	SchemaVersion          int       `json:"schema_version"`
+	Kind                   string    `json:"kind"`
+	Controller             string    `json:"controller"`
+	DeviceID               string    `json:"device_id"`
+	NetworkID              string    `json:"network_id"`
+	ClientNonce            string    `json:"client_nonce"`
+	RemoteCommitted        bool      `json:"remote_committed"`
+	PolicyReconcilePending bool      `json:"policy_reconcile_pending"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 type operationOwner struct {
@@ -42,6 +57,34 @@ type CleanupResult struct {
 }
 
 func (s *Store) PolicyStatePath() string { return filepath.Join(s.dir, "policy-state.json") }
+
+func (s *Store) DeviceOperationPath() string { return filepath.Join(s.dir, "device-operation.json") }
+
+func (s *Store) LoadDeviceOperation() (DeviceOperation, error) {
+	var result DeviceOperation
+	if err := readJSON(s.DeviceOperationPath(), &result); err != nil {
+		return DeviceOperation{}, err
+	}
+	if err := validateDeviceOperation(result); err != nil {
+		return DeviceOperation{}, err
+	}
+	return result, nil
+}
+
+func (s *Store) SaveDeviceOperation(result DeviceOperation) error {
+	result.SchemaVersion = SchemaVersion
+	if err := validateDeviceOperation(result); err != nil {
+		return err
+	}
+	return writeJSON0600(s.DeviceOperationPath(), result)
+}
+
+func validateDeviceOperation(result DeviceOperation) error {
+	if result.SchemaVersion != SchemaVersion || result.Kind != "leave" || result.Controller == "" || result.DeviceID == "" || result.NetworkID == "" || !operationNoncePattern.MatchString(result.ClientNonce) || result.UpdatedAt.IsZero() {
+		return fault.New(fault.CodeStateIO, "validate device operation", nil)
+	}
+	return nil
+}
 
 func (s *Store) LoadPolicyState() (PolicyState, error) {
 	var result PolicyState
@@ -156,6 +199,7 @@ func (s *Store) ClearOwnedState() (CleanupResult, error) {
 		s.SigningKeyCachePath(),
 		s.EnrollmentSecretPath(),
 		s.PolicyStatePath(),
+		s.DeviceOperationPath(),
 	}
 	result := CleanupResult{}
 	for _, path := range paths {

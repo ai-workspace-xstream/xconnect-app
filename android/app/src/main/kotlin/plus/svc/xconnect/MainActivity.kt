@@ -77,6 +77,13 @@ class MainActivity : FlutterFragmentActivity() {
                             "retryable" to false
                         )
                     )
+                    "syncDeviceSession", "rotateDeviceCredential", "leaveDevice" -> result.success(
+                        mapOf(
+                            "completed" to false,
+                            "code" to "protected_device_session_unavailable",
+                            "retryable" to false
+                        )
+                    )
                     else -> result.notImplemented()
                 }
             }
