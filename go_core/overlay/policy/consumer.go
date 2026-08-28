@@ -78,6 +78,13 @@ type VerifiedReference struct {
 	expiresAt  time.Time
 }
 
+// ReferenceFromVerifiedSignedConfig binds a policy artifact to data that has
+// already been authenticated by the SignedConfig verifier. It intentionally
+// takes no URL or expiry from HTTP headers or CLI input.
+func ReferenceFromVerifiedSignedConfig(networkID string, generation uint64, digest string, expiresAt time.Time) (VerifiedReference, error) {
+	return newVerifiedReference(ProvenanceSignedConfig, networkID, generation, digest, expiresAt)
+}
+
 func newVerifiedReference(provenance Provenance, networkID string, generation uint64, digest string, expiresAt time.Time) (VerifiedReference, error) {
 	if provenance != ProvenanceSignedConfig && provenance != ProvenanceGatewaySnapshot || !idPattern.MatchString(networkID) || generation == 0 || !digestPattern.MatchString(digest) || expiresAt.IsZero() || expiresAt.Location() != time.UTC || expiresAt.Nanosecond() != 0 {
 		return VerifiedReference{}, invalid("bind verified policy reference")

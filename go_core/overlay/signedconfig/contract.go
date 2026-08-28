@@ -21,15 +21,18 @@ import (
 
 const (
 	SchemaVersionV1  = 1
+	SchemaVersionV2  = 2
 	ProxyCoreXray    = "xray"
 	TransportVLESS   = "vless-tls-xudp"
 	SignatureEd25519 = "Ed25519"
 	LoopbackHost     = "127.0.0.1"
 	RelayTargetPort  = 51820
+	PolicyMediaType  = "application/vnd.xconnect.policy.v1+json"
 )
 
 var (
 	idPattern        = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.:-]{2,127}$`)
+	digestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	interfacePattern = regexp.MustCompile(`^[a-zA-Z0-9_=+.-]{1,15}$`)
 	forbiddenFields  = map[string]struct{}{
 		"private_key":           {},
@@ -40,6 +43,10 @@ var (
 		"token":                 {},
 	}
 )
+
+func PolicyPath(generation uint64, digest string) string {
+	return fmt.Sprintf("/api/overlay/v1/enrollment/policy-artifacts/%d/%s", generation, digest)
+}
 
 // CanonicalTime preserves the SignedConfig wire requirement: UTC, whole
 // seconds, and the exact RFC3339 Z representation.
@@ -115,8 +122,19 @@ type Config struct {
 	ProxyCore     string        `json:"proxy_core"`
 	Transport     Transport     `json:"transport"`
 	WireGuard     WireGuard     `json:"wireguard"`
+	Policy        *Policy       `json:"policy,omitempty"`
 	Signature     Signature     `json:"signature"`
 	ETag          string        `json:"-"`
+}
+
+// Policy is a signed, same-origin reference to the canonical local-policy
+// artifact. It is deliberately a path, not a URL: callers must derive and
+// compare it before making an authenticated request.
+type Policy struct {
+	Generation uint64 `json:"generation"`
+	Digest     string `json:"digest"`
+	Path       string `json:"path"`
+	MediaType  string `json:"media_type"`
 }
 
 type SigningKey struct {
@@ -162,7 +180,7 @@ func DecodeSigningKeys(raw []byte) (SigningKeys, error) {
 }
 
 func (c Config) Validate() error {
-	if c.SchemaVersion != SchemaVersionV1 || !validID(c.ConfigID) || !validID(c.NetworkID) || !validID(c.DeviceID) || c.Generation == 0 {
+	if c.SchemaVersion != SchemaVersionV1 && c.SchemaVersion != SchemaVersionV2 || !validID(c.ConfigID) || !validID(c.NetworkID) || !validID(c.DeviceID) || c.Generation == 0 {
 		return fault.New(fault.CodeInvalidSignedConfig, "validate signed config identity", nil)
 	}
 	if c.IssuedAt.IsZero() || c.ExpiresAt.IsZero() || !c.ExpiresAt.After(c.IssuedAt.Time) {
@@ -201,6 +219,16 @@ func (c Config) Validate() error {
 	if err != nil || len(signature) != ed25519.SignatureSize {
 		return fault.New(fault.CodeInvalidSignedConfig, "validate signed config signature", nil)
 	}
+	if c.SchemaVersion == SchemaVersionV1 && c.Policy != nil || c.SchemaVersion == SchemaVersionV2 && (c.Policy == nil || c.Policy.Validate() != nil) {
+		return fault.New(fault.CodeInvalidSignedConfig, "validate signed config policy", nil)
+	}
+	return nil
+}
+
+func (p Policy) Validate() error {
+	if p.Generation == 0 || !digestPattern.MatchString(p.Digest) || p.MediaType != PolicyMediaType || p.Path != PolicyPath(p.Generation, p.Digest) {
+		return fault.New(fault.CodeInvalidSignedConfig, "validate signed policy reference", nil)
+	}
 	return nil
 }
 
@@ -238,6 +266,22 @@ func (k SigningKeys) Validate() error {
 }
 
 func (c Config) SigningBytes() ([]byte, error) {
+	if c.SchemaVersion == SchemaVersionV2 {
+		payload := struct {
+			SchemaVersion int           `json:"schema_version"`
+			ConfigID      string        `json:"config_id"`
+			NetworkID     string        `json:"network_id"`
+			DeviceID      string        `json:"device_id"`
+			Generation    uint64        `json:"generation"`
+			IssuedAt      CanonicalTime `json:"issued_at"`
+			ExpiresAt     CanonicalTime `json:"expires_at"`
+			ProxyCore     string        `json:"proxy_core"`
+			Transport     Transport     `json:"transport"`
+			WireGuard     WireGuard     `json:"wireguard"`
+			Policy        *Policy       `json:"policy"`
+		}{c.SchemaVersion, c.ConfigID, c.NetworkID, c.DeviceID, c.Generation, c.IssuedAt, c.ExpiresAt, c.ProxyCore, c.Transport, c.WireGuard, c.Policy}
+		return json.Marshal(payload)
+	}
 	payload := struct {
 		SchemaVersion int           `json:"schema_version"`
 		ConfigID      string        `json:"config_id"`

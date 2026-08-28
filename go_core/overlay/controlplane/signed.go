@@ -50,6 +50,8 @@ type SignedConfigAckResponse struct {
 	Ack       SignedConfigAck `json:"ack"`
 }
 
+const SignedConfigV2MediaType = "application/vnd.xconnect.signed-config.v2+json"
+
 func (c *Client) GetSigningKeys(ctx context.Context, etag string) (SigningKeysResponse, error) {
 	headers := http.Header{}
 	if strings.TrimSpace(etag) != "" {
@@ -75,6 +77,17 @@ func (c *Client) GetSigningKeys(ctx context.Context, etag string) (SigningKeysRe
 }
 
 func (c *Client) GetSignedConfig(ctx context.Context, request SignedConfigRequest) (signedconfig.Config, error) {
+	return c.getSignedConfig(ctx, request, c.token, apiPrefixV1+"/signed-config", nil, false)
+}
+
+// GetSignedConfigV2 opts into the v2 representation. There is deliberately no
+// v1 fallback: a proxy or Accounts deployment that cannot serve v2 must fail
+// visibly instead of silently removing the signed policy binding.
+func (c *Client) GetSignedConfigV2(ctx context.Context, request SignedConfigRequest) (signedconfig.Config, error) {
+	return c.getSignedConfig(ctx, request, c.token, apiPrefixV1+"/signed-config", http.Header{"Accept": []string{SignedConfigV2MediaType}}, true)
+}
+
+func (c *Client) getSignedConfig(ctx context.Context, request SignedConfigRequest, bearer, path string, headers http.Header, v2 bool) (signedconfig.Config, error) {
 	query := url.Values{}
 	query.Set("device_id", request.DeviceID)
 	if request.NetworkID != "" {
@@ -83,16 +96,25 @@ func (c *Client) GetSignedConfig(ctx context.Context, request SignedConfigReques
 	if request.NodeID != "" {
 		query.Set("node_id", request.NodeID)
 	}
-	_, responseHeaders, raw, err := c.doContract(ctx, http.MethodGet, apiPrefixV1+"/signed-config", query, nil, nil, true)
+	_, responseHeaders, raw, err := c.doContractWithBearer(ctx, http.MethodGet, path, query, nil, headers, bearer, contractErrorSignedCapability)
 	if err != nil {
 		return signedconfig.Config{}, err
 	}
-	if responseHeaders.Get("Cache-Control") != "private, no-store" || strings.TrimSpace(responseHeaders.Get("ETag")) == "" {
+	if responseHeaders.Get("Cache-Control") != "private, no-store" || strings.TrimSpace(responseHeaders.Get("ETag")) == "" || v2 && !headerContainsToken(responseHeaders.Values("Vary"), "Accept") {
 		return signedconfig.Config{}, fault.New(fault.CodeInvalidResponse, "validate signed-config cache headers", nil)
+	}
+	if v2 {
+		mediaType, _, mediaErr := mime.ParseMediaType(responseHeaders.Get("Content-Type"))
+		if mediaErr != nil || mediaType != SignedConfigV2MediaType {
+			return signedconfig.Config{}, fault.New(fault.CodeInvalidResponse, "validate signed-config v2 media type", nil)
+		}
 	}
 	config, err := signedconfig.DecodeConfig(raw)
 	if err != nil {
 		return signedconfig.Config{}, err
+	}
+	if v2 != (config.SchemaVersion == signedconfig.SchemaVersionV2) {
+		return signedconfig.Config{}, fault.New(fault.CodeInvalidSignedConfig, "validate signed-config negotiated version", nil)
 	}
 	config.ETag = responseHeaders.Get("ETag")
 	return config, nil
@@ -171,6 +193,7 @@ func (c *Client) doContractWithAuthorization(ctx context.Context, method, path s
 		request.Header.Set("Authorization", strings.TrimSpace(authorization))
 	}
 	for key, values := range headers {
+		request.Header.Del(key)
 		for _, value := range values {
 			request.Header.Add(key, value)
 		}

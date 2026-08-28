@@ -245,6 +245,29 @@ func (s *Store) AcceptSignedConfig(controller, deviceID, networkID, configID, pa
 	return writeJSON0600(s.ContractStatePath(), contractState)
 }
 
+// ValidateSignedConfigFloor performs the replay check without changing durable
+// state. Consumers use it while staging a v2 config and policy before runtime
+// apply/readback; the floor is advanced only after that boundary succeeds.
+func (s *Store) ValidateSignedConfigFloor(controller, deviceID, networkID, configID, payloadSHA256 string, generation uint64) error {
+	digest, digestErr := hex.DecodeString(payloadSHA256)
+	if strings.TrimSpace(controller) == "" || strings.TrimSpace(deviceID) == "" || strings.TrimSpace(networkID) == "" || strings.TrimSpace(configID) == "" || generation == 0 || digestErr != nil || len(digest) != 32 || payloadSHA256 != strings.ToLower(payloadSHA256) {
+		return fault.New(fault.CodeStateIO, "validate signed config floor", nil)
+	}
+	contractState, err := s.LoadContractState()
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, binding := range contractState.Bindings {
+		if binding.Controller == controller && binding.DeviceID == deviceID && binding.NetworkID == networkID && (generation < binding.HighestGeneration || generation == binding.HighestGeneration && (binding.ConfigID != configID || binding.PayloadSHA256 != payloadSHA256)) {
+			return fault.New(fault.CodeConfigReplay, "validate signed config generation", nil)
+		}
+	}
+	return nil
+}
+
 func (s *Store) LoadSigningKeyCache(controller, deviceID string) (SigningKeyCache, error) {
 	var cache SigningKeyCache
 	if err := readJSON(s.SigningKeyCachePath(), &cache); err != nil {

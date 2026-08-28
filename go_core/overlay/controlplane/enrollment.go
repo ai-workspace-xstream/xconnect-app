@@ -3,6 +3,9 @@ package controlplane
 import (
 	"context"
 	"encoding/base64"
+	"errors"
+	"io"
+	"mime"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -100,6 +103,16 @@ func canonicalCredentialWindow(issuedAt, expiresAt, now time.Time) bool {
 }
 
 func (c *Client) GetEnrollmentSignedConfig(ctx context.Context, enrollmentToken string, request SignedConfigRequest) (signedconfig.Config, error) {
+	return c.getEnrollmentSignedConfig(ctx, enrollmentToken, request, false)
+}
+
+// GetEnrollmentSignedConfigV2 uses an explicit media type to request the
+// signed policy reference. It must never downgrade to v1.
+func (c *Client) GetEnrollmentSignedConfigV2(ctx context.Context, enrollmentToken string, request SignedConfigRequest) (signedconfig.Config, error) {
+	return c.getEnrollmentSignedConfig(ctx, enrollmentToken, request, true)
+}
+
+func (c *Client) getEnrollmentSignedConfig(ctx context.Context, enrollmentToken string, request SignedConfigRequest, v2 bool) (signedconfig.Config, error) {
 	if !validOpaqueSecret(enrollmentToken, "xenr_") {
 		return signedconfig.Config{}, fault.New(fault.CodeEnrollmentUnavailable, "load enrollment session", nil)
 	}
@@ -111,19 +124,74 @@ func (c *Client) GetEnrollmentSignedConfig(ctx context.Context, enrollmentToken 
 	if request.NodeID != "" {
 		query.Set("node_id", request.NodeID)
 	}
-	_, responseHeaders, raw, err := c.doContractWithBearer(ctx, http.MethodGet, apiPrefixV1+"/enrollment/signed-config", query, nil, nil, enrollmentToken, contractErrorEnrollment)
+	headers := http.Header(nil)
+	if v2 {
+		headers = http.Header{"Accept": []string{SignedConfigV2MediaType}}
+	}
+	_, responseHeaders, raw, err := c.doContractWithBearer(ctx, http.MethodGet, apiPrefixV1+"/enrollment/signed-config", query, nil, headers, enrollmentToken, contractErrorEnrollment)
 	if err != nil {
 		return signedconfig.Config{}, err
 	}
-	if responseHeaders.Get("Cache-Control") != "private, no-store" || strings.TrimSpace(responseHeaders.Get("ETag")) == "" {
+	if responseHeaders.Get("Cache-Control") != "private, no-store" || strings.TrimSpace(responseHeaders.Get("ETag")) == "" || v2 && !headerContainsToken(responseHeaders.Values("Vary"), "Accept") {
 		return signedconfig.Config{}, fault.New(fault.CodeInvalidResponse, "validate enrollment signed-config cache headers", nil)
+	}
+	if v2 {
+		mediaType, _, mediaErr := mime.ParseMediaType(responseHeaders.Get("Content-Type"))
+		if mediaErr != nil || mediaType != SignedConfigV2MediaType {
+			return signedconfig.Config{}, fault.New(fault.CodeInvalidResponse, "validate enrollment signed-config v2 media type", nil)
+		}
 	}
 	config, err := signedconfig.DecodeConfig(raw)
 	if err != nil {
 		return signedconfig.Config{}, err
 	}
+	if v2 != (config.SchemaVersion == signedconfig.SchemaVersionV2) {
+		return signedconfig.Config{}, fault.New(fault.CodeInvalidSignedConfig, "validate enrollment signed-config negotiated version", nil)
+	}
 	config.ETag = responseHeaders.Get("ETag")
 	return config, nil
+}
+
+// GetEnrollmentPolicyArtifact obtains the only policy artifact a v2 config
+// can name. The path is reconstructed from signed values before a request is
+// made, so an absolute URL, userinfo, different authority, or redirect cannot
+// receive the enrollment bearer.
+func (c *Client) GetEnrollmentPolicyArtifact(ctx context.Context, enrollmentToken string, reference signedconfig.Policy) ([]byte, error) {
+	if !validOpaqueSecret(enrollmentToken, "xenr_") || reference.Validate() != nil {
+		return nil, fault.New(fault.CodeEnrollmentUnavailable, "load enrollment policy", nil)
+	}
+	if c.baseURL.Scheme != "https" {
+		return nil, fault.New(fault.CodeInvalidInput, "create enrollment policy request", nil)
+	}
+	endpoint := *c.baseURL
+	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + signedconfig.PolicyPath(reference.Generation, reference.Digest)
+	endpoint.RawQuery = ""
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return nil, fault.New(fault.CodeInvalidInput, "create enrollment policy request", err)
+	}
+	request.Header.Set("Accept", signedconfig.PolicyMediaType)
+	request.Header.Set("Authorization", "Bearer "+enrollmentToken)
+	clientCopy := *c.httpClient
+	clientCopy.CheckRedirect = func(*http.Request, []*http.Request) error { return errors.New("redirect rejected") }
+	response, err := clientCopy.Do(request)
+	if err != nil {
+		return nil, fault.New(fault.CodeControlPlaneUnavailable, "request enrollment policy", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+		return nil, statusError(response.StatusCode)
+	}
+	mediaType, _, mediaErr := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if mediaErr != nil || mediaType != signedconfig.PolicyMediaType || response.Header.Get("Cache-Control") != "private, no-store" {
+		return nil, fault.New(fault.CodeInvalidResponse, "validate enrollment policy response", nil)
+	}
+	raw, readErr := io.ReadAll(io.LimitReader(response.Body, 4<<20+1))
+	if readErr != nil || len(raw) == 0 || len(raw) > 4<<20 {
+		return nil, fault.New(fault.CodeInvalidResponse, "read enrollment policy", readErr)
+	}
+	return raw, nil
 }
 
 func (c *Client) AckEnrollmentSignedConfig(ctx context.Context, enrollmentToken string, request SignedConfigAckRequest) (SignedConfigAckResponse, error) {

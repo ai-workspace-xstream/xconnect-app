@@ -69,7 +69,7 @@ recovery path and does not report remote revocation.
 ## Commands and stable failures
 
 ```text
-xconnect sync [--state-dir DIR]
+xconnect sync [--state-dir DIR] [--signed-config-v2]
 xconnect credential rotate [--state-dir DIR]
 xconnect leave [--state-dir DIR]
 xconnect leave --local-only [--state-dir DIR]
@@ -80,6 +80,11 @@ Relevant stable failures include `device_credential_missing`,
 `device_credential_storage_unavailable`, `device_session_invalid`, and the
 existing signed-config/runtime errors. Error text contains only operation and
 stable code.
+
+`--signed-config-v2` is a deliberate rollout switch. It requests only the v2
+media type and requires the signed same-origin policy reference and policy
+artifact to validate before runtime Apply. It rejects redirects and never
+downgrades to v1 if the v2 producer is unavailable.
 
 ## Platform limitation
 

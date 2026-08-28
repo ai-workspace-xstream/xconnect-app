@@ -5,7 +5,7 @@
 ```text
 xconnect up [--state-dir DIR]
 xconnect down [--state-dir DIR]
-xconnect sync [--state-dir DIR]
+xconnect sync [--state-dir DIR] [--signed-config-v2]
 xconnect leave [--state-dir DIR] [--local-only]
 xconnect credential rotate [--state-dir DIR]
 xconnect admin invite create --network-id ID [--device-id ID]
@@ -113,12 +113,18 @@ and is shown by `status` and `diagnose`. It becomes reachable only when a
 canonical signed verifier can issue the opaque reference. Local policy remains
 advisory; Gateway enforcement is authoritative.
 
-The current client SignedConfig v1 does not yet carry a policy artifact
-reference, and Accounts exposes the enforcement artifact only on the internal
-Gateway route. Therefore Batch 06 delivers and verifies the consumer/storage
-boundary but does not claim a live client artifact fetch/apply chain. That
-chain must be enabled only after a signed client policy reference and scoped
-artifact endpoint become canonical.
+`sync --signed-config-v2` explicitly opts into the policy-bound SignedConfig
+v2 contract. Default `sync` remains strict v1 throughout the producer rollout.
+V2 requires `Accept: application/vnd.xconnect.signed-config.v2+json`,
+`Vary: Accept`, and the exact v2 response media type; it never silently falls
+back to v1. After Ed25519 verification, the client derives the only permitted
+same-origin relative artifact path from the signed policy generation/digest.
+It rejects absolute paths, redirects, unexpected media types, digest mismatch,
+and replay (including an equal generation with another digest). Config and
+policy are both validated before runtime Apply; runtime readback and ACK occur
+before advancing the SignedConfig/policy floors, preserving last-known-good
+state on any failure. Accounts must serve the scoped artifact endpoint before
+this opt-in flag is enabled in a rollout.
 
 Optional cross-repository gates can set:
 

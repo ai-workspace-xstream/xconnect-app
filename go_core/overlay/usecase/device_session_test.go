@@ -2,6 +2,11 @@ package usecase_test
 
 import (
 	"bytes"
+	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"go_core/overlay/controlplane"
 	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	overlayruntime "go_core/overlay/runtime"
@@ -103,6 +109,96 @@ func TestDeviceSyncFailedConfigCannotPoisonDurableSigningKeys(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(stored.SigningKeys, original.SigningKeys) {
 		t.Fatalf("durable trust changed on failed config: stored=%#v original=%#v err=%v", stored.SigningKeys, original.SigningKeys, err)
 	}
+}
+
+func TestDeviceSyncV2StagesPolicyBeforeRuntimeAndPersistsFloor(t *testing.T) {
+	base := newInviteControlPlaneFixture(t)
+	policyRaw, digest := v2PolicyArtifact(t)
+	controlPlane := &v2DeviceControlPlane{inviteControlPlaneFixture: base, policyRaw: policyRaw, policyDigest: digest}
+	now := base.config.IssuedAt.Time.Add(time.Minute)
+	stateStore := state.NewStore(t.TempDir())
+	if err := stateStore.SaveLastKnown(lifecycleLastKnown()); err != nil {
+		t.Fatal(err)
+	}
+	credentials := &credential.MemoryStore{}
+	if err := credentials.Save(t.Context(), durableRecord(t, base.keys, now)); err != nil {
+		t.Fatal(err)
+	}
+	runtimeFake := &overlayruntime.Fake{}
+	manager := usecase.NewDeviceSessionManager(controlPlane, stateStore, credentials, runtimeFake).WithClock(func() time.Time { return now }).WithSignedConfigV2()
+	if _, err := manager.Sync(t.Context()); err != nil {
+		t.Fatalf("v2 sync: %v", err)
+	}
+	policyState, err := stateStore.LoadPolicyState()
+	if err != nil || policyState.Generation != 9 || policyState.Digest != digest {
+		t.Fatalf("policy state=%#v err=%v", policyState, err)
+	}
+	if controlPlane.v2Calls != 1 || controlPlane.policyCalls != 1 || runtimeFake.ApplyCalls != 1 {
+		t.Fatalf("v2=%d policy=%d apply=%d", controlPlane.v2Calls, controlPlane.policyCalls, runtimeFake.ApplyCalls)
+	}
+}
+
+func TestDeviceSyncV2RejectsPolicyBeforeRuntimeOrFloorMutation(t *testing.T) {
+	base := newInviteControlPlaneFixture(t)
+	controlPlane := &v2DeviceControlPlane{inviteControlPlaneFixture: base, policyRaw: []byte(`{"schema_version":1}`), policyDigest: v2PolicyDigest}
+	now := base.config.IssuedAt.Time.Add(time.Minute)
+	stateStore := state.NewStore(t.TempDir())
+	if err := stateStore.SaveLastKnown(lifecycleLastKnown()); err != nil {
+		t.Fatal(err)
+	}
+	credentials := &credential.MemoryStore{}
+	if err := credentials.Save(t.Context(), durableRecord(t, base.keys, now)); err != nil {
+		t.Fatal(err)
+	}
+	runtimeFake := &overlayruntime.Fake{}
+	manager := usecase.NewDeviceSessionManager(controlPlane, stateStore, credentials, runtimeFake).WithClock(func() time.Time { return now }).WithSignedConfigV2()
+	if _, err := manager.Sync(t.Context()); fault.Code(err) != fault.CodePolicyInvalid {
+		t.Fatalf("policy error=%q err=%v", fault.Code(err), err)
+	}
+	if runtimeFake.ApplyCalls != 0 {
+		t.Fatalf("runtime applied before policy validation: %d", runtimeFake.ApplyCalls)
+	}
+	if _, err := stateStore.LoadContractState(); !errors.Is(err, state.ErrNotFound) {
+		t.Fatalf("config floor advanced on rejected policy: %v", err)
+	}
+}
+
+const v2PolicyDigest = "58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c"
+
+type v2DeviceControlPlane struct {
+	*inviteControlPlaneFixture
+	policyRaw    []byte
+	policyDigest string
+	v2Calls      int
+	policyCalls  int
+}
+
+func (f *v2DeviceControlPlane) GetEnrollmentSignedConfigV2(_ context.Context, enrollmentToken string, _ controlplane.SignedConfigRequest) (signedconfig.Config, error) {
+	f.v2Calls++
+	if len(f.enrollmentTokens) == 0 || enrollmentToken != f.enrollmentTokens[len(f.enrollmentTokens)-1] {
+		return signedconfig.Config{}, fault.New(fault.CodeEnrollmentExpired, "invalid enrollment", nil)
+	}
+	config := f.config
+	config.SchemaVersion = signedconfig.SchemaVersionV2
+	config.Policy = &signedconfig.Policy{Generation: 9, Digest: f.policyDigest, Path: signedconfig.PolicyPath(9, f.policyDigest), MediaType: signedconfig.PolicyMediaType}
+	payload, err := config.SigningBytes()
+	if err != nil {
+		return signedconfig.Config{}, err
+	}
+	config.Signature.Value = base64.StdEncoding.EncodeToString(ed25519.Sign(signedTestPrivateKey(), payload))
+	return config, nil
+}
+
+func (f *v2DeviceControlPlane) GetEnrollmentPolicyArtifact(_ context.Context, _ string, _ signedconfig.Policy) ([]byte, error) {
+	f.policyCalls++
+	return append([]byte(nil), f.policyRaw...), nil
+}
+
+func v2PolicyArtifact(t *testing.T) ([]byte, string) {
+	t.Helper()
+	raw := []byte(`{"schema_version":1,"compiler_version":"xconnect-acl-v1alpha1.1","network_id":"net_private","revision":7,"default_action":"deny","protected_flows":["control:controller-session","control:gateway-apply-result","control:gateway-heartbeat","control:gateway-policy-artifact","control:gateway-snapshot"],"rules":[]}`)
+	sum := sha256.Sum256(raw)
+	return raw, hex.EncodeToString(sum[:])
 }
 
 func TestDeviceCredentialRotationPersistsPendingAndRecoversLostResponse(t *testing.T) {

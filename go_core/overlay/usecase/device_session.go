@@ -9,6 +9,7 @@ import (
 	"go_core/overlay/credential"
 	"go_core/overlay/fault"
 	"go_core/overlay/model"
+	"go_core/overlay/policy"
 	"go_core/overlay/runtime"
 	"go_core/overlay/signedconfig"
 	"go_core/overlay/state"
@@ -20,6 +21,15 @@ type DurableDeviceControlPlane interface {
 	RotateDeviceCredential(context.Context, credential.Record, controlplane.DeviceCredentialRotateRequest, time.Time) (controlplane.DeviceCredentialRotateResponse, error)
 }
 
+// DeviceSessionV2ControlPlane is intentionally separate so existing v1-only
+// test doubles and pre-v2 servers retain their explicit v1 behaviour. The
+// shipped HTTP client implements it; a caller must opt in before durable sync
+// requests v2, and a v2 request never falls back after a capability failure.
+type DeviceSessionV2ControlPlane interface {
+	GetEnrollmentSignedConfigV2(context.Context, string, controlplane.SignedConfigRequest) (signedconfig.Config, error)
+	GetEnrollmentPolicyArtifact(context.Context, string, signedconfig.Policy) ([]byte, error)
+}
+
 type DeviceSessionManager struct {
 	controlPlane DurableDeviceControlPlane
 	state        *state.Store
@@ -28,6 +38,7 @@ type DeviceSessionManager struct {
 	now          func() time.Time
 	nonce        func() (string, error)
 	secret       func() (credential.Secret, error)
+	preferV2     bool
 }
 
 type SyncResult struct {
@@ -53,6 +64,14 @@ func (m *DeviceSessionManager) WithClock(now func() time.Time) *DeviceSessionMan
 	return m
 }
 
+// WithSignedConfigV2 explicitly opts a caller into policy-bound config v2.
+// The default stays v1 so an Accounts rollout can add the producer without
+// changing the behaviour of already-installed clients.
+func (m *DeviceSessionManager) WithSignedConfigV2() *DeviceSessionManager {
+	m.preferV2 = true
+	return m
+}
+
 func (m *DeviceSessionManager) Sync(ctx context.Context) (SyncResult, error) {
 	lock, err := m.state.AcquireOperation(ctx, "sync")
 	if err != nil {
@@ -74,7 +93,15 @@ func (m *DeviceSessionManager) Sync(ctx context.Context) (SyncResult, error) {
 	if err != nil {
 		return SyncResult{}, err
 	}
-	config, err := m.controlPlane.GetEnrollmentSignedConfig(ctx, enrollment.EnrollmentToken, controlplane.SignedConfigRequest{DeviceID: record.DeviceID, NetworkID: record.NetworkID, NodeID: lastKnown.NodeID})
+	request := controlplane.SignedConfigRequest{DeviceID: record.DeviceID, NetworkID: record.NetworkID, NodeID: lastKnown.NodeID}
+	v2, supportsV2 := m.controlPlane.(DeviceSessionV2ControlPlane)
+	supportsV2 = supportsV2 && m.preferV2
+	var config signedconfig.Config
+	if supportsV2 {
+		config, err = v2.GetEnrollmentSignedConfigV2(ctx, enrollment.EnrollmentToken, request)
+	} else {
+		config, err = m.controlPlane.GetEnrollmentSignedConfig(ctx, enrollment.EnrollmentToken, request)
+	}
 	if err != nil {
 		return SyncResult{}, handleDeviceSessionError(m.state, err)
 	}
@@ -88,8 +115,38 @@ func (m *DeviceSessionManager) Sync(ctx context.Context) (SyncResult, error) {
 	if err != nil {
 		return SyncResult{}, err
 	}
-	if err := m.state.AcceptSignedConfig(record.Controller, record.DeviceID, record.NetworkID, config.ConfigID, compiled.Digest, config.Generation, m.now()); err != nil {
+	if err := m.state.ValidateSignedConfigFloor(record.Controller, record.DeviceID, record.NetworkID, config.ConfigID, compiled.Digest, config.Generation); err != nil {
 		return SyncResult{}, err
+	}
+	if !supportsV2 {
+		// Preserve the established v1 floor timing. V2 intentionally commits only
+		// after its policy has staged, runtime readback has succeeded, and ACK is
+		// accepted below.
+		if err := m.state.AcceptSignedConfig(record.Controller, record.DeviceID, record.NetworkID, config.ConfigID, compiled.Digest, config.Generation, m.now()); err != nil {
+			return SyncResult{}, err
+		}
+	}
+	var acceptedPolicy policy.Accepted
+	if supportsV2 {
+		if config.SchemaVersion != signedconfig.SchemaVersionV2 || config.Policy == nil {
+			return SyncResult{}, fault.New(fault.CodeInvalidSignedConfig, "validate device sync v2 policy", nil)
+		}
+		reference, referenceErr := policy.ReferenceFromVerifiedSignedConfig(config.NetworkID, config.Policy.Generation, config.Policy.Digest, config.ExpiresAt.Time)
+		if referenceErr != nil {
+			return SyncResult{}, referenceErr
+		}
+		floor, floorErr := m.policyFloor(record.NetworkID)
+		if floorErr != nil {
+			return SyncResult{}, floorErr
+		}
+		raw, artifactErr := v2.GetEnrollmentPolicyArtifact(ctx, enrollment.EnrollmentToken, *config.Policy)
+		if artifactErr != nil {
+			return SyncResult{}, handleDeviceSessionError(m.state, artifactErr)
+		}
+		acceptedPolicy, err = policy.Consume(raw, reference, floor, m.now())
+		if err != nil {
+			return SyncResult{}, err
+		}
 	}
 	status, err := m.runtime.Status(ctx)
 	if err != nil {
@@ -104,6 +161,10 @@ func (m *DeviceSessionManager) Sync(ctx context.Context) (SyncResult, error) {
 		if applyErr != nil {
 			return SyncResult{}, fault.New(runtimeApplyErrorCode(applyErr), "apply synchronized runtime", applyErr)
 		}
+		readback, readbackErr := m.runtime.Status(ctx)
+		if readbackErr != nil || !runtimeMatches(readback, state.LastKnown{Config: compiled}) {
+			return SyncResult{}, fault.New(fault.CodeRuntimeApplyFailed, "read back synchronized runtime", readbackErr)
+		}
 	}
 	ack, err := m.controlPlane.AckEnrollmentSignedConfig(ctx, enrollment.EnrollmentToken, controlplane.SignedConfigAckRequest{Generation: config.Generation, ConfigID: config.ConfigID, DeviceID: record.DeviceID, AppliedAt: m.now().UTC()})
 	if err != nil {
@@ -111,6 +172,14 @@ func (m *DeviceSessionManager) Sync(ctx context.Context) (SyncResult, error) {
 	}
 	if !ack.Acked || ack.Ack.DeviceID != record.DeviceID || ack.Ack.ConfigID != config.ConfigID || ack.Ack.Generation != config.Generation {
 		return SyncResult{}, fault.New(fault.CodeInvalidResponse, "acknowledge device sync", nil)
+	}
+	if supportsV2 {
+		if err := m.state.AcceptSignedConfig(record.Controller, record.DeviceID, record.NetworkID, config.ConfigID, compiled.Digest, config.Generation, m.now()); err != nil {
+			return SyncResult{}, err
+		}
+		if err := m.state.SavePolicyState(state.PolicyState{NetworkID: acceptedPolicy.Artifact.NetworkID, Generation: acceptedPolicy.Generation, Digest: acceptedPolicy.Digest, Revision: acceptedPolicy.Artifact.Revision, ExpiresAt: acceptedPolicy.ExpiresAt, AcceptedAt: m.now().UTC()}); err != nil {
+			return SyncResult{}, err
+		}
 	}
 	lastKnown.Config = compiled
 	lastKnown.ConfigContract = string(ConfigContractSigned)
@@ -128,6 +197,17 @@ func (m *DeviceSessionManager) Sync(ctx context.Context) (SyncResult, error) {
 		return SyncResult{}, err
 	}
 	return SyncResult{DeviceID: record.DeviceID, NetworkID: record.NetworkID, Revision: compiled.Revision, Generation: config.Generation, AlreadyCurrent: alreadyCurrent}, nil
+}
+
+func (m *DeviceSessionManager) policyFloor(networkID string) (policy.Floor, error) {
+	current, err := m.state.LoadPolicyState()
+	if errors.Is(err, state.ErrNotFound) {
+		return policy.Floor{NetworkID: networkID}, nil
+	}
+	if err != nil {
+		return policy.Floor{}, err
+	}
+	return policy.Floor{NetworkID: current.NetworkID, Generation: current.Generation, Digest: current.Digest}, nil
 }
 
 func (m *DeviceSessionManager) Rotate(ctx context.Context) (RotationResult, error) {

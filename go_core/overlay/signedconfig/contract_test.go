@@ -41,6 +41,29 @@ func TestAccountsGoldenVectorSigningBytesAndEd25519Verification(t *testing.T) {
 	}
 }
 
+func TestAccountsV2GoldenVectorBindsPolicyInSignature(t *testing.T) {
+	config := goldenConfig()
+	config.SchemaVersion = SchemaVersionV2
+	config.Policy = &Policy{Generation: 9, Digest: "58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c", Path: "/api/overlay/v1/enrollment/policy-artifacts/9/58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c", MediaType: PolicyMediaType}
+	payload, err := config.SigningBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"schema_version":2,"config_id":"cfg_01xconnect","network_id":"net_private","device_id":"dev_laptop","generation":42,"issued_at":"2026-08-27T12:00:00Z","expires_at":"2026-08-28T12:00:00Z","proxy_core":"xray","transport":{"kind":"vless-tls-xudp","loopback":{"host":"127.0.0.1","port":51830},"remote":{"host":"gateway.example.net","port":443,"server_name":"gateway.example.net"},"auth_id":"auth_device_01"},"wireguard":{"interface_name":"wg-xco","addresses":["10.77.0.10/32"],"mtu":1280,"peers":[{"gateway_id":"gw_tokyo_01","public_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","allowed_ips":["10.77.0.0/16"],"endpoint":{"host":"127.0.0.1","port":51830},"persistent_keepalive_seconds":25}]},"policy":{"generation":9,"digest":"58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c","path":"/api/overlay/v1/enrollment/policy-artifacts/9/58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c","media_type":"application/vnd.xconnect.policy.v1+json"}}`
+	if string(payload) != want {
+		t.Fatalf("v2 canonical payload drifted\ngot:  %s\nwant: %s", payload, want)
+	}
+	config.Signature = Signature{Algorithm: SignatureEd25519, KeyID: "signing_key_01", Value: "EJn9/iCIzWvbTRLXpyKkmvLpO4h9NznZzgRJE5zpxWfc7OEUZadhBzZaiZivnoDm7BWUYNYeMvX+fDUoZpG2AQ=="}
+	keys := signingKeys("signing_key_01", "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=", time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	if err := Verify(config, keys, time.Date(2026, 8, 27, 13, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("verify v2 interoperability vector: %v", err)
+	}
+	config.Policy.Path = "https://wrong.example/policy"
+	if err := config.Validate(); fault.Code(err) != fault.CodeInvalidSignedConfig {
+		t.Fatalf("absolute policy URL accepted: code=%q err=%v", fault.Code(err), err)
+	}
+}
+
 func TestVerifyRejectsBadSignatureUnknownKeyAndLifetime(t *testing.T) {
 	config, keys := signedRuntimeConfig(t)
 	now := time.Date(2026, 8, 27, 12, 30, 0, 0, time.UTC)

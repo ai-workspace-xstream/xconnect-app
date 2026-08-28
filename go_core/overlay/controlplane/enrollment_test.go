@@ -12,6 +12,7 @@ import (
 
 	"go_core/overlay/controlplane"
 	"go_core/overlay/fault"
+	"go_core/overlay/signedconfig"
 )
 
 func TestExchangeJoinTokenIsPublicStrictAndNoStore(t *testing.T) {
@@ -82,7 +83,7 @@ func TestExchangeJoinTokenRejectsCacheableMalformedOrUnboundResponse(t *testing.
 
 func TestEnrollmentSignedConfigAndAckUseOnlyEnrollmentBearer(t *testing.T) {
 	enrollmentToken := testOpaqueSecret("xenr_", 9)
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("Authorization") != "Bearer "+enrollmentToken {
 			t.Fatalf("authorization = %q", request.Header.Get("Authorization"))
 		}
@@ -114,6 +115,89 @@ func TestEnrollmentSignedConfigAndAckUseOnlyEnrollmentBearer(t *testing.T) {
 	if err != nil || !ack.Acked || ack.Ack.ReceivedAt.Nanosecond() == 0 {
 		t.Fatalf("ack=%#v err=%v", ack, err)
 	}
+}
+
+func TestEnrollmentSignedConfigV2AndPolicyArtifactArePinned(t *testing.T) {
+	enrollmentToken := testOpaqueSecret("xenr_", 9)
+	digest := "58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c"
+	policyPath := "/api/overlay/v1/enrollment/policy-artifacts/9/" + digest
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+enrollmentToken {
+			t.Fatalf("authorization = %q", request.Header.Get("Authorization"))
+		}
+		switch request.URL.Path {
+		case "/api/overlay/v1/enrollment/signed-config":
+			if request.Header.Get("Accept") != controlplane.SignedConfigV2MediaType {
+				t.Fatalf("v2 accept = %q", request.Header.Get("Accept"))
+			}
+			writer.Header().Set("Content-Type", controlplane.SignedConfigV2MediaType)
+			writer.Header().Set("Cache-Control", "private, no-store")
+			writer.Header().Set("Vary", "Accept")
+			writer.Header().Set("ETag", `"cfg-v2"`)
+			_, _ = writer.Write([]byte(validSignedConfigV2JSON()))
+		case policyPath:
+			if request.Header.Get("Accept") != "application/vnd.xconnect.policy.v1+json" {
+				t.Fatalf("policy accept = %q", request.Header.Get("Accept"))
+			}
+			writer.Header().Set("Content-Type", "application/vnd.xconnect.policy.v1+json")
+			writer.Header().Set("Cache-Control", "private, no-store")
+			_, _ = writer.Write([]byte(`{"schema_version":1,"compiler_version":"xconnect-acl-v1alpha1.1","network_id":"net_private","revision":7,"default_action":"deny","protected_flows":["control:controller-session","control:gateway-apply-result","control:gateway-heartbeat","control:gateway-policy-artifact","control:gateway-snapshot"],"rules":[]}`))
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client, err := controlplane.New(server.URL, "account-token", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := client.GetEnrollmentSignedConfigV2(t.Context(), enrollmentToken, controlplane.SignedConfigRequest{DeviceID: "dev_laptop", NetworkID: "net_private"})
+	if err != nil || config.SchemaVersion != 2 || config.Policy == nil || config.Policy.Path != policyPath {
+		t.Fatalf("config=%#v err=%v", config, err)
+	}
+	if _, err := client.GetEnrollmentPolicyArtifact(t.Context(), enrollmentToken, *config.Policy); err != nil {
+		t.Fatalf("fetch policy: %v", err)
+	}
+}
+
+func TestEnrollmentPolicyRejectsRedirectAndBadContract(t *testing.T) {
+	enrollmentToken := testOpaqueSecret("xenr_", 9)
+	policy := mustPolicyReference(t)
+	for _, test := range []struct {
+		name        string
+		redirect    bool
+		contentType string
+		cache       string
+	}{
+		{name: "redirect", redirect: true},
+		{name: "wrong media type", contentType: "application/json", cache: "private, no-store"},
+		{name: "cacheable", contentType: "application/vnd.xconnect.policy.v1+json", cache: "private, max-age=60"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if test.redirect {
+					http.Redirect(writer, request, "https://elsewhere.example/policy", http.StatusFound)
+					return
+				}
+				writer.Header().Set("Content-Type", test.contentType)
+				writer.Header().Set("Cache-Control", test.cache)
+				_, _ = writer.Write([]byte(`{}`))
+			}))
+			defer server.Close()
+			client, err := controlplane.New(server.URL, "account-token", server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.GetEnrollmentPolicyArtifact(t.Context(), enrollmentToken, policy); fault.Code(err) != fault.CodeInvalidResponse && fault.Code(err) != fault.CodeControlPlaneUnavailable {
+				t.Fatalf("code=%q err=%v", fault.Code(err), err)
+			}
+		})
+	}
+}
+
+func mustPolicyReference(t *testing.T) signedconfig.Policy {
+	t.Helper()
+	return signedconfig.Policy{Generation: 9, Digest: "58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c", Path: "/api/overlay/v1/enrollment/policy-artifacts/9/58941760a9ab4568d2e72a6f34a2cede891d8e678346da8e886d86263e5b780c", MediaType: signedconfig.PolicyMediaType}
 }
 
 func TestInviteAndEnrollmentErrorsAreStableAndSecretFree(t *testing.T) {

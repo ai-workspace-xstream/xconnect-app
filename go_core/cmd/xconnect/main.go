@@ -172,6 +172,7 @@ func runSync(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	flags := flag.NewFlagSet("xconnect sync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
+	signedConfigV2 := flags.Bool("signed-config-v2", false, "request the policy-bound SignedConfig v2 contract")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return fault.New(fault.CodeInvalidInput, "parse sync arguments", err)
 	}
@@ -187,7 +188,11 @@ func runSync(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	if err != nil {
 		return err
 	}
-	result, err := usecase.NewDeviceSessionManager(client, state.NewStore(*stateDirectory), credentials, newRuntime(*stateDirectory)).Sync(ctx)
+	manager := usecase.NewDeviceSessionManager(client, state.NewStore(*stateDirectory), credentials, newRuntime(*stateDirectory))
+	if *signedConfigV2 {
+		manager.WithSignedConfigV2()
+	}
+	result, err := manager.Sync(ctx)
 	if err != nil {
 		return err
 	}
