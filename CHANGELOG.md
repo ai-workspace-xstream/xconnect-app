@@ -1,5 +1,10 @@
 # Unreleased
 
+- Android Packet Tunnel now excludes the XConnect UID and pinned node IPs from
+  its own VPN route so Xray node and DNS connections stay on the underlying
+  network. It also falls back to literal IPv4 DNS servers when a profile has
+  none. IPv6 is disabled by default until an IPv6 tunnel address is configured,
+  preventing IPv6-only applications from being sent into an unusable route.
 - Added verified Ubuntu 26.04 Linux builds, including native GNOME Wayland
   minimize behavior and X11-only legacy tray integration.
 - Linux DEB/RPM packages now include the privileged network helper, PolicyKit
