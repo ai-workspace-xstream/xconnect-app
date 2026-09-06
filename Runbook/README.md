@@ -19,6 +19,7 @@
 |------|------|
 | [Code-Quality-Check.md](./Code-Quality-Check.md) | PR 合并前代码质量验收：lint、格式化、l10n、页面渲染 |
 | [iOS-Packet-Tunnel-Soak.md](./iOS-Packet-Tunnel-Soak.md) | iOS Packet Tunnel 长时压测：扩展内存占用与会话稳定性验证 |
+| [Android-Packet-Tunnel-Release.md](./Android-Packet-Tunnel-Release.md) | Android Release 真机安装、DNS、IPv4/IPv6 和应用层验证 |
 
 ### 🚨 故障排查
 

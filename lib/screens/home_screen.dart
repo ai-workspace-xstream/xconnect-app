@@ -643,9 +643,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Confirm the tunnel carries traffic, and surface the result.
   ///
-  /// This is diagnostic, not a gate: a failed probe leaves the tunnel running
-  /// and the node active. Tearing the tunnel down here is what previously
-  /// killed healthy connections whose DNS had simply not settled yet.
+  /// The probe is advisory. On Android the Xray process and this control UI
+  /// share the excluded UID, so their sockets intentionally stay on the
+  /// underlying network while other applications use the Packet Tunnel.
+  /// Device-level traffic is validated separately with an external app.
   Future<void> _verifyTunnelDataPlane() async {
     final report = await NativeBridge.verifyTunnelDataPlane();
     if (!mounted) return;
