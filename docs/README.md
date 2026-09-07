@@ -38,6 +38,7 @@ This `docs/` directory now has a bilingual canonical layer for the current repos
 - `dev-guide.md`
 - `dns-secure-tunnel-design.md`
 - `ffi-bridge-architecture.md`
+- `xconnect-one-macos-controlled-client.md`
 - `ios-design.md`
 - `ios-packet-tunnel-real-device-followup.md`
 - `linux-build.md`
