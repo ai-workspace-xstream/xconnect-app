@@ -20,6 +20,8 @@ help: ## Show this help message
 	@echo "  format              Format Dart code"
 	@echo "  clean               Clean build artifacts"
 	@echo "  sync-macos-config   Sync pubspec.yaml version to macOS config"
+	@echo "  dns-check           Diagnose DNS resolution and cache status"
+	@echo "  dns-flush           Flush local system DNS cache (requires sudo)"
 
 
 
@@ -200,3 +202,9 @@ test:
 
 run:
 	$(FLUTTER) run
+
+dns-check:
+	@./scripts/dns-check.sh
+
+dns-flush:
+	@./scripts/dns-flush.sh
