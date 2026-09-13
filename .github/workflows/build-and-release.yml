@@ -128,14 +128,19 @@ jobs:
             artifact_name: build-android-universal
             artifact_paths: |
               build/app/outputs/flutter-apk/app-release.apk
+              build/app/outputs/bundle/release/app-release.aab
 
     runs-on: ${{ matrix.runs_on }}
+    permissions:
+      contents: read
+      id-token: write
     needs:
       - prepare-release
 
     env:
       PLATFORM: ${{ matrix.platform }}
       ARCH: ${{ matrix.arch }}
+      REQUIRE_ANDROID_SIGNING: ${{ github.event_name != 'pull_request' }}
 
     steps:
       - name: Checkout source
@@ -171,6 +176,38 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Load Vault secrets (Android)
+        id: vault_android
+        if: ${{ matrix.platform == 'android' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: hashicorp/vault-action@v4
+        with:
+          url: https://vault.svc.plus
+          method: jwt
+          role: github-actions-xconnect-app
+          jwtGithubAudience: vault
+          ignoreNotFound: true
+          secrets: |
+            kv/data/github-actions/xconnect-app ANDROID_KEYSTORE_BASE64 | ANDROID_KEYSTORE_BASE64 ;
+            kv/data/github-actions/xconnect-app ANDROID_KEYSTORE_PASSWORD | ANDROID_KEYSTORE_PASSWORD ;
+            kv/data/github-actions/xconnect-app ANDROID_KEY_ALIAS | ANDROID_KEY_ALIAS ;
+            kv/data/github-actions/xconnect-app ANDROID_KEY_PASSWORD | ANDROID_KEY_PASSWORD
+
+      - name: Export Android signing secrets
+        if: ${{ matrix.platform == 'android' }}
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ steps.vault_android.outputs.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ steps.vault_android.outputs.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ steps.vault_android.outputs.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ steps.vault_android.outputs.ANDROID_KEY_PASSWORD }}
+        run: |
+          {
+            echo "ANDROID_KEYSTORE_BASE64=${ANDROID_KEYSTORE_BASE64:-}"
+            echo "ANDROID_KEYSTORE_PASSWORD=${ANDROID_KEYSTORE_PASSWORD:-}"
+            echo "ANDROID_KEY_ALIAS=${ANDROID_KEY_ALIAS:-}"
+            echo "ANDROID_KEY_PASSWORD=${ANDROID_KEY_PASSWORD:-}"
+          } >> "$GITHUB_ENV"
+
       - name: Install platform dependencies
         shell: bash
         run: bash ./scripts/ci/setup_platform_deps.sh "$PLATFORM"
@@ -182,7 +219,7 @@ jobs:
 
       - name: Build platform artifacts
         shell: bash
-        run: bash ./scripts/ci/build_matrix_artifacts.sh "$PLATFORM" "$ARCH"
+        run: bash ./scripts/ci/build_matrix_artifacts.sh "$PLATFORM" "$ARCH" "$REQUIRE_ANDROID_SIGNING"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0

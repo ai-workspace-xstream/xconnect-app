@@ -13,7 +13,7 @@ help: ## Show this help message
 	@echo "  build-windows-x64   Build Windows x64 release"
 	@echo "  build-linux-x64     Build Linux x64 release"
 	@echo "  build-ios-ipa       Build iOS IPA (requires macOS)"
-	@echo "  build-android-apk   Build Android APK"
+	@echo "  build-android-apk   Build Android APK and Play App Bundle"
 	@echo ""
 	@echo "Utility targets:"
 	@echo "  analyze             Run Flutter static analysis"
@@ -157,7 +157,7 @@ build-ios-ipa: check-flutter check-macos check-git-submodules
 build-android-apk: check-flutter check-go check-git-submodules
 	@echo ">>> Building Android APK"
 	./build_scripts/build_android_apk.sh
-	@echo ">>> APK ready: build/app/outputs/flutter-apk/app-release.apk"
+	@echo ">>> Android artifacts ready: build/app/outputs/flutter-apk/app-release.apk and build/app/outputs/bundle/release/app-release.aab"
 
 analyze: check-flutter
 	$(FLUTTER) analyze
