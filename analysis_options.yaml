@@ -12,6 +12,7 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - vx/**
+    - plugins/xconnect_one_bridge/test/**
 
 linter:
   rules:

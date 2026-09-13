@@ -1,5 +1,9 @@
 # Unreleased
 
+- Android release builds now use the Vault-backed upload keystore contract and
+  publish both the APK and a Play Console-ready App Bundle. Verification builds
+  retain an explicit debug-signing fallback.
+
 - Android Packet Tunnel now excludes the XConnect UID and pinned node IPs from
   its own VPN route so Xray node and DNS connections stay on the underlying
   network. It also falls back to literal IPv4 DNS servers when a profile has
