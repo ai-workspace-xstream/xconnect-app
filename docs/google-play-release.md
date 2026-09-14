@@ -29,6 +29,10 @@ the step exits. Never commit `android/key.properties`, a keystore, or passwords.
 Pull request verification builds may use the documented debug-signing fallback,
 but those artifacts must not be uploaded to Play.
 
+The field mapping and least-privilege Vault contract are documented in
+[Vault Android upload signing](vault-android-upload-signing.md). `storeFile` is
+a runner-local path and is not stored in Vault.
+
 ## Android Studio Quail 4 local release
 
 Android Studio can create the upload keystore and build the same release
