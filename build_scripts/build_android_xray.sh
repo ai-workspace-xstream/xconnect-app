@@ -112,10 +112,11 @@ fi
 HOST_TAG=""
 case "$(uname -s)" in
   Darwin)
-    if [[ "$UNAME_M" == "arm64" ]]; then
+    # Most NDK versions use darwin-x86_64 for all Macs. Some newer versions
+    # may have a native darwin-arm64, so we check availability.
+    HOST_TAG="darwin-x86_64"
+    if [[ "$UNAME_M" == "arm64" ]] && [[ -d "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-arm64" ]]; then
       HOST_TAG="darwin-arm64"
-    else
-      HOST_TAG="darwin-x86_64"
     fi
     ;;
   Linux)

@@ -75,3 +75,8 @@ macos/Resources/xray/xray-x86_64
 
 # Local macOS installer artifact
 macos/Runner 2026-03-07 17-50-46/xconnect.pkg
+
+# Android release signing credentials (never commit)
+android/key.properties
+android/*.jks
+android/*.keystore
