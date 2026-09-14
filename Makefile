@@ -14,6 +14,7 @@ help: ## Show this help message
 	@echo "  build-linux-x64     Build Linux x64 release"
 	@echo "  build-ios-ipa       Build iOS IPA (requires macOS)"
 	@echo "  build-android-apk   Build Android APK and Play App Bundle"
+	@echo "  build-android-play  Build and verify a Play-uploadable signed AAB"
 	@echo ""
 	@echo "Utility targets:"
 	@echo "  analyze             Run Flutter static analysis"
@@ -158,6 +159,11 @@ build-android-apk: check-flutter check-go check-git-submodules
 	@echo ">>> Building Android APK"
 	./build_scripts/build_android_apk.sh
 	@echo ">>> Android artifacts ready: build/app/outputs/flutter-apk/app-release.apk and build/app/outputs/bundle/release/app-release.aab"
+
+build-android-play: check-flutter check-go check-git-submodules
+	@echo ">>> Building Play-uploadable Android artifacts with release/upload signing"
+	REQUIRE_ANDROID_SIGNING=true ./build_scripts/build_android_apk.sh true
+	./build_scripts/verify_android_release.sh
 
 analyze: check-flutter
 	$(FLUTTER) analyze

@@ -29,6 +29,38 @@ the step exits. Never commit `android/key.properties`, a keystore, or passwords.
 Pull request verification builds may use the documented debug-signing fallback,
 but those artifacts must not be uploaded to Play.
 
+## Android Studio Quail 4 local release
+
+Android Studio can create the upload keystore and build the same release
+variant used by CI:
+
+1. Install the official **Flutter** plugin from **Settings/Preferences →
+   Plugins → Marketplace**. The Dart plugin is installed as its dependency.
+2. Restart Android Studio and open the repository root (the directory that
+   contains `pubspec.yaml`), not only `android/`:
+   `/Users/shenlan/workspaces/ai-workspace-xstream/xconnect-app`.
+3. Set Flutter SDK to `/Users/shenlan/.local/devtools/flutter`, Android SDK to
+   `/Users/shenlan/.local/devtools/android-sdk`, and Gradle JDK to
+   `/Users/shenlan/.local/devtools/jdk17/Contents/Home`.
+4. Run `flutter pub get`, then **File → Sync Project with Gradle Files**. If
+   old unresolved references remain, use **File → Invalidate Caches / Restart**.
+5. Choose **Build → Generate Signed Bundle / APK**, select **Android App
+   Bundle**, and create or select an upload keystore. Use a validity of at
+   least 25 years, keep the `.jks` file outside version control, and never
+   commit its passwords.
+6. For a local Gradle build, save `android/key.properties` with these keys:
+   `storePassword`, `keyPassword`, `keyAlias`, and `storeFile`. Prefer an
+   absolute `storeFile` path so Android Studio and command-line builds resolve
+   the same file.
+7. From the repository root run `make build-android-play`. The target requires
+   release signing and rejects debug certificates before reporting success.
+
+The package name is immutable: `plus.svc.xconnect`. Increment the `+BUILD`
+number in `pubspec.yaml` for every upload. On the first upload, use the Play
+Console **App signing** section to enable Play App Signing; upload the AAB
+signed with the upload key, then complete the internal-testing rollout before
+promoting to closed or production testing.
+
 ## Play listing and policy information
 
 - Developer name: **XWork Technologies LLC**.
