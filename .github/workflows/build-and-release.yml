@@ -178,7 +178,10 @@ jobs:
 
       - name: Load Vault secrets (Android)
         id: vault_android
-        if: ${{ matrix.platform == 'android' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        # Pull requests use the explicit verification-signing fallback and
+        # must never read the Android upload key from Vault. Release branches,
+        # tags, and manual production runs retain the Vault-backed key path.
+        if: ${{ matrix.platform == 'android' && github.event_name != 'pull_request' }}
         uses: hashicorp/vault-action@v4
         with:
           url: https://vault.svc.plus
