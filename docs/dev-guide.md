@@ -7,6 +7,8 @@
 - [Xcode 在线调试（macOS / iOS）](xcode-online-debug.md)
 - [本机 MCP Server（Codex / Genmini）](xconnect-mcp-server.md)
 - [Apple Signing 与 Packet Tunnel 能力申请（macOS / iOS）](apple-network-extension-signing-setup.md)
+- [Google Play Android 签名与发布](google-play-release.md)
+- [Vault Android 上传签名契约](vault-android-upload-signing.md)
 - [macOS Packet Tunnel 实现记录](macos-packet-tunnel-implementation.md)
 - [VpnConfig 与节点持久化说明](VpnConfigStruct.md)
 

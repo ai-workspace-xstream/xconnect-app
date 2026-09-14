@@ -71,7 +71,10 @@ android {
             if (signingPropertiesFile.exists()) {
                 keyAlias signingProperties["keyAlias"]
                 keyPassword signingProperties["keyPassword"]
-                storeFile file(signingProperties["storeFile"])
+                def configuredStoreFile = signingProperties["storeFile"]?.toString()
+                storeFile configuredStoreFile?.startsWith(File.separator)
+                    ? file(configuredStoreFile)
+                    : rootProject.file(configuredStoreFile)
                 storePassword signingProperties["storePassword"]
             }
         }

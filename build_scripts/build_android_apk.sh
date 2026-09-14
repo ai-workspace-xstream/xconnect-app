@@ -47,18 +47,74 @@ fi
 cd "$ROOT_DIR"
 
 cleanup_signing_files() {
-  rm -f "$KEY_PROPERTIES" "$KEYSTORE_PATH"
+  if [[ "${GENERATED_KEY_PROPERTIES:-false}" == "true" ]]; then
+    if [[ -n "${ORIGINAL_KEY_PROPERTIES_BACKUP:-}" ]]; then
+      cp "$ORIGINAL_KEY_PROPERTIES_BACKUP" "$KEY_PROPERTIES"
+      rm -f "$ORIGINAL_KEY_PROPERTIES_BACKUP"
+    else
+      rm -f "$KEY_PROPERTIES"
+    fi
+  fi
+  if [[ "${GENERATED_KEYSTORE:-false}" == "true" ]]; then
+    if [[ -n "${ORIGINAL_KEYSTORE_BACKUP:-}" ]]; then
+      cp "$ORIGINAL_KEYSTORE_BACKUP" "$KEYSTORE_PATH"
+      rm -f "$ORIGINAL_KEYSTORE_BACKUP"
+    else
+      rm -f "$KEYSTORE_PATH"
+    fi
+  fi
 }
 trap cleanup_signing_files EXIT
 
+GENERATED_KEY_PROPERTIES=false
+GENERATED_KEYSTORE=false
+ORIGINAL_KEY_PROPERTIES_BACKUP=""
+ORIGINAL_KEYSTORE_BACKUP=""
+
 if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${ANDROID_KEYSTORE_PASSWORD:-}" && -n "${ANDROID_KEY_ALIAS:-}" && -n "${ANDROID_KEY_PASSWORD:-}" ]]; then
-  printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
-  cat > "$KEY_PROPERTIES" <<EOF
+  umask 077
+  generated_keystore_tmp="$(mktemp "${TMPDIR:-/tmp}/xconnect-upload-keystore.XXXXXX")"
+  if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$generated_keystore_tmp" || [[ ! -s "$generated_keystore_tmp" ]]; then
+    rm -f "$generated_keystore_tmp"
+    echo "ANDROID_KEYSTORE_BASE64 is not a valid non-empty keystore." >&2
+    exit 1
+  fi
+  if [[ -e "$KEY_PROPERTIES" ]]; then
+    ORIGINAL_KEY_PROPERTIES_BACKUP="$(mktemp "${TMPDIR:-/tmp}/xconnect-key-properties.XXXXXX")"
+    cp "$KEY_PROPERTIES" "$ORIGINAL_KEY_PROPERTIES_BACKUP"
+  fi
+  if [[ -e "$KEYSTORE_PATH" ]]; then
+    ORIGINAL_KEYSTORE_BACKUP="$(mktemp "${TMPDIR:-/tmp}/xconnect-upload-keystore.XXXXXX")"
+    cp "$KEYSTORE_PATH" "$ORIGINAL_KEYSTORE_BACKUP"
+  fi
+  mv "$generated_keystore_tmp" "$KEYSTORE_PATH"
+  generated_properties_tmp="$(mktemp "${TMPDIR:-/tmp}/xconnect-key-properties.XXXXXX")"
+  cat > "$generated_properties_tmp" <<EOF
 storePassword=$ANDROID_KEYSTORE_PASSWORD
 keyPassword=$ANDROID_KEY_PASSWORD
 keyAlias=$ANDROID_KEY_ALIAS
 storeFile=$KEYSTORE_PATH
 EOF
+  mv "$generated_properties_tmp" "$KEY_PROPERTIES"
+  GENERATED_KEYSTORE=true
+  GENERATED_KEY_PROPERTIES=true
+elif [[ -f "$KEY_PROPERTIES" ]]; then
+  required_properties=(storePassword keyPassword keyAlias storeFile)
+  for property_name in "${required_properties[@]}"; do
+    if ! grep -Eq "^${property_name}=.+$" "$KEY_PROPERTIES"; then
+      echo "android/key.properties is missing ${property_name}." >&2
+      exit 1
+    fi
+  done
+  local_store_file="$(sed -n 's/^storeFile=//p' "$KEY_PROPERTIES" | head -n 1)"
+  if [[ "$local_store_file" != /* ]]; then
+    local_store_file="$ROOT_DIR/android/$local_store_file"
+  fi
+  if [[ ! -f "$local_store_file" ]]; then
+    echo "Android keystore referenced by android/key.properties was not found: $local_store_file" >&2
+    exit 1
+  fi
+  echo ">>> Using local Android upload keystore from android/key.properties."
 elif [[ "$REQUIRE_SIGNING" == "true" ]]; then
   echo "Android release signing is required, but the keystore contract is incomplete." >&2
   echo "Set ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD." >&2
