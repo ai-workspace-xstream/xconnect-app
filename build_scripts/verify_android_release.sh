@@ -32,10 +32,11 @@ fi
 JARSIGNER="$(command -v jarsigner || true)"
 [[ -n "$JARSIGNER" ]] || { echo "jarsigner was not found in JAVA_HOME/PATH." >&2; exit 1; }
 AAB_CERTS="$("$JARSIGNER" -verify -verbose:certs "$AAB_PATH" 2>&1)"
-grep -q 'jar verified' <<<"$AAB_CERTS" || {
+# Support multiple locales for verification success message
+if ! grep -qE 'jar verified|jar 已验证' <<<"$AAB_CERTS"; then
   echo "Release App Bundle failed jarsigner verification." >&2
   exit 1
-}
+fi
 if grep -qi 'Android Debug' <<<"$AAB_CERTS"; then
   echo "Release App Bundle is signed with the Android debug certificate; it cannot be uploaded to Google Play." >&2
   exit 1
