@@ -48,6 +48,16 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = (flutterExt?.metaClass?.respondsTo(flutterExt, "getVersionCode") ? flutterExt.getVersionCode() : versionCodeDefault)
         versionName = (flutterExt?.metaClass?.respondsTo(flutterExt, "getVersionName") ? flutterExt.getVersionName() : versionNameDefault)
+
+        externalNativeBuild {
+            cmake {
+                // NDK 28 on macOS cannot link CMake's compiler probe
+                // executable during Android Studio/Gradle configuration.
+                // A static probe keeps configuration deterministic; the JNI
+                // shared library still links normally in the actual build.
+                arguments "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY"
+            }
+        }
     }
 
     externalNativeBuild {
