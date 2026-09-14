@@ -48,29 +48,54 @@ cd "$ROOT_DIR"
 
 cleanup_signing_files() {
   if [[ "${GENERATED_KEY_PROPERTIES:-false}" == "true" ]]; then
-    rm -f "$KEY_PROPERTIES"
+    if [[ -n "${ORIGINAL_KEY_PROPERTIES_BACKUP:-}" ]]; then
+      cp "$ORIGINAL_KEY_PROPERTIES_BACKUP" "$KEY_PROPERTIES"
+      rm -f "$ORIGINAL_KEY_PROPERTIES_BACKUP"
+    else
+      rm -f "$KEY_PROPERTIES"
+    fi
   fi
   if [[ "${GENERATED_KEYSTORE:-false}" == "true" ]]; then
-    rm -f "$KEYSTORE_PATH"
+    if [[ -n "${ORIGINAL_KEYSTORE_BACKUP:-}" ]]; then
+      cp "$ORIGINAL_KEYSTORE_BACKUP" "$KEYSTORE_PATH"
+      rm -f "$ORIGINAL_KEYSTORE_BACKUP"
+    else
+      rm -f "$KEYSTORE_PATH"
+    fi
   fi
 }
 trap cleanup_signing_files EXIT
 
 GENERATED_KEY_PROPERTIES=false
 GENERATED_KEYSTORE=false
+ORIGINAL_KEY_PROPERTIES_BACKUP=""
+ORIGINAL_KEYSTORE_BACKUP=""
 
 if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${ANDROID_KEYSTORE_PASSWORD:-}" && -n "${ANDROID_KEY_ALIAS:-}" && -n "${ANDROID_KEY_PASSWORD:-}" ]]; then
   umask 077
-  if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH" || [[ ! -s "$KEYSTORE_PATH" ]]; then
+  generated_keystore_tmp="$(mktemp "${TMPDIR:-/tmp}/xconnect-upload-keystore.XXXXXX")"
+  if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$generated_keystore_tmp" || [[ ! -s "$generated_keystore_tmp" ]]; then
+    rm -f "$generated_keystore_tmp"
     echo "ANDROID_KEYSTORE_BASE64 is not a valid non-empty keystore." >&2
     exit 1
   fi
-  cat > "$KEY_PROPERTIES" <<EOF
+  if [[ -e "$KEY_PROPERTIES" ]]; then
+    ORIGINAL_KEY_PROPERTIES_BACKUP="$(mktemp "${TMPDIR:-/tmp}/xconnect-key-properties.XXXXXX")"
+    cp "$KEY_PROPERTIES" "$ORIGINAL_KEY_PROPERTIES_BACKUP"
+  fi
+  if [[ -e "$KEYSTORE_PATH" ]]; then
+    ORIGINAL_KEYSTORE_BACKUP="$(mktemp "${TMPDIR:-/tmp}/xconnect-upload-keystore.XXXXXX")"
+    cp "$KEYSTORE_PATH" "$ORIGINAL_KEYSTORE_BACKUP"
+  fi
+  mv "$generated_keystore_tmp" "$KEYSTORE_PATH"
+  generated_properties_tmp="$(mktemp "${TMPDIR:-/tmp}/xconnect-key-properties.XXXXXX")"
+  cat > "$generated_properties_tmp" <<EOF
 storePassword=$ANDROID_KEYSTORE_PASSWORD
 keyPassword=$ANDROID_KEY_PASSWORD
 keyAlias=$ANDROID_KEY_ALIAS
 storeFile=$KEYSTORE_PATH
 EOF
+  mv "$generated_properties_tmp" "$KEY_PROPERTIES"
   GENERATED_KEYSTORE=true
   GENERATED_KEY_PROPERTIES=true
 elif [[ -f "$KEY_PROPERTIES" ]]; then
