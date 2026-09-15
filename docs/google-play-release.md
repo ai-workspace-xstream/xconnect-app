@@ -19,7 +19,7 @@ number for every Play upload; Google Play rejects a reused version code.
 
 Release lanes on `main`, version tags, and manual dispatch require these
 Vault-backed environment variables from
-`kv/data/github-actions/xconnect-app`:
+`kv/data/github-actions/xconnect-android-play-signing`:
 
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
 and `ANDROID_KEY_PASSWORD`.
