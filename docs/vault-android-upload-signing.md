@@ -1,7 +1,7 @@
 # Vault contract for Android upload signing
 
 Store the Android upload key in the existing Vault KV v2 mount at
-`kv/data/github-actions/xconnect-app`. The GitHub Actions role
+`kv/data/github-actions/xconnect-android-play-signing`. The GitHub Actions role
 `github-actions-xconnect-app` reads this path through JWT/OIDC and should have
 read access to this path only.
 
@@ -25,7 +25,7 @@ export ANDROID_KEYSTORE_PASSWORD='...'
 export ANDROID_KEY_ALIAS='xconnect-upload'
 export ANDROID_KEY_PASSWORD='...'
 ANDROID_KEYSTORE_BASE64="$(base64 < /secure/path/xconnect-upload.jks | tr -d '\n')"
-vault kv put -mount=kv github-actions/xconnect-app \
+vault kv put -mount=kv github-actions/xconnect-android-play-signing \
   ANDROID_KEYSTORE_BASE64="$ANDROID_KEYSTORE_BASE64" \
   ANDROID_KEYSTORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \
   ANDROID_KEY_ALIAS="$ANDROID_KEY_ALIAS" \

@@ -1,0 +1,296 @@
+name: XConnect Multi-Platform Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/**"
+      - "assets/**"
+      - "android/**"
+      - "ios/**"
+      - "macos/**"
+      - "linux/**"
+      - "windows/**"
+      - "go_core/**"
+      - "build_scripts/**"
+      - "scripts/**"
+      - "pubspec.*"
+      - "Makefile"
+      - ".gitmodules"
+      - ".github/workflows/build-and-release.yml"
+      - ".github/workflows/xconnect-multi-platform-release.yaml"
+  schedule:
+    - cron: "0 19 * * 0"
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: "构建的分支、标签或提交 SHA"
+        required: false
+        default: main
+        type: string
+      release_tag:
+        description: "可选的发布标签；留空则按现有规则生成"
+        required: false
+        type: string
+  repository_dispatch:
+    types: [xconnect-release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xconnect-multi-platform-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.41.4
+  GO_VERSION: "1.26.4"
+  XCONNECT_APPLE_TEAM_ID: N3G9T67W78
+  XCONNECT_APP_GROUP_ID: group.plus.svc.xconnect
+  XCONNECT_IOS_BUNDLE_ID: plus.svc.xconnect
+  XCONNECT_IOS_PACKET_TUNNEL_BUNDLE_ID: plus.svc.xconnect.PacketTunnel
+  XCONNECT_MACOS_BUNDLE_ID: plus.svc.xconnect
+  XCONNECT_MACOS_PACKET_TUNNEL_BUNDLE_ID: plus.svc.xconnect.PacketTunnel
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      release_title: ${{ steps.meta.outputs.release_title }}
+      release_notes: ${{ steps.meta.outputs.release_notes }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.release_ref || inputs.release_ref || github.ref }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Clean old daily tags
+        if: ${{ github.event_name == 'schedule' }}
+        shell: bash
+        run: bash ./scripts/clean_old_tags.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Flutter SDK
+        uses: ./.github/actions/setup-flutter-sdk
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Install verification dependencies
+        shell: bash
+        run: bash ./scripts/ci/setup_platform_deps.sh linux
+
+      - name: Run Flutter verification suite
+        shell: bash
+        run: bash ./scripts/ci/run_flutter_ci_suite.sh
+
+      - name: Compute release metadata
+        if: ${{ github.event_name != 'pull_request' && github.event_name != 'schedule' }}
+        id: meta
+        shell: bash
+        run: bash ./scripts/ci/compute_release_metadata.sh
+        env:
+          RELEASE_TAG_OVERRIDE: ${{ github.event.client_payload.release_tag || inputs.release_tag }}
+
+  build:
+    if: ${{ github.event_name != 'schedule' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            arch: x64
+            runs_on: ubuntu-22.04
+            artifact_name: build-linux-x64
+            artifact_paths: |
+              build/linux/x64/release/bundle/xconnect-linux.zip
+              build/linux/x64/release/AppImage/xconnect-linux.AppImage
+              build/linux/x64/release/packages/*.deb
+              build/linux/x64/release/packages/*.rpm
+          - platform: windows
+            arch: x64
+            runs_on: windows-2022
+            artifact_name: build-windows-x64
+            artifact_paths: |
+              build/windows/x64/runner/Release/xconnect-windows.zip
+              build/windows/x64/runner/Release/*.msi
+          - platform: macos
+            arch: arm64
+            runs_on: macos-14
+            artifact_name: build-macos-arm64
+            artifact_paths: |
+              build/macos/*.dmg
+          - platform: ios
+            arch: arm64
+            runs_on: macos-14
+            artifact_name: build-ios-arm64
+            artifact_paths: |
+              build/ios/iphoneos/xconnect.app.zip
+              build/ios/ipa/*.ipa
+          - platform: android
+            arch: universal
+            runs_on: ubuntu-22.04
+            artifact_name: build-android-universal
+            artifact_paths: |
+              build/app/outputs/flutter-apk/app-release.apk
+              build/app/outputs/bundle/release/app-release.aab
+
+    runs-on: ${{ matrix.runs_on }}
+    permissions:
+      contents: read
+      id-token: write
+    needs:
+      - prepare-release
+
+    env:
+      PLATFORM: ${{ matrix.platform }}
+      ARCH: ${{ matrix.arch }}
+      REQUIRE_ANDROID_SIGNING: ${{ github.event_name != 'pull_request' }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Flutter SDK
+        uses: ./.github/actions/setup-flutter-sdk
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Set up Go
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go_core/go.sum
+
+      - name: Check Go toolchain
+        shell: bash
+        run: bash ./.github/scripts/check_go_version.sh
+
+      - name: Install MinGW-w64
+        if: ${{ matrix.platform == 'windows' }}
+        shell: pwsh
+        run: pwsh ./.github/scripts/install_mingw_windows.ps1
+
+      - name: Set up Java
+        if: ${{ matrix.platform == 'android' }}
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Load Vault secrets (Android)
+        id: vault_android
+        # Pull requests use the explicit verification-signing fallback and
+        # must never read the Android upload key from Vault. Release branches,
+        # tags, and manual production runs retain the Vault-backed key path.
+        if: ${{ matrix.platform == 'android' && github.event_name != 'pull_request' }}
+        uses: hashicorp/vault-action@v4
+        with:
+          url: https://vault.svc.plus
+          method: jwt
+          role: github-actions-xconnect-app
+          jwtGithubAudience: vault
+          ignoreNotFound: true
+          secrets: |
+            kv/data/github-actions/xconnect-android-play-signing ANDROID_KEYSTORE_BASE64 | ANDROID_KEYSTORE_BASE64 ;
+            kv/data/github-actions/xconnect-android-play-signing ANDROID_KEYSTORE_PASSWORD | ANDROID_KEYSTORE_PASSWORD ;
+            kv/data/github-actions/xconnect-android-play-signing ANDROID_KEY_ALIAS | ANDROID_KEY_ALIAS ;
+            kv/data/github-actions/xconnect-android-play-signing ANDROID_KEY_PASSWORD | ANDROID_KEY_PASSWORD
+
+      - name: Export Android signing secrets
+        if: ${{ matrix.platform == 'android' }}
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ steps.vault_android.outputs.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ steps.vault_android.outputs.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ steps.vault_android.outputs.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ steps.vault_android.outputs.ANDROID_KEY_PASSWORD }}
+        run: |
+          {
+            echo "ANDROID_KEYSTORE_BASE64=${ANDROID_KEYSTORE_BASE64:-}"
+            echo "ANDROID_KEYSTORE_PASSWORD=${ANDROID_KEYSTORE_PASSWORD:-}"
+            echo "ANDROID_KEY_ALIAS=${ANDROID_KEY_ALIAS:-}"
+            echo "ANDROID_KEY_PASSWORD=${ANDROID_KEY_PASSWORD:-}"
+          } >> "$GITHUB_ENV"
+
+      - name: Install platform dependencies
+        shell: bash
+        run: bash ./scripts/ci/setup_platform_deps.sh "$PLATFORM"
+
+      - name: Guard Windows MSI script root handling
+        if: ${{ matrix.platform == 'windows' }}
+        shell: bash
+        run: bash ./scripts/ci/check_windows_msi_script.sh
+
+      - name: Build platform artifacts
+        shell: bash
+        run: bash ./scripts/ci/build_matrix_artifacts.sh "$PLATFORM" "$ARCH" "$REQUIRE_ANDROID_SIGNING"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_paths }}
+          if-no-files-found: error
+
+  release:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs:
+      - prepare-release
+      - build
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          path: release-artifacts
+
+      - name: Upload assets to GitHub Release
+        shell: bash
+        run: bash ./scripts/ci/github_release_upload.sh release-artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
+          RELEASE_TITLE: ${{ needs.prepare-release.outputs.release_title }}
+          RELEASE_NOTES: ${{ needs.prepare-release.outputs.release_notes }}
+
+  update-readme:
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs:
+      - prepare-release
+      - release
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Refresh README download links
+        shell: bash
+        run: bash ./scripts/ci/update_readme_from_release.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
