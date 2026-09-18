@@ -45,6 +45,7 @@ class AppLocalizations {
       'homeStatusDuration': 'Duration',
       'homeStatusLatency': 'Latency',
       'homeStatusLocation': 'Location',
+      'homeSelfDiagnosis': 'Self-Diagnosis',
       'secondsSuffix': 's',
       'hoverHintSelected': 'Selected',
       'hoverHintClickToStart':
@@ -109,6 +110,12 @@ class AppLocalizations {
       'settingsTabTransport': 'Transport',
       'settingsTabConfig': 'Config',
       'settingsTabSystem': 'System',
+      'settingsTabDiagnostics': 'Diagnostics',
+      'diagPlaceholderTitle': 'Network self-diagnosis',
+      'diagPlaceholderBody':
+          'Measures loss and retransmissions on the local network, the '
+              'link to your node, and the tunnel exit, and shows which '
+              'segment is at fault. Coming soon.',
       'dangerZone': 'Danger Zone',
       'deleteConfigMeaning':
           'Removes the selected connections and their config files. This cannot be undone.',
@@ -336,6 +343,7 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'homeStatusDuration': '持续时间',
       'homeStatusLatency': '延迟',
       'homeStatusLocation': '位置',
+      'homeSelfDiagnosis': '自诊断',
       'secondsSuffix': '秒',
       'hoverHintSelected': '已选中',
       'hoverHintClickToStart': '点击右下角按钮启动加速',
@@ -397,6 +405,9 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'settingsTabTransport': '传输',
       'settingsTabConfig': '配置',
       'settingsTabSystem': '系统',
+      'settingsTabDiagnostics': '诊断',
+      'diagPlaceholderTitle': '网络自诊断',
+      'diagPlaceholderBody': '分段测量本地网络、到节点的线路与隧道出口的丢包和重传，定位问题发生在哪一段。即将上线。',
       'dangerZone': '危险区域',
       'deleteConfigMeaning': '删除所选连接及其配置文件，不可撤销。',
       'resetAllMeaning': '清除系统 VPN 配置与生成的运行文件，并重新注册。',

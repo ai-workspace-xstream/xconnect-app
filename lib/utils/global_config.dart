@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/dns/dns_control_plane.dart';
 import '../widgets/log_console.dart';
+import 'settings_tab_navigation.dart';
 
 // LogConsole Global Key
 final GlobalKey<LogConsoleState> logConsoleKey = GlobalKey<LogConsoleState>();
@@ -122,6 +123,10 @@ class GlobalState {
 
   /// 节点列表修订号（导入/删除后递增，用于触发主界面刷新）
   static final ValueNotifier<int> nodeListRevision = ValueNotifier<int>(0);
+
+  /// 待处理的设置页标签跳转请求。由 [SettingsScreen] 消费一次后置回 null。
+  static final ValueNotifier<SettingsTabRequest?> settingsTabRequest =
+      ValueNotifier<SettingsTabRequest?>(null);
 
   /// 当前语言环境，默认中文
   static final ValueNotifier<Locale> locale = ValueNotifier<Locale>(
