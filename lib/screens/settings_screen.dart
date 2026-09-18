@@ -6,6 +6,7 @@ import 'package:archive/archive_io.dart';
 import '../../utils/global_config.dart'
     show GlobalState, DnsConfig, GlobalApplicationConfig, XhttpAdvancedConfig;
 import '../../utils/native_bridge.dart';
+import '../../utils/settings_tab_navigation.dart';
 import '../../services/app_version_service.dart';
 import '../../services/desktop/desktop_platform_capabilities.dart';
 import '../l10n/app_localizations.dart';
@@ -72,6 +73,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _httpPortController.text = GlobalState.httpPort.value;
     _refreshTunStatus();
     _runtimeMcpService.init();
+    GlobalState.settingsTabRequest.addListener(_onSettingsTabRequested);
+  }
+
+  /// Wakes the widget so [_buildSettingsView] can resolve and consume the
+  /// pending request. The actual index lookup happens there, where the
+  /// platform-filtered tab list (and its ids) already exist for this frame.
+  void _onSettingsTabRequested() {
+    if (!mounted) return;
+    if (GlobalState.settingsTabRequest.value != null) {
+      setState(() {});
+    }
   }
 
   void _syncBaseUrlFromSession() {
@@ -739,12 +751,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ///
   /// A tab whose blocks are all empty on this platform is dropped along with
   /// its chip, so no tab can be opened onto a blank page.
-  List<({SettingsTab tab, List<Widget> blocks})> _settingsTabs(
+  List<({SettingsTabId id, SettingsTab tab, List<Widget> blocks})>
+      _settingsTabs(
     BuildContext context, {
     required bool isMobile,
   }) {
-    final candidates = <({SettingsTab tab, List<Widget> blocks})>[
+    final candidates =
+        <({SettingsTabId id, SettingsTab tab, List<Widget> blocks})>[
       (
+        id: SettingsTabId.connection,
         tab: SettingsTab(
           icon: Icons.vpn_key_outlined,
           label: context.l10n.get('settingsTabConnection'),
@@ -755,6 +770,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       (
+        id: SettingsTabId.dns,
         tab: SettingsTab(
           icon: Icons.dns_outlined,
           label: context.l10n.get('settingsTabDns'),
@@ -765,6 +781,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       (
+        id: SettingsTabId.routing,
         tab: SettingsTab(
           icon: Icons.alt_route,
           label: context.l10n.get('settingsTabRouting'),
@@ -772,6 +789,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         blocks: [_routingGroup(context, isMobile: isMobile)],
       ),
       (
+        id: SettingsTabId.transport,
         tab: SettingsTab(
           icon: Icons.swap_vert,
           label: context.l10n.get('settingsTabTransport'),
@@ -779,6 +797,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         blocks: [_buildXhttpAdvancedConfig(context)],
       ),
       (
+        id: SettingsTabId.config,
         tab: SettingsTab(
           icon: Icons.folder_outlined,
           label: context.l10n.get('settingsTabConfig'),
@@ -789,6 +808,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       (
+        id: SettingsTabId.system,
         tab: SettingsTab(
           icon: Icons.tune,
           label: context.l10n.get('settingsTabSystem'),
@@ -798,6 +818,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _developerGroup(context, isMobile: isMobile),
           _navigationGroup(context, isMobile: isMobile),
         ],
+      ),
+      (
+        id: SettingsTabId.diagnostics,
+        tab: SettingsTab(
+          icon: Icons.network_check,
+          label: context.l10n.get('settingsTabDiagnostics'),
+        ),
+        blocks: [_diagnosticsGroup(context)],
       ),
     ];
 
@@ -811,6 +839,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return candidates
         .map((entry) => (
+              id: entry.id,
               tab: entry.tab,
               blocks: entry.blocks.where(renders).toList(),
             ))
@@ -821,6 +850,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildSettingsView(BuildContext context, {required bool isMobile}) {
     final cs = Theme.of(context).colorScheme;
     final entries = _settingsTabs(context, isMobile: isMobile);
+
+    final pendingRequest = GlobalState.settingsTabRequest.value;
+    if (pendingRequest != null) {
+      final resolved = resolveSettingsTabIndex(
+        entries.map((entry) => entry.id).toList(),
+        pendingRequest.id,
+      );
+      // Filtered out on this platform: leave the current selection alone
+      // rather than silently landing on tab 0.
+      if (resolved != null) {
+        _selectedTab = resolved;
+      }
+      // Cleared after this frame, not inline: mutating the notifier here
+      // would re-enter build via its own listener.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (GlobalState.settingsTabRequest.value == pendingRequest) {
+          GlobalState.settingsTabRequest.value = null;
+        }
+      });
+    }
+
     final index = _selectedTab.clamp(0, entries.length - 1);
     final blocks = entries[index].blocks;
 
@@ -1296,6 +1346,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Placeholder for the diagnostics tab: navigation and the deep-link entry
+  /// point land here today; the probes and verdict themselves ship in a
+  /// later PR (see docs/design/network-self-diagnosis.md).
+  Widget _diagnosticsGroup(BuildContext context) {
+    return SettingsGroup(
+      children: [
+        SettingsRow(
+          icon: Icons.network_check,
+          title: context.l10n.get('diagPlaceholderTitle'),
+          description: context.l10n.get('diagPlaceholderBody'),
+          kind: SettingsRowKind.action,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -1312,6 +1378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _sessionManager.baseUrl.removeListener(_syncBaseUrlFromSession);
     _sessionManager.currentUser.removeListener(_syncUsernameFromSession);
+    GlobalState.settingsTabRequest.removeListener(_onSettingsTabRequested);
     _baseUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
