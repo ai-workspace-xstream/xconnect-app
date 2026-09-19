@@ -13,6 +13,7 @@ enum SettingsTabId {
   config,
   system,
   diagnostics,
+  repair,
 }
 
 /// A request to switch the Settings screen to a specific tab.

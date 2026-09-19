@@ -28,6 +28,7 @@ LiveDiagnosisController _controller(
       );
     },
     now: now ?? DateTime.now,
+    log: (_) {},
     startTimer: false,
   );
 }

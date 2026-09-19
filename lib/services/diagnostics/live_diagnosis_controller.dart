@@ -6,6 +6,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 
+import '../../utils/app_logger.dart';
 import '../../utils/global_config.dart' show GlobalState;
 import '../vpn_config_service.dart';
 import 'live_metrics.dart';
@@ -82,6 +83,7 @@ class LiveDiagnosisController extends ChangeNotifier {
     Future<DiagNetworkType> Function()? networkType,
     TcpProbe? probe,
     DateTime Function()? now,
+    void Function(String message)? log,
     this.interval = const Duration(seconds: 1),
     this.maxDuration = const Duration(minutes: 5),
     bool startTimer = true,
@@ -91,6 +93,7 @@ class LiveDiagnosisController extends ChangeNotifier {
         _networkType = networkType ?? readNetworkType,
         _probe = probe ?? tcpConnectProbe,
         _now = now ?? DateTime.now,
+        _log = log ?? addAppLog,
         _startTimer = startTimer;
 
   /// RFC 5737 TEST-NET-1: nothing on the internet answers here, so a connect
@@ -107,6 +110,7 @@ class LiveDiagnosisController extends ChangeNotifier {
   final Future<DiagNetworkType> Function() _networkType;
   final TcpProbe _probe;
   final DateTime Function() _now;
+  final void Function(String message) _log;
   final bool _startTimer;
   final Duration interval;
   final Duration maxDuration;
@@ -162,6 +166,11 @@ class LiveDiagnosisController extends ChangeNotifier {
       localUnmeasurable: localUnmeasurable,
     );
     _notify();
+    // One line per session so a field report shows what was measured.
+    _log('[diagnosis] start node=${node.endpoint?.host}:${node.endpoint?.port} '
+        'physical=$_source gateway=$rawGateway accepted=${gateway != null} '
+        'routerPort=$_routerPort canaryAnswered=${canary.answered} '
+        'network=${networkType.name}');
     if (node.endpoint == null) return;
 
     await tick();
