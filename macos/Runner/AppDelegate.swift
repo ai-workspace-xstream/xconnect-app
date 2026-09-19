@@ -2,6 +2,7 @@
 import Cocoa
 import FlutterMacOS
 import ServiceManagement
+import SystemConfiguration
 
 @main
 class AppDelegate: FlutterAppDelegate {
@@ -61,6 +62,8 @@ class AppDelegate: FlutterAppDelegate {
           self.handlePerformAction(call: call, bundleId: bundleId, result: result)
         case "updateMenuState":
           self.handleUpdateMenuState(call: call, result: result)
+        case "sandboxProbe":
+          result(SandboxProbe.run())
 
         default:
           result(FlutterMethodNotImplemented)
@@ -375,5 +378,36 @@ class AppDelegate: FlutterAppDelegate {
       logToFlutter("error", "设置开机启动失败: \(error.localizedDescription)")
       return false
     }
+  }
+}
+
+// R0 spike only (issue #89 M0). Read-only SystemConfiguration / sysctl checks
+// to learn what a sandboxed build can still observe. Not for merge into main.
+enum SandboxProbe {
+  static func run() -> [String: Any] {
+    var out: [String: Any] = [
+      "sandboxed": ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+    ]
+    guard let store = SCDynamicStoreCreate(nil, "xconnect-sandbox-probe" as CFString, nil, nil) else {
+      out["store"] = "create-failed"
+      return out
+    }
+    func clip(_ value: Any?) -> String {
+      guard let value = value else { return "nil" }
+      return String(String(describing: value).prefix(300))
+    }
+    out["globalDNS"] = clip(SCDynamicStoreCopyValue(store, "State:/Network/Global/DNS" as CFString))
+    out["globalIPv4"] = clip(SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString))
+    out["proxies"] = clip(SCDynamicStoreCopyProxies(store))
+    let pattern = "Setup:/Network/Service/[^/]+/DNS" as CFString
+    if let multi = SCDynamicStoreCopyMultiple(store, nil, [pattern] as CFArray) as? [String: Any] {
+      out["serviceDNS"] = multi.isEmpty ? "empty" : clip(multi)
+    } else {
+      out["serviceDNS"] = "nil"
+    }
+    var size = 0
+    let rc = sysctlbyname("net.inet.tcp.stats", nil, &size, nil, 0)
+    out["sysctlTcpStats"] = "rc=\(rc) errno=\(rc == 0 ? 0 : errno) size=\(size)"
+    return out
   }
 }

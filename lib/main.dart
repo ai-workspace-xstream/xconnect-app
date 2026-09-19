@@ -31,6 +31,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image/image.dart' as img;
 import 'package:zxing2/qrcode.dart';
 import 'widgets/take_picture.dart';
+import 'spike/sandbox_probe.dart';
 
 String getQrCodeData(img.Image image) {
   final source = RGBLuminanceSource(
@@ -68,6 +69,9 @@ void main(List<String> args) async {
   }
   await VpnConfig.load(); // ✅ 启动时加载 assets + 本地配置
   runApp(const MyApp());
+  if (kSandboxProbe) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => runSandboxProbe());
+  }
 }
 
 class MyApp extends StatelessWidget {
