@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../utils/native_bridge.dart';
 import '../../utils/global_config.dart' show GlobalState;
-import '../../utils/settings_tab_navigation.dart';
 import '../../utils/app_logger.dart';
 import '../l10n/app_localizations.dart';
 import '../../services/permission_guide_service.dart';
@@ -1154,36 +1153,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: _openSelfDiagnosis,
-              icon: const Icon(Icons.network_check, size: 16),
-              label: Text(context.l10n.get('homeSelfDiagnosis')),
-              style: TextButton.styleFrom(
-                foregroundColor: context.xColors.brand,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ),
         ],
       ),
-    );
-  }
-
-  /// Jumps to Settings > Diagnostics and asks it to start a run immediately,
-  /// since arriving through this explicit entry point counts as a clear
-  /// diagnostic intent (see docs/design/network-self-diagnosis.md §1.2).
-  void _openSelfDiagnosis() {
-    GlobalState.settingsTabRequest.value = const SettingsTabRequest(
-      id: SettingsTabId.diagnostics,
-      autoStart: true,
     );
   }
 

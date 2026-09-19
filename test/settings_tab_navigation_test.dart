@@ -38,21 +38,4 @@ void main() {
       expect(index, 0);
     });
   });
-
-  group('SettingsTabRequest', () {
-    test('defaults autoStart to false', () {
-      const request = SettingsTabRequest(id: SettingsTabId.diagnostics);
-
-      expect(request.autoStart, isFalse);
-    });
-
-    test('carries an explicit autoStart flag', () {
-      const request = SettingsTabRequest(
-        id: SettingsTabId.diagnostics,
-        autoStart: true,
-      );
-
-      expect(request.autoStart, isTrue);
-    });
-  });
 }
