@@ -60,6 +60,18 @@ void main() {
     expect(find.text('停止诊断'), findsOneWidget);
   });
 
+  testWidgets('does not repeat the node name when it equals the host',
+      (tester) async {
+    await tester.pumpWidget(_host(const LiveDiagnosisSnapshot(
+      running: true,
+      nodeName: 'tky-proxy.svc.plus',
+      endpoint: (host: 'tky-proxy.svc.plus', port: 443),
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('tky-proxy.svc.plus:443'), findsOneWidget);
+  });
+
   testWidgets('idle state shows placeholders and a start button',
       (tester) async {
     await tester.pumpWidget(_host(const LiveDiagnosisSnapshot()));
