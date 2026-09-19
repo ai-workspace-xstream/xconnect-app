@@ -284,7 +284,10 @@ lib/services/repair/
 
 ## 7. 待确认
 
-1. ~~macOS 最终是否上 Mac App Store？~~ **已决定上 MAS（2026-09-19）**，见 §4。还剩一个问题：是否**同时保留** Developer ID 直装版本？如果保留，桌面三端的 macOS 行可以恢复 `inAppPrivileged`；代码已通过 §4.2 的渠道维度预留好。
+1. ~~macOS 最终是否上 Mac App Store？~~ **已决定（2026-09-19）：macOS 同时提供 Mac App Store 版和强化直装版。**
+   - MAS 版按 §4 执行：只有 `appScoped` 和 `guided` 两种模式。
+   - 直装版通过特权助手使用 `inAppPrivileged` 模式。
+   - 两个版本的差异见 [`macos-distribution-channels.md`](./macos-distribution-channels.md)。
 2. 本机 OneXray 与 XConnect 并存，是长期常态还是迁移过渡期？（`onexray-xconnect-migration-matrix.md`）如果长期并存，C1/C4 的提示文案需要单独设计。
 3. UU 残留的确认：需要用户执行一次 `sudo launchctl print system/com.netease.uumac.helper`，并查看 06:30–07:30 的 `sudo log show`（§0.2 第 3 条）。
 4. T4（签名问题）：本机没有签名身份，所以本地构建的包在这台 Mac 上**永远无法**保存 VPN 配置。这是开发环境问题，与自修复功能无关，但需要单独排期解决。
