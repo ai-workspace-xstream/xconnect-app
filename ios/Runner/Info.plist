@@ -77,7 +77,7 @@
 	<key>PacketTunnelProviderBundleId</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER).PacketTunnel</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Used to connect development tools for debug builds.</string>
+	<string>XConnect checks the connection to your router during network self-diagnosis to find where packet loss happens. Results stay on this device.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_dartobservatory._tcp</string>

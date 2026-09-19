@@ -21,6 +21,7 @@ import '../screens/help_screen.dart';
 import '../screens/logs_screen.dart';
 import '../widgets/permission_guide_dialog.dart';
 import '../widgets/diagnostics/live_metrics_panel.dart';
+import '../widgets/repair/repair_section.dart';
 import '../widgets/settings_row.dart';
 import '../widgets/settings_tab_bar.dart';
 import '../widgets/log_console.dart' show LogLevel;
@@ -826,7 +827,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.network_check,
           label: context.l10n.get('settingsTabDiagnostics'),
         ),
-        blocks: const [LiveDiagnosisSection()],
+        blocks: [
+          LiveDiagnosisSection(
+            onHowToFix: () => GlobalState.settingsTabRequest.value =
+                const SettingsTabRequest(id: SettingsTabId.repair),
+          ),
+        ],
+      ),
+      (
+        id: SettingsTabId.repair,
+        tab: SettingsTab(
+          icon: Icons.build_outlined,
+          label: context.l10n.get('settingsTabRepair'),
+        ),
+        blocks: const [RepairSection()],
       ),
     ];
 

@@ -32,6 +32,7 @@ dependencies:
   zxing2: ^0.2.4
   image: ^4.3.0
   connectivity_plus: ^7.0.0
+  network_info_plus: ^7.0.0
 
 dependency_overrides:
   intl: ^0.20.2
