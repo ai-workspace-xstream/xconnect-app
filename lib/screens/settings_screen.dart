@@ -20,6 +20,7 @@ import '../screens/about_screen.dart';
 import '../screens/help_screen.dart';
 import '../screens/logs_screen.dart';
 import '../widgets/permission_guide_dialog.dart';
+import '../widgets/diagnostics/live_metrics_panel.dart';
 import '../widgets/settings_row.dart';
 import '../widgets/settings_tab_bar.dart';
 import '../widgets/log_console.dart' show LogLevel;
@@ -825,7 +826,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.network_check,
           label: context.l10n.get('settingsTabDiagnostics'),
         ),
-        blocks: [_diagnosticsGroup(context)],
+        blocks: const [LiveDiagnosisSection()],
       ),
     ];
 
@@ -1341,22 +1342,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.security,
           title: context.l10n.get('permissionGuide'),
           onTap: _showPermissionGuide,
-        ),
-      ],
-    );
-  }
-
-  /// Placeholder for the diagnostics tab: navigation and the deep-link entry
-  /// point land here today; the probes and verdict themselves ship in a
-  /// later PR (see docs/design/network-self-diagnosis.md).
-  Widget _diagnosticsGroup(BuildContext context) {
-    return SettingsGroup(
-      children: [
-        SettingsRow(
-          icon: Icons.network_check,
-          title: context.l10n.get('diagPlaceholderTitle'),
-          description: context.l10n.get('diagPlaceholderBody'),
-          kind: SettingsRowKind.action,
         ),
       ],
     );
