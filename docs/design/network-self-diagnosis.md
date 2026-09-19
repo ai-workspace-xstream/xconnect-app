@@ -12,7 +12,7 @@
 
 1. 在 App 内提供「自诊断」能力，**实时**探测并显示**丢包**、**TCP 重传**、延迟、抖动。
 2. 回答用户最关心的问题：**问题发生在哪一段**（本地 Wi‑Fi/路由器、运营商到节点、节点出口）。
-3. 入口：从 App 页面一键跳转到「设置 → 诊断」标签页。
+3. 入口：只放在「设置 → 诊断」标签页，首页保持原样（§1.2）。
 4. 满足 App Store / Google Play 上架要求：只用公开 API，数据只留在本机，权限按需、在用户操作时申请。
 5. 依赖在 **macOS / Linux / Windows / iOS / Android** 五个平台都可用。
 
@@ -34,23 +34,23 @@
 - 加在末尾，不打乱现有标签顺序（ui-style-system §0.1：不改次序）。
 - 这个标签在五个平台都显示，因为它的 blocks 永远不为空。
 
-### 1.2 「自诊断」入口（App 页面 → 设置/诊断）
+### 1.2 入口：只放在设置页（2026-09-19 修订）
 
-| 位置 | 形态 | 行为 |
-|---|---|---|
-| 首页连接状态卡的指标行（延迟指标旁） | `TextButton.icon(Icons.network_check, '自诊断')`，文字按钮，不加底色 | 切到「设置」页，选中「诊断」标签，**自动开始诊断** |
-| 首页延迟探测失败或延迟超过阈值时 | 延迟指标本身变成可点，右侧加一个 `chevron_right` | 同上 |
-| 用户直接点「诊断」标签 | — | 只进入标签页，**不自动开始**，要用户点「开始诊断」 |
+**首页保持原有的简洁，不增加任何诊断或修复入口。** PR1 早先在首页加的「自诊断」按钮已经移除。
 
-为什么这样分：iOS 14+ 和 macOS 15+ 第一次连接路由器时会弹「本地网络」授权框。App Review 5.1.1 要求权限在用户操作的上下文中申请。点入口是明确的诊断意图，所以可以自动开始；只是点开标签不算。
+- 「诊断」和「修复」两个入口都只放在设置页的标签条里。
+- 进入「诊断」标签**不会自动开始**，由用户点击「开始诊断」。
+  - iOS 14+ 和 macOS 15+ 第一次连接路由器时会弹出「本地网络」授权框；
+  - App Review 5.1.1 要求在用户操作的上下文中申请权限；
+  - 所以这个弹框只会在用户点击「开始诊断」之后出现。
 
-### 1.3 跳转机制（关键实现约束）
+### 1.3 标签跳转机制（关键实现约束）
 
-- `_settingsTabs()` 会把**当前平台为空的标签过滤掉**（例如 iOS 没有桌面 DNS 组），所以**标签下标不稳定**。深链**必须按 id 找标签，不能按下标**。
-- 新增 `enum SettingsTabId { connection, dns, routing, transport, config, system, diagnostics }`。给 `_settingsTabs()` 的每一项加上 `id`。
-- 新增一个导航请求通道：`ValueNotifier<SettingsTabRequest?>`（放在 `GlobalState` 或新的 `AppNavigation` 单例里）。`SettingsTabRequest` 带 `id` 和 `autoStart` 两个字段。
-  - `main.dart` 监听到请求后执行 `setState(() => _currentIndex = 2)`。桌面和移动端的页面列表里，设置都在下标 2。
-  - `SettingsScreen` 监听到请求后，**按 id** 选中对应标签，然后把请求**置回 null**（消费一次）。
+- `_settingsTabs()` 会把**当前平台为空的标签过滤掉**（例如 iOS 没有桌面 DNS 组），所以**标签下标不稳定**。跳转**必须按 id 找标签，不能按下标**。
+- `enum SettingsTabId`：给 `_settingsTabs()` 的每一项加上 `id`。
+- 跳转请求通道：`GlobalState.settingsTabRequest`（`ValueNotifier<SettingsTabRequest?>`）。
+  - `SettingsScreen` 收到请求后**按 id** 选中对应标签，然后把请求**置回 null**（只消费一次）。
+  - 这个通道只在设置页内部使用，例如诊断结论里的「如何处理？」跳到「修复」标签（`network-self-repair.md` R1 会增加 `anchor` 字段）。所以不需要主页面切换页面。
 - 纯函数 `int? resolveSettingsTabIndex(List<SettingsTabId> visible, SettingsTabId requested)`，用单测锁定。
 
 ---
@@ -311,14 +311,14 @@ lib/widgets/diagnostics/…      # §3.3 的组件
 2. 五个平台 CI 构建通过；`flutter analyze` 零新增 issue；`dart format .` 无 diff。
 3. Android 合并后的 manifest（`build/app/intermediates/merged_manifests/`）**不含**任何 `LOCATION` 权限。
 4. iOS Release 包的 `NSLocalNetworkUsageDescription` 是诊断用途文案。
-5. 从首页点「自诊断」，在五个平台上都能落到「设置 → 诊断」并开始诊断，包括 iOS 上 DNS 标签被过滤的情况。
+5. 五个平台的设置页都有「诊断」标签，包括 iOS 上 DNS 标签被过滤的情况；首页界面与 `main` 分支一致，没有新增元素。
 
 ---
 
 ## 9. 开放问题（需要 owner 确认）
 
-1. 首页入口的位置（§1.2）是否接受？
-2. 从入口进入时自动开始，从标签进入时不自动开始，这个规则是否接受？
+1. ~~首页入口的位置~~：已决定首页不放入口（2026-09-19，§1.2）。
+2. ~~自动开始的规则~~：已决定不自动开始，由用户点击「开始诊断」。
 3. Android 上 S3 走本地 SOCKS 入站是否可行（§6）？
 4. 是否需要 PR8（libXray 按连接统计 `TCP_INFO`）。这是移动端拿到**真实隧道重传**的唯一合规途径。
 
@@ -328,7 +328,7 @@ lib/widgets/diagnostics/…      # §3.3 的组件
 
 | PR | 内容 | 先写的失败测试 | 验收 |
 |---|---|---|---|
-| PR1 | 导航骨架：`SettingsTabId`、按 id 选中、导航请求通道、诊断标签占位、首页入口、l10n key | `test/widgets/settings_tab_request_test.dart`：`resolveSettingsTabIndex` 在标签被过滤时仍能按 id 命中；请求被消费一次后置为 null | 五个平台点入口都落在诊断标签 |
+| PR1 | 导航骨架：`SettingsTabId`、按 id 选中、跳转请求通道、诊断标签占位、l10n key（**首页不改**） | `test/settings_tab_navigation_test.dart`：`resolveSettingsTabIndex` 在标签被过滤时仍能按 id 命中，被过滤掉的标签返回 null | 五个平台的设置页都出现诊断标签 |
 | PR2 | 探测原语和滑动窗口 | `test/services/diagnostics/segment_window_test.dart`：被拒计为可达并记录 RTT；超时计为丢包；`rtt ≥ 中位数 + 800ms` 计为重传；窗口 30 个样本淘汰旧值；中位数和抖动计算 | 纯函数，零网络 |
 | PR3 | 分段判定 | `stage_attribution_test.dart`（表驱动）：S1 和 S2 都 10% 丢包时主因是 S1；S1 为 0、S2 为 8% 时主因是 S2；网关未知时的降级；connectivity 为 `none` 但 S2 成功时**不判离线** | §2.5 全部分支都被覆盖 |
 | PR4 | 依赖、网关解析、权限、plist | `gateway_resolver_test.dart`：用 `/proc/net/route` fixture 解析 `0101A8C0` → `192.168.1.1`；解析链的顺序 | §8 第 2、3、4 条 |

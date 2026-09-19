@@ -133,7 +133,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     GlobalState.connectionMode.addListener(_onConnectionModeChanged);
     GlobalState.activeNodeName.addListener(_syncNativeMenuState);
     GlobalState.locale.addListener(_onLocaleChanged);
-    GlobalState.settingsTabRequest.addListener(_onSettingsTabRequested);
     _syncNativeMenuState();
   }
 
@@ -143,16 +142,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     GlobalState.connectionMode.removeListener(_onConnectionModeChanged);
     GlobalState.activeNodeName.removeListener(_syncNativeMenuState);
     GlobalState.locale.removeListener(_onLocaleChanged);
-    GlobalState.settingsTabRequest.removeListener(_onSettingsTabRequested);
     super.dispose();
-  }
-
-  /// Settings is index 2 in both the desktop and mobile page lists.
-  void _onSettingsTabRequested() {
-    if (!mounted) return;
-    if (GlobalState.settingsTabRequest.value != null && _currentIndex != 2) {
-      setState(() => _currentIndex = 2);
-    }
   }
 
   @override

@@ -2,9 +2,9 @@
 ///
 /// The strip filters out tabs whose blocks are empty on the current
 /// platform (e.g. iOS has no desktop DNS group), so a tab's position in the
-/// rendered list shifts between platforms. Anything that deep-links into a
-/// specific tab — the home screen's diagnostics entry point, for one — must
-/// target one of these ids, never a raw index.
+/// rendered list shifts between platforms. Anything that links to a specific
+/// tab — e.g. a diagnosis verdict pointing at its repair — must target one of
+/// these ids, never a raw index.
 enum SettingsTabId {
   connection,
   dns,
@@ -20,13 +20,9 @@ enum SettingsTabId {
 /// Published on [GlobalState.settingsTabRequest] and consumed once by
 /// [SettingsScreen], which resets the notifier to null after acting on it.
 class SettingsTabRequest {
-  const SettingsTabRequest({required this.id, this.autoStart = false});
+  const SettingsTabRequest({required this.id});
 
   final SettingsTabId id;
-
-  /// Whether landing on this tab should immediately start its action
-  /// (currently only meaningful for [SettingsTabId.diagnostics]).
-  final bool autoStart;
 }
 
 /// Finds where [requested] sits within [visible], the tab ids currently
