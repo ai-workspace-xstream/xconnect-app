@@ -90,6 +90,22 @@ void main() {
     expect(taps, 1);
   });
 
+  testWidgets('phone width keeps the three tiles side by side', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_host(_unstable));
+    await tester.pumpAndSettle();
+
+    final latency = tester.getCenter(find.text('即时延迟'));
+    final loss = tester.getCenter(find.text('丢包率'));
+    final network = tester.getCenter(find.text('网络类型'));
+    expect(loss.dy, latency.dy);
+    expect(network.dy, latency.dy);
+    expect(latency.dx < loss.dx && loss.dx < network.dx, isTrue);
+  });
+
   testWidgets('narrow width does not overflow', (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1.0;

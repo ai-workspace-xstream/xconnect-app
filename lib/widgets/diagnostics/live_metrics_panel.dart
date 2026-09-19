@@ -89,20 +89,24 @@ class LiveMetricsPanel extends StatelessWidget {
           const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
+              final compact = constraints.maxWidth < 600;
               final tiles = [
                 _MetricTile(
+                  compact: compact,
                   label: l10n.get('diagLatency'),
                   value: latency?.toString() ?? _empty,
                   unit: latency == null ? null : 'ms',
                   level: _latencyLevel(latency),
                 ),
                 _MetricTile(
+                  compact: compact,
                   label: l10n.get('diagLoss'),
                   value: lossPercent?.toString() ?? _empty,
                   unit: lossPercent == null ? null : '%',
                   level: _lossLevel(lossPercent),
                 ),
                 _MetricTile(
+                  compact: compact,
                   label: l10n.get('diagNetworkType'),
                   value: _networkLabel(context, snapshot.networkType),
                   icon: _networkIcon(snapshot.networkType),
@@ -110,7 +114,7 @@ class LiveMetricsPanel extends StatelessWidget {
                   compactValue: true,
                 ),
               ];
-              if (constraints.maxWidth < 420) {
+              if (constraints.maxWidth < 300) {
                 return Column(
                   children: [
                     for (var i = 0; i < tiles.length; i++) ...[
@@ -125,7 +129,7 @@ class LiveMetricsPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (var i = 0; i < tiles.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 12),
+                      if (i > 0) SizedBox(width: compact ? 8 : 12),
                       Expanded(child: tiles[i]),
                     ],
                   ],
@@ -270,6 +274,7 @@ class _MetricTile extends StatelessWidget {
     this.unit,
     this.icon,
     this.compactValue = false,
+    this.compact = false,
   });
 
   final String label;
@@ -278,15 +283,19 @@ class _MetricTile extends StatelessWidget {
   final IconData? icon;
   final _Level level;
   final bool compactValue;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final xc = context.xColors;
     final textTheme = Theme.of(context).textTheme;
     final color = _levelColor(context, level);
-    final valueStyle =
-        (compactValue ? textTheme.headlineSmall : textTheme.displaySmall)
-            ?.copyWith(color: color, fontWeight: FontWeight.w700);
+    final valueStyle = (compact
+            ? textTheme.titleLarge
+            : compactValue
+                ? textTheme.headlineSmall
+                : textTheme.displaySmall)
+        ?.copyWith(color: color, fontWeight: FontWeight.w700);
 
     return Semantics(
       container: true,
@@ -294,35 +303,44 @@ class _MetricTile extends StatelessWidget {
           '$label ${value == LiveMetricsPanel._empty ? '' : value}${unit ?? ''}',
       child: ExcludeSemantics(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 12,
+            vertical: compact ? 10 : 16,
+          ),
           decoration: BoxDecoration(
             color: xc.surfaceSunken,
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            // Labels share a bottom line across tiles, whatever sits above.
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (icon != null) ...[
-                Icon(icon, size: 22, color: xc.brand),
-                const SizedBox(height: 4),
-              ],
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(value, style: valueStyle),
-                    if (unit != null) ...[
-                      const SizedBox(width: 3),
-                      Text(
-                        unit!,
-                        style: textTheme.labelLarge?.copyWith(color: color),
-                      ),
-                    ],
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 22, color: xc.brand),
+                    const SizedBox(height: 4),
                   ],
-                ),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(value, style: valueStyle),
+                        if (unit != null) ...[
+                          const SizedBox(width: 3),
+                          Text(
+                            unit!,
+                            style: textTheme.labelLarge?.copyWith(color: color),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
               Text(
