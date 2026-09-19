@@ -90,9 +90,11 @@ class LiveMetricsPanel extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 600;
+              final stacked = constraints.maxWidth < 300;
               final tiles = [
                 _MetricTile(
                   compact: compact,
+                  fill: !stacked,
                   label: l10n.get('diagLatency'),
                   value: latency?.toString() ?? _empty,
                   unit: latency == null ? null : 'ms',
@@ -100,6 +102,7 @@ class LiveMetricsPanel extends StatelessWidget {
                 ),
                 _MetricTile(
                   compact: compact,
+                  fill: !stacked,
                   label: l10n.get('diagLoss'),
                   value: lossPercent?.toString() ?? _empty,
                   unit: lossPercent == null ? null : '%',
@@ -107,6 +110,7 @@ class LiveMetricsPanel extends StatelessWidget {
                 ),
                 _MetricTile(
                   compact: compact,
+                  fill: !stacked,
                   label: l10n.get('diagNetworkType'),
                   value: _networkLabel(context, snapshot.networkType),
                   icon: _networkIcon(snapshot.networkType),
@@ -114,7 +118,7 @@ class LiveMetricsPanel extends StatelessWidget {
                   compactValue: true,
                 ),
               ];
-              if (constraints.maxWidth < 300) {
+              if (stacked) {
                 return Column(
                   children: [
                     for (var i = 0; i < tiles.length; i++) ...[
@@ -202,6 +206,12 @@ class _Header extends StatelessWidget {
   final LiveDiagnosisSnapshot snapshot;
   final VoidCallback onToggle;
 
+  static String _endpointLine(String? name, ServerEndpoint endpoint) {
+    final address = '${endpoint.host}:${endpoint.port}';
+    if (name == null || name.isEmpty || name == endpoint.host) return address;
+    return '$name  $address';
+  }
+
   static String _clock(Duration d) {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(d.inHours)}:${two(d.inMinutes % 60)}:${two(d.inSeconds % 60)}';
@@ -220,8 +230,7 @@ class _Header extends StatelessWidget {
     final subtitle = switch (snapshot) {
       LiveDiagnosisSnapshot(noEndpoint: true) => l10n.get('diagNoNode'),
       LiveDiagnosisSnapshot(autoStopped: true) => l10n.get('diagAutoStopped'),
-      _ when endpoint != null =>
-        '${snapshot.nodeName ?? ''}  ${endpoint.host}:${endpoint.port}'.trim(),
+      _ when endpoint != null => _endpointLine(snapshot.nodeName, endpoint),
       _ => l10n.get('diagIdleHint'),
     };
 
@@ -275,6 +284,7 @@ class _MetricTile extends StatelessWidget {
     this.icon,
     this.compactValue = false,
     this.compact = false,
+    this.fill = false,
   });
 
   final String label;
@@ -284,6 +294,10 @@ class _MetricTile extends StatelessWidget {
   final _Level level;
   final bool compactValue;
   final bool compact;
+
+  /// True when the tile sits in an equal-height row: the value group then
+  /// centres in the space above the label, so values line up across tiles.
+  final bool fill;
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +329,7 @@ class _MetricTile extends StatelessWidget {
             // Labels share a bottom line across tiles, whatever sits above.
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
+              _valueArea(Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (icon != null) ...[
@@ -341,7 +355,7 @@ class _MetricTile extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
+              )),
               const SizedBox(height: 6),
               Text(
                 label,
@@ -353,6 +367,9 @@ class _MetricTile extends StatelessWidget {
       ),
     );
   }
+
+  Widget _valueArea(Widget child) =>
+      fill ? Expanded(child: Center(child: child)) : child;
 }
 
 class _VerdictLine extends StatelessWidget {
