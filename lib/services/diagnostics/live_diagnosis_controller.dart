@@ -122,16 +122,25 @@ class LiveDiagnosisController extends ChangeNotifier {
   String? _source;
   Timer? _timer;
   bool _inFlight = false;
+
+  /// Bumped by every start and stop, so a start whose discovery is still in
+  /// flight can tell it has been superseded.
+  int _session = 0;
   bool _disposed = false;
 
   LiveDiagnosisSnapshot get snapshot => _snapshot;
 
   Future<void> start() async {
     stop();
+    final session = ++_session;
     _window.clear();
     _localWindow.clear();
     _routerPort = null;
     final startedAt = _now();
+    // Discovery can take several seconds (a silent port 53, a canary with
+    // no TUN to answer it); show "sampling" at once instead of nothing.
+    _snapshot = LiveDiagnosisSnapshot(running: true, startedAt: startedAt);
+    _notify();
     final node = await _endpoint();
     _source = await _physicalAddress();
     final networkType = await _networkType();
@@ -151,6 +160,7 @@ class LiveDiagnosisController extends ChangeNotifier {
       }
       localUnmeasurable = _routerPort == null;
     }
+    if (session != _session) return;
 
     _snapshot = LiveDiagnosisSnapshot(
       running: node.endpoint != null,
@@ -218,6 +228,7 @@ class LiveDiagnosisController extends ChangeNotifier {
   }
 
   void _finish({required bool autoStopped}) {
+    _session++;
     _timer?.cancel();
     _timer = null;
     _snapshot = _copy(running: false, autoStopped: autoStopped);

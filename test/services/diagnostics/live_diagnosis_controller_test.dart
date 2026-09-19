@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xconnect/services/diagnostics/live_diagnosis_controller.dart';
 import 'package:xconnect/services/diagnostics/live_metrics.dart';
@@ -177,5 +179,52 @@ void main() {
         'eth0\t00000000\t0101A8C0\t0003\n'
         'eth0\t0001A8C0\t00000000\t0001\n';
     expect(parseLinuxDefaultGateway(table), '192.168.1.1');
+  });
+
+  test('shows it is running before slow discovery probes finish', () async {
+    final gate = Completer<void>();
+    final c = LiveDiagnosisController(
+      gateway: () async => '192.168.0.1',
+      endpoint: () async => (name: 'jp', endpoint: (host: 'n', port: 443)),
+      physicalAddress: () async => '192.168.0.107',
+      networkType: () async => DiagNetworkType.wifi,
+      probe: (host, port, {sourceAddress}) async {
+        await gate.future;
+        return const ProbeSample.timedOut();
+      },
+      log: (_) {},
+      startTimer: false,
+    );
+    final started = c.start();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(c.snapshot.running, isTrue);
+    expect(c.snapshot.verdict, LiveVerdict.sampling);
+    gate.complete();
+    await started;
+    c.dispose();
+  });
+
+  test('stopping during discovery stays stopped', () async {
+    final gate = Completer<void>();
+    final c = LiveDiagnosisController(
+      gateway: () async => null,
+      endpoint: () async => (name: 'jp', endpoint: (host: 'n', port: 443)),
+      physicalAddress: () async => '192.168.0.107',
+      networkType: () async => DiagNetworkType.wifi,
+      probe: (host, port, {sourceAddress}) async {
+        await gate.future;
+        return const ProbeSample.reached(Duration(milliseconds: 5));
+      },
+      log: (_) {},
+      startTimer: false,
+    );
+    final started = c.start();
+    await Future<void>.delayed(Duration.zero);
+    c.stop();
+    gate.complete();
+    await started;
+    expect(c.snapshot.running, isFalse);
+    c.dispose();
   });
 }
