@@ -201,3 +201,161 @@ LiveVerdict liveVerdict(SegmentStats stats, {required bool tunConflict}) {
   if (latency != null && latency >= 300) return LiveVerdict.slow;
   return LiveVerdict.good;
 }
+
+/// Severity shared by tiles, path segments and the verdict line.
+enum DiagLevel { none, good, warn, bad }
+
+DiagLevel _levelFor(
+  int? latencyMs,
+  double? lossRate, {
+  required int latencyWarn,
+  required int latencyBad,
+}) {
+  if (latencyMs == null && lossRate == null) return DiagLevel.none;
+  final loss = lossRate ?? 0;
+  final latency = latencyMs ?? 0;
+  if (loss >= 0.05 || latency >= latencyBad) return DiagLevel.bad;
+  if (loss >= 0.02 || latency >= latencyWarn) return DiagLevel.warn;
+  return DiagLevel.good;
+}
+
+DiagLevel latencyLevel(int? ms) => ms == null
+    ? DiagLevel.none
+    : _levelFor(ms, null, latencyWarn: 150, latencyBad: 300);
+
+DiagLevel lossLevel(double? rate) => rate == null
+    ? DiagLevel.none
+    : _levelFor(null, rate, latencyWarn: 150, latencyBad: 300);
+
+enum SegmentState { measured, warmingUp, unmeasurable, unknown }
+
+enum Culprit { none, local, upstream }
+
+class SegmentReading {
+  const SegmentReading({
+    required this.state,
+    this.latencyMs,
+    this.lossRate,
+    this.level = DiagLevel.none,
+  });
+
+  final SegmentState state;
+  final int? latencyMs;
+  final double? lossRate;
+  final DiagLevel level;
+}
+
+class PathAttribution {
+  const PathAttribution({
+    required this.local,
+    required this.upstream,
+    required this.culprit,
+  });
+
+  /// Device → router.
+  final SegmentReading local;
+
+  /// Router → node, or device → node when the router hop is not measured.
+  final SegmentReading upstream;
+  final Culprit culprit;
+}
+
+/// Splits the end-to-end reading into the LAN hop and everything past it.
+///
+/// Loss and latency on the node probe include the LAN hop, so the upstream
+/// share is the difference. The segment nearest the device that is bad (or
+/// failing that, warn) is blamed, since trouble there shows up everywhere
+/// downstream too.
+PathAttribution attributePath({
+  required SegmentStats? local,
+  required SegmentStats node,
+  bool localUnmeasurable = false,
+}) {
+  final warming = node.warmingUp || (local?.warmingUp ?? false);
+  SegmentReading whole(SegmentState state) => SegmentReading(
+        state: state,
+        latencyMs: node.latencyMs,
+        lossRate: node.lossRate,
+        level: state == SegmentState.measured
+            ? _levelFor(node.latencyMs, node.lossRate,
+                latencyWarn: 150, latencyBad: 300)
+            : DiagLevel.none,
+      );
+
+  if (local == null) {
+    final upstream =
+        whole(warming ? SegmentState.warmingUp : SegmentState.measured);
+    return PathAttribution(
+      local: SegmentReading(
+        state: localUnmeasurable
+            ? SegmentState.unmeasurable
+            : SegmentState.unknown,
+      ),
+      upstream: upstream,
+      culprit: !warming && upstream.level == DiagLevel.bad
+          ? Culprit.upstream
+          : Culprit.none,
+    );
+  }
+
+  if (warming) {
+    return const PathAttribution(
+      local: SegmentReading(state: SegmentState.warmingUp),
+      upstream: SegmentReading(state: SegmentState.warmingUp),
+      culprit: Culprit.none,
+    );
+  }
+
+  final localLevel = _levelFor(local.latencyMs, local.lossRate,
+      latencyWarn: 20, latencyBad: 50);
+  final upLatency = node.latencyMs == null
+      ? null
+      : (node.latencyMs! - (local.latencyMs ?? 0)).clamp(0, 1 << 30);
+  final upLoss = (node.lossRate - local.lossRate).clamp(0.0, 1.0);
+  final upLevel =
+      _levelFor(upLatency, upLoss, latencyWarn: 150, latencyBad: 300);
+
+  final Culprit culprit;
+  if (localLevel == DiagLevel.bad) {
+    culprit = Culprit.local;
+  } else if (upLevel == DiagLevel.bad) {
+    culprit = Culprit.upstream;
+  } else if (localLevel == DiagLevel.warn) {
+    culprit = Culprit.local;
+  } else if (upLevel == DiagLevel.warn) {
+    culprit = Culprit.upstream;
+  } else {
+    culprit = Culprit.none;
+  }
+
+  return PathAttribution(
+    local: SegmentReading(
+      state: SegmentState.measured,
+      latencyMs: local.latencyMs,
+      lossRate: local.lossRate,
+      level: localLevel,
+    ),
+    upstream: SegmentReading(
+      state: SegmentState.measured,
+      latencyMs: upLatency,
+      lossRate: upLoss,
+      level: upLevel,
+    ),
+    culprit: culprit,
+  );
+}
+
+/// Whether [gateway] is plausibly the router on the physical network.
+///
+/// With another tunnel up, "the default gateway" can come back as the
+/// tunnel's peer; requiring the same /16 as the physical address keeps the
+/// router hop honest.
+bool acceptGateway(String? gateway, {required String? physical}) {
+  if (gateway == null || physical == null || gateway == physical) {
+    return false;
+  }
+  final g = gateway.split('.');
+  final p = physical.split('.');
+  if (g.length != 4 || p.length != 4) return false;
+  return g[0] == p[0] && g[1] == p[1];
+}

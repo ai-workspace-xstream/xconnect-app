@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 
 import '../../utils/global_config.dart' show GlobalState;
 import '../vpn_config_service.dart';
@@ -33,6 +34,9 @@ class LiveDiagnosisSnapshot {
     this.noEndpoint = false,
     this.noPhysicalInterface = false,
     this.autoStopped = false,
+    this.gateway,
+    this.localStats,
+    this.localUnmeasurable = false,
   });
 
   final bool running;
@@ -47,7 +51,22 @@ class LiveDiagnosisSnapshot {
   final bool noPhysicalInterface;
   final bool autoStopped;
 
+  /// Router on the physical network, when one was found and accepted.
+  final String? gateway;
+
+  /// Device → router samples; null when the router hop is not measured.
+  final SegmentStats? localStats;
+
+  /// A router was found but answered on none of the probe ports.
+  final bool localUnmeasurable;
+
   LiveVerdict get verdict => liveVerdict(stats, tunConflict: tunConflict);
+
+  PathAttribution get path => attributePath(
+        local: localStats,
+        node: stats,
+        localUnmeasurable: localUnmeasurable,
+      );
 }
 
 /// Runs the live latency / loss measurement behind Settings → Diagnostics.
@@ -58,6 +77,7 @@ class LiveDiagnosisSnapshot {
 class LiveDiagnosisController extends ChangeNotifier {
   LiveDiagnosisController({
     NodeEndpointReader? endpoint,
+    Future<String?> Function()? gateway,
     Future<String?> Function()? physicalAddress,
     Future<DiagNetworkType> Function()? networkType,
     TcpProbe? probe,
@@ -66,6 +86,7 @@ class LiveDiagnosisController extends ChangeNotifier {
     this.maxDuration = const Duration(minutes: 5),
     bool startTimer = true,
   })  : _endpoint = endpoint ?? readActiveNodeEndpoint,
+        _gateway = gateway ?? readGateway,
         _physicalAddress = physicalAddress ?? readPhysicalIPv4,
         _networkType = networkType ?? readNetworkType,
         _probe = probe ?? tcpConnectProbe,
@@ -76,7 +97,12 @@ class LiveDiagnosisController extends ChangeNotifier {
   /// that succeeds was answered by a local TUN stack.
   static const canaryHost = '192.0.2.1';
 
+  /// Ports tried on the router, in order. RST counts as an answer, so any
+  /// router that rejects rather than drops SYNs is measurable.
+  static const routerPorts = <int>[53, 80, 443];
+
   final NodeEndpointReader _endpoint;
+  final Future<String?> Function() _gateway;
   final Future<String?> Function() _physicalAddress;
   final Future<DiagNetworkType> Function() _networkType;
   final TcpProbe _probe;
@@ -86,6 +112,8 @@ class LiveDiagnosisController extends ChangeNotifier {
   final Duration maxDuration;
 
   final SegmentWindow _window = SegmentWindow();
+  final SegmentWindow _localWindow = SegmentWindow();
+  int? _routerPort;
   LiveDiagnosisSnapshot _snapshot = const LiveDiagnosisSnapshot();
   String? _source;
   Timer? _timer;
@@ -97,11 +125,28 @@ class LiveDiagnosisController extends ChangeNotifier {
   Future<void> start() async {
     stop();
     _window.clear();
+    _localWindow.clear();
+    _routerPort = null;
     final startedAt = _now();
     final node = await _endpoint();
     _source = await _physicalAddress();
     final networkType = await _networkType();
     final canary = await _probe(canaryHost, 443);
+    final rawGateway = await _gateway();
+    final gateway =
+        acceptGateway(rawGateway, physical: _source) ? rawGateway : null;
+    var localUnmeasurable = false;
+    if (gateway != null && node.endpoint != null) {
+      for (final port in routerPorts) {
+        final sample = await _probe(gateway, port, sourceAddress: _source);
+        if (sample.answered) {
+          _routerPort = port;
+          _localWindow.add(sample);
+          break;
+        }
+      }
+      localUnmeasurable = _routerPort == null;
+    }
 
     _snapshot = LiveDiagnosisSnapshot(
       running: node.endpoint != null,
@@ -112,6 +157,9 @@ class LiveDiagnosisController extends ChangeNotifier {
       tunConflict: canary.answered,
       noEndpoint: node.endpoint == null,
       noPhysicalInterface: _source == null,
+      gateway: gateway,
+      localStats: _routerPort == null ? null : _localWindow.stats,
+      localUnmeasurable: localUnmeasurable,
     );
     _notify();
     if (node.endpoint == null) return;
@@ -133,6 +181,13 @@ class LiveDiagnosisController extends ChangeNotifier {
     }
     _inFlight = true;
     try {
+      final gateway = _snapshot.gateway;
+      final routerPort = _routerPort;
+      if (gateway != null && routerPort != null) {
+        _localWindow.add(
+          await _probe(gateway, routerPort, sourceAddress: _source),
+        );
+      }
       _window.add(
         await _probe(endpoint.host, endpoint.port, sourceAddress: _source),
       );
@@ -140,7 +195,11 @@ class LiveDiagnosisController extends ChangeNotifier {
       _inFlight = false;
     }
     if (!_snapshot.running) return;
-    _snapshot = _copy(elapsed: elapsed, stats: _window.stats);
+    _snapshot = _copy(
+      elapsed: elapsed,
+      stats: _window.stats,
+      localStats: _routerPort == null ? null : _localWindow.stats,
+    );
     _notify();
   }
 
@@ -160,6 +219,7 @@ class LiveDiagnosisController extends ChangeNotifier {
     bool? running,
     Duration? elapsed,
     SegmentStats? stats,
+    SegmentStats? localStats,
     bool? autoStopped,
   }) {
     final s = _snapshot;
@@ -175,6 +235,9 @@ class LiveDiagnosisController extends ChangeNotifier {
       noEndpoint: s.noEndpoint,
       noPhysicalInterface: s.noPhysicalInterface,
       autoStopped: autoStopped ?? s.autoStopped,
+      gateway: s.gateway,
+      localStats: localStats ?? s.localStats,
+      localUnmeasurable: s.localUnmeasurable,
     );
   }
 
@@ -269,3 +332,43 @@ Future<({String? name, ServerEndpoint? endpoint})>
     return (name: node.name, endpoint: null);
   }
 }
+
+/// The router's IPv4 address, from the OS where the plugin supports it and
+/// from the kernel routing table on Linux.
+Future<String?> readGateway() async {
+  try {
+    final gateway = await NetworkInfo().getWifiGatewayIP();
+    if (gateway != null && gateway.isNotEmpty && gateway != '0.0.0.0') {
+      return gateway;
+    }
+  } catch (_) {}
+  if (Platform.isLinux) {
+    try {
+      return parseLinuxDefaultGateway(
+        await File('/proc/net/route').readAsString(),
+      );
+    } catch (_) {}
+  }
+  return null;
+}
+
+/// Default route gateway from `/proc/net/route` (little-endian hex).
+String? parseLinuxDefaultGateway(String table) {
+  for (final line in table.split('\n').skip(1)) {
+    final cols = line.trim().split(RegExp(r'\s+'));
+    if (cols.length < 3 || cols[1] != '00000000') continue;
+    final iface = cols[0];
+    if (_isTunnelName(iface)) continue;
+    final hex = cols[2];
+    if (hex.length != 8 || hex == '00000000') continue;
+    final bytes = [
+      for (var i = 6; i >= 0; i -= 2)
+        int.parse(hex.substring(i, i + 2), radix: 16),
+    ];
+    return bytes.join('.');
+  }
+  return null;
+}
+
+bool _isTunnelName(String name) =>
+    pickPhysicalIPv4([(name: name, address: '10.0.0.1')]) == null;

@@ -7,7 +7,11 @@ import 'package:xconnect/services/diagnostics/live_metrics.dart';
 import 'package:xconnect/utils/app_theme.dart';
 import 'package:xconnect/widgets/diagnostics/live_metrics_panel.dart';
 
-Widget _host(LiveDiagnosisSnapshot snapshot, {VoidCallback? onToggle}) {
+Widget _host(
+  LiveDiagnosisSnapshot snapshot, {
+  VoidCallback? onToggle,
+  VoidCallback? onHowToFix,
+}) {
   return MaterialApp(
     theme: AppTheme.lightTheme,
     locale: const Locale('zh'),
@@ -20,8 +24,11 @@ Widget _host(LiveDiagnosisSnapshot snapshot, {VoidCallback? onToggle}) {
     ],
     home: Scaffold(
       body: SingleChildScrollView(
-        child:
-            LiveMetricsPanel(snapshot: snapshot, onToggle: onToggle ?? () {}),
+        child: LiveMetricsPanel(
+          snapshot: snapshot,
+          onToggle: onToggle ?? () {},
+          onHowToFix: onHowToFix,
+        ),
       ),
     ),
   );
@@ -126,5 +133,61 @@ void main() {
     await tester.pumpWidget(_host(_unstable));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('names the local hop and offers a fix when Wi-Fi is at fault',
+      (tester) async {
+    var fixes = 0;
+    await tester.pumpWidget(_host(
+      const LiveDiagnosisSnapshot(
+        running: true,
+        endpoint: (host: 'n', port: 443),
+        networkType: DiagNetworkType.wifi,
+        gateway: '192.168.0.1',
+        localStats: SegmentStats(
+          sampleCount: 30,
+          latencyMs: 3,
+          lossRate: 0.10,
+          retransmitRate: 0,
+          jitterMs: 1,
+          warmingUp: false,
+        ),
+        stats: SegmentStats(
+          sampleCount: 30,
+          latencyMs: 161,
+          lossRate: 0.10,
+          retransmitRate: 0,
+          jitterMs: 9,
+          warmingUp: false,
+        ),
+      ),
+      onHowToFix: () => fixes++,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('您当前设备的网络环境不稳定 · 问题在本地 Wi‑Fi'), findsOneWidget);
+    expect(find.text('路由器'), findsOneWidget);
+    await tester.tap(find.text('如何处理？'));
+    expect(fixes, 1);
+  });
+
+  testWidgets('no fix link while the network is good', (tester) async {
+    await tester.pumpWidget(_host(
+      const LiveDiagnosisSnapshot(
+        running: true,
+        endpoint: (host: 'n', port: 443),
+        stats: SegmentStats(
+          sampleCount: 30,
+          latencyMs: 60,
+          lossRate: 0,
+          retransmitRate: 0,
+          jitterMs: 2,
+          warmingUp: false,
+        ),
+      ),
+      onHowToFix: () {},
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('如何处理？'), findsNothing);
   });
 }

@@ -12,8 +12,10 @@ LiveDiagnosisController _controller(
   String? physical = '192.168.0.107',
   ServerEndpoint? endpoint = (host: 'node.example', port: 443),
   DateTime Function()? now,
+  String? gateway,
 }) {
   return LiveDiagnosisController(
+    gateway: () async => gateway,
     endpoint: () async => (name: 'jp', endpoint: endpoint),
     physicalAddress: () async => physical,
     networkType: () async => DiagNetworkType.wifi,
@@ -112,5 +114,67 @@ void main() {
     expect(c.snapshot.running, isFalse);
     expect(c.snapshot.stats.sampleCount, 1);
     c.dispose();
+  });
+
+  group('router hop', () {
+    test('probes the gateway on the first port that answers, bound', () async {
+      final calls = _Calls();
+      final c = _controller(
+        calls,
+        gateway: '192.168.0.1',
+        answer: (host, source) {
+          if (host == '192.0.2.1') return const ProbeSample.timedOut();
+          return const ProbeSample.reached(Duration(milliseconds: 3));
+        },
+      );
+      await c.start();
+      await c.tick();
+
+      final router = calls.probes.where((p) => p.host == '192.168.0.1');
+      expect(router.first.port, 53);
+      expect(router.every((p) => p.source == '192.168.0.107'), isTrue);
+      // Port discovery, the tick inside start(), and this tick.
+      expect(c.snapshot.localStats?.sampleCount, 3);
+      c.dispose();
+    });
+
+    test('a router that answers on no port is unmeasurable, not lossy',
+        () async {
+      final calls = _Calls();
+      final c = _controller(
+        calls,
+        gateway: '192.168.0.1',
+        answer: (host, source) => host == '192.168.0.1' || host == '192.0.2.1'
+            ? const ProbeSample.timedOut()
+            : const ProbeSample.reached(Duration(milliseconds: 90)),
+      );
+      await c.start();
+      final before = calls.probes.where((p) => p.host == '192.168.0.1').length;
+      await c.tick();
+      final after = calls.probes.where((p) => p.host == '192.168.0.1').length;
+
+      expect(before, 3, reason: 'tries 53, 80 and 443 once');
+      expect(after, before, reason: 'stops probing an unmeasurable router');
+      expect(c.snapshot.localUnmeasurable, isTrue);
+      expect(c.snapshot.path.local.state, SegmentState.unmeasurable);
+      c.dispose();
+    });
+
+    test('a gateway off the physical subnet is ignored', () async {
+      final calls = _Calls();
+      final c = _controller(calls, gateway: '198.18.0.1');
+      await c.start();
+      expect(calls.probes.where((p) => p.host == '198.18.0.1'), isEmpty);
+      expect(c.snapshot.path.local.state, SegmentState.unknown);
+      c.dispose();
+    });
+  });
+
+  test('parses the default gateway from /proc/net/route, skipping tunnels', () {
+    const table = 'Iface\tDestination\tGateway\tFlags\n'
+        'tun0\t00000000\t0100A8C0\t0003\n'
+        'eth0\t00000000\t0101A8C0\t0003\n'
+        'eth0\t0001A8C0\t00000000\t0001\n';
+    expect(parseLinuxDefaultGateway(table), '192.168.1.1');
   });
 }

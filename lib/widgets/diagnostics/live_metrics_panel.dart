@@ -4,13 +4,14 @@ import '../../l10n/app_localizations.dart';
 import '../../services/diagnostics/live_diagnosis_controller.dart';
 import '../../services/diagnostics/live_metrics.dart';
 import '../../utils/app_theme.dart';
-
-enum _Level { none, good, warn, bad }
+import 'diag_path_view.dart';
 
 /// Settings → Diagnostics: owns a [LiveDiagnosisController] for as long as the
 /// tab is on screen, so leaving the tab ends the session.
 class LiveDiagnosisSection extends StatefulWidget {
-  const LiveDiagnosisSection({super.key});
+  const LiveDiagnosisSection({super.key, this.onHowToFix});
+
+  final VoidCallback? onHowToFix;
 
   @override
   State<LiveDiagnosisSection> createState() => _LiveDiagnosisSectionState();
@@ -31,6 +32,7 @@ class _LiveDiagnosisSectionState extends State<LiveDiagnosisSection> {
       listenable: _controller,
       builder: (context, _) => LiveMetricsPanel(
         snapshot: _controller.snapshot,
+        onHowToFix: widget.onHowToFix,
         onToggle: () {
           if (_controller.snapshot.running) {
             _controller.stop();
@@ -50,12 +52,14 @@ class LiveMetricsPanel extends StatelessWidget {
     super.key,
     required this.snapshot,
     required this.onToggle,
+    this.onHowToFix,
   });
 
   static const _empty = '— —';
 
   final LiveDiagnosisSnapshot snapshot;
   final VoidCallback onToggle;
+  final VoidCallback? onHowToFix;
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +102,7 @@ class LiveMetricsPanel extends StatelessWidget {
                   label: l10n.get('diagLatency'),
                   value: latency?.toString() ?? _empty,
                   unit: latency == null ? null : 'ms',
-                  level: _latencyLevel(latency),
+                  level: latencyLevel(latency),
                 ),
                 _MetricTile(
                   compact: compact,
@@ -106,7 +110,7 @@ class LiveMetricsPanel extends StatelessWidget {
                   label: l10n.get('diagLoss'),
                   value: lossPercent?.toString() ?? _empty,
                   unit: lossPercent == null ? null : '%',
-                  level: _lossLevel(lossPercent),
+                  level: lossLevel(hasData ? stats.lossRate : null),
                 ),
                 _MetricTile(
                   compact: compact,
@@ -114,7 +118,7 @@ class LiveMetricsPanel extends StatelessWidget {
                   label: l10n.get('diagNetworkType'),
                   value: _networkLabel(context, snapshot.networkType),
                   icon: _networkIcon(snapshot.networkType),
-                  level: _Level.none,
+                  level: DiagLevel.none,
                   compactValue: true,
                 ),
               ];
@@ -141,8 +145,12 @@ class LiveMetricsPanel extends StatelessWidget {
               );
             },
           ),
+          if (snapshot.running || hasData) ...[
+            const SizedBox(height: 16),
+            DiagPathView(path: snapshot.path),
+          ],
           const SizedBox(height: 16),
-          _VerdictLine(snapshot: snapshot),
+          _VerdictLine(snapshot: snapshot, onHowToFix: onHowToFix),
           const SizedBox(height: 8),
           Text(
             l10n.get('diagFooter'),
@@ -154,20 +162,6 @@ class LiveMetricsPanel extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static _Level _latencyLevel(int? ms) {
-    if (ms == null) return _Level.none;
-    if (ms >= 300) return _Level.bad;
-    if (ms >= 150) return _Level.warn;
-    return _Level.good;
-  }
-
-  static _Level _lossLevel(int? percent) {
-    if (percent == null) return _Level.none;
-    if (percent >= 5) return _Level.bad;
-    if (percent >= 2) return _Level.warn;
-    return _Level.good;
   }
 
   static String _networkLabel(BuildContext context, DiagNetworkType type) {
@@ -188,16 +182,6 @@ class LiveMetricsPanel extends StatelessWidget {
         DiagNetworkType.none => Icons.wifi_off,
         _ => Icons.device_unknown_outlined,
       };
-}
-
-Color _levelColor(BuildContext context, _Level level) {
-  final xc = context.xColors;
-  return switch (level) {
-    _Level.good => xc.success,
-    _Level.warn => xc.warning,
-    _Level.bad => xc.error,
-    _Level.none => Theme.of(context).colorScheme.onSurface,
-  };
 }
 
 class _Header extends StatelessWidget {
@@ -291,7 +275,7 @@ class _MetricTile extends StatelessWidget {
   final String value;
   final String? unit;
   final IconData? icon;
-  final _Level level;
+  final DiagLevel level;
   final bool compactValue;
   final bool compact;
 
@@ -303,7 +287,7 @@ class _MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final xc = context.xColors;
     final textTheme = Theme.of(context).textTheme;
-    final color = _levelColor(context, level);
+    final color = diagLevelColor(context, level);
     final valueStyle = (compact
             ? textTheme.titleLarge
             : compactValue
@@ -373,9 +357,32 @@ class _MetricTile extends StatelessWidget {
 }
 
 class _VerdictLine extends StatelessWidget {
-  const _VerdictLine({required this.snapshot});
+  const _VerdictLine({required this.snapshot, this.onHowToFix});
 
   final LiveDiagnosisSnapshot snapshot;
+  final VoidCallback? onHowToFix;
+
+  static const _actionable = {
+    LiveVerdict.slow,
+    LiveVerdict.unstable,
+    LiveVerdict.unreachable,
+    LiveVerdict.tunConflict,
+  };
+
+  /// Blame is only assigned when the router hop was actually measured;
+  /// otherwise the two can't be told apart.
+  String? _culpritKey(LiveVerdict verdict) {
+    if (!_actionable.contains(verdict)) return null;
+    final path = snapshot.path;
+    if (path.local.state != SegmentState.measured) return null;
+    return switch (path.culprit) {
+      Culprit.local => snapshot.networkType == DiagNetworkType.wifi
+          ? 'diagCulpritLocalWifi'
+          : 'diagCulpritLocal',
+      Culprit.upstream => 'diagCulpritUpstream',
+      Culprit.none => null,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -389,45 +396,80 @@ class _VerdictLine extends StatelessWidget {
         ? liveVerdict(snapshot.stats, tunConflict: false)
         : snapshot.verdict;
     final (key, level) = switch (verdict) {
-      LiveVerdict.sampling => ('diagVerdictSampling', _Level.none),
-      LiveVerdict.good => ('diagVerdictGood', _Level.good),
-      LiveVerdict.slow => ('diagVerdictSlow', _Level.warn),
-      LiveVerdict.unstable => ('diagVerdictUnstable', _Level.bad),
-      LiveVerdict.unreachable => ('diagVerdictUnreachable', _Level.bad),
-      LiveVerdict.tunConflict => ('diagVerdictTunConflict', _Level.warn),
+      LiveVerdict.sampling => ('diagVerdictSampling', DiagLevel.none),
+      LiveVerdict.good => ('diagVerdictGood', DiagLevel.good),
+      LiveVerdict.slow => ('diagVerdictSlow', DiagLevel.warn),
+      LiveVerdict.unstable => ('diagVerdictUnstable', DiagLevel.bad),
+      LiveVerdict.unreachable => ('diagVerdictUnreachable', DiagLevel.bad),
+      LiveVerdict.tunConflict => ('diagVerdictTunConflict', DiagLevel.warn),
     };
     final color =
-        level == _Level.none ? xc.mutedText : _levelColor(context, level);
+        level == DiagLevel.none ? xc.mutedText : diagLevelColor(context, level);
+    final l10n = context.l10n;
+    final culprit = _culpritKey(verdict);
+    final text = culprit == null
+        ? l10n.get(key)
+        : '${l10n.get(key)} · ${l10n.get(culprit)}';
+    final fix = _actionable.contains(verdict) ? onHowToFix : null;
 
-    return Semantics(
-      liveRegion: true,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: xc.surfaceSunken,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                context.l10n.get(key),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: color, fontWeight: FontWeight.w600),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // On a phone the whole bar is the target: the inline link would be
+        // under the 44pt minimum.
+        final compact = constraints.maxWidth < 600;
+        final bar = Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: xc.surfaceSunken,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: color, fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (fix != null) ...[
+                const SizedBox(width: 8),
+                if (compact)
+                  Icon(Icons.chevron_right, color: xc.mutedText)
+                else
+                  TextButton(
+                    onPressed: fix,
+                    style: TextButton.styleFrom(foregroundColor: xc.brand),
+                    child: Text(l10n.get('diagHowToFix')),
+                  ),
+              ],
+            ],
+          ),
+        );
+        return Semantics(
+          liveRegion: true,
+          button: fix != null && compact,
+          child: fix != null && compact
+              ? InkWell(
+                  onTap: fix,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: bar,
+                )
+              : bar,
+        );
+      },
     );
   }
 }
