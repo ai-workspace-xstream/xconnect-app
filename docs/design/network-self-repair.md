@@ -220,7 +220,15 @@ enum RepairExecution {
 | 运行时 MCP 服务中的子进程 | `lib/services/mcp/runtime_mcp_service.dart` | 需要逐项验证 | MAS 版本默认关闭 |
 | 开机自启（`SMAppService.mainApp`） | `macos/Runner/AppDelegate.swift:357` | ✓ 可用 | 不用改 |
 
-以上判断都是**基于代码阅读的推断**，需要一次 spike 实测：开启沙盒构建后，逐项运行确认。
+> **R0 实测更正（2026-09-19，macOS 27，详见 `docs/report/macos-sandbox-spike-2026-09-19.md`）**
+>
+> - 沙盒内**只读**起子进程可行：`scutil`、`networksetup -get*`、`launchctl print`、`id` 都能正常执行。
+> - 沙盒内通过 SystemConfiguration API 读取系统网络状态可行（S2 通过）。
+> - 读取 `/etc/hosts`、列出 `/Library/LaunchDaemons` 可行。
+> - **写 `~/Library/LaunchAgents` 被拒绝**，所以基于 LaunchAgent 的节点服务在沙盒下不可用，这一点已确认。
+> - 系统网络配置的写操作没有测。按 App Review 2.4.5，MAS 版不得申请提权，所以这类写操作在 MAS 版中仍然只走 `guided` 模式，结论不变。
+> - 因此上表中「权限向导：大多数会失败」的推断需要修正：**只读检查可以保留**，要重写的只有其中需要写或需要提权的部分。
+> - S1（重连隧道能否清缓存）因为没有签名环境，仍然阻塞。
 
 ### 4.5 其他平台的合规约束
 

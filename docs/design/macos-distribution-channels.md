@@ -31,6 +31,12 @@
 
 ---
 
+### R0 / M0 spike 带来的新约束（2026-09-19，详见 `docs/report/macos-sandbox-spike-2026-09-19.md`）
+
+- **Xcode 27 + Flutter 3.41.4 无法构建 universal 包**：新版 `lipo -verify_arch` 只接受一个架构参数，Flutter 的 `release_unpack_macos` 步骤因此失败。CI runner 升级到 Xcode 27 之前必须先处理：升级 Flutter，或者分架构构建后用 `lipo -create` 合并。
+- **不同签名的构建不能共用同一个 Bundle ID 的容器**：签名不同的沙盒构建复用 `plus.svc.xconnect` 的容器时，启动会卡在 `_libsecinit_appsandbox`。这支持下文 Q1 的建议（直装版使用独立的 Bundle ID）；开发用的沙盒构建也要使用单独的 Bundle ID。
+- **容器受 App Data 保护**：沙盒版 App 的日志和导出文件，外部进程无法直接读取。「导出日志」「导出诊断报告」必须由 App 通过 `NSSavePanel` 写到用户选择的位置。
+
 ## 1. 两个版本的差异
 
 | 维度 | Mac App Store 版 | 强化直装版 |
