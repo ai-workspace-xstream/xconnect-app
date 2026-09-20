@@ -26,6 +26,27 @@ Future<List<ConflictFinding>> scanThisDevice() async {
   final findings = [
     ...commonFindings(canary: canary, tunnelLastError: lastError),
   ];
+  if (Platform.isAndroid) {
+    final consent = await NativeBridge.getVpnConsentState();
+    if (consent != null) {
+      PacketTunnelStatus? status;
+      try {
+        status = await NativeBridge.getPacketTunnelStatus();
+      } catch (_) {}
+      findings.addAll(
+        scanAndroid(
+          AndroidScanInputs(
+            vpnConsentGranted: consent['granted'] == true,
+            vpnTransportActive: await hasVpnInterface(),
+            reportedStatus: status?.status ?? 'not_configured',
+            alwaysOnVpnPackage: consent['alwaysOnVpnPackage'] as String?,
+            ownPackage:
+                consent['ownPackage'] as String? ?? 'plus.svc.xconnect',
+          ),
+        ),
+      );
+    }
+  }
   if (Platform.isMacOS) {
     final inputs = await gatherMacInputs(
       ourSocksPort: int.tryParse(GlobalState.socksPort.value) ?? 1080,
@@ -132,7 +153,7 @@ class _RepairSectionState extends State<RepairSection> {
             _Card(
               title: context.l10n.get('repairSectionActions'),
               children: [
-                for (final id in RepairActionId.values)
+                for (final id in actionsFor(_os))
                   _ActionRow(
                     plan: planFor(id, os: _os, findings: _findings),
                     compact: compact,
@@ -274,6 +295,9 @@ String findingTitle(BuildContext context, ConflictFinding f) {
     FindingKind.staleProxy => fill('findStaleProxy'),
     FindingKind.orphanHelper => fill('findOrphanHelper'),
     FindingKind.profileSaveDenied => fill('findProfileDenied'),
+    FindingKind.vpnConsentMissing => fill('findVpnConsentMissing'),
+    FindingKind.alwaysOnVpnResidual => fill('findAlwaysOnResidual'),
+    FindingKind.tunnelStateMismatch => fill('findTunnelStateMismatch'),
   };
 }
 
@@ -338,6 +362,18 @@ class _ActionRow extends StatelessWidget {
           Icons.language,
           'actResetDns',
           'actResetDnsDesc',
+          'repairSteps',
+        ),
+      RepairActionId.grantVpnConsent => (
+          Icons.vpn_key_outlined,
+          'actGrantVpnConsent',
+          'actGrantVpnConsentDesc',
+          'repairSteps',
+        ),
+      RepairActionId.clearAlwaysOnVpn => (
+          Icons.settings_outlined,
+          'actClearAlwaysOn',
+          'actClearAlwaysOnDesc',
           'repairSteps',
         ),
       RepairActionId.repairTunnel => (
@@ -572,6 +608,8 @@ class _PlanBody extends StatelessWidget {
       RepairActionId.flushDnsCache => 'actFlushDns',
       RepairActionId.resetManualDns => 'actResetDns',
       RepairActionId.repairTunnel => 'actRepairTunnel',
+      RepairActionId.grantVpnConsent => 'actGrantVpnConsent',
+      RepairActionId.clearAlwaysOnVpn => 'actClearAlwaysOn',
     });
     final inApp = plan.mode == RepairMode.inApp;
 

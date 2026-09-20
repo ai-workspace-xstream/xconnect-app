@@ -22,9 +22,27 @@ enum FindingKind {
 
   /// T4: the OS refused to save our VPN profile (signing / consent).
   profileSaveDenied,
+
+  /// A1: Android has not granted VpnService consent, so no tunnel can start.
+  vpnConsentMissing,
+
+  /// A2: `always_on_vpn_app` still names a package that cannot use it.
+  ///
+  /// The key lives in Settings.Secure and only the system may write it, so an
+  /// uninstall leaves it behind and no app can clear it. Detect and guide.
+  alwaysOnVpnResidual,
+
+  /// A3: we report a live tunnel while the OS carries no VPN transport.
+  tunnelStateMismatch,
 }
 
-enum RepairActionId { flushDnsCache, resetManualDns, repairTunnel }
+enum RepairActionId {
+  flushDnsCache,
+  resetManualDns,
+  repairTunnel,
+  grantVpnConsent,
+  clearAlwaysOnVpn,
+}
 
 class ConflictFinding {
   const ConflictFinding({
@@ -173,6 +191,99 @@ List<ConflictFinding> scanMac(MacScanInputs input) {
       detail: '/Library/LaunchDaemons/$plist',
       thirdParty: true,
       manual: true,
+    ));
+  }
+
+  return findings;
+}
+
+/// The read-only Android state [scanAndroid] needs.
+///
+/// Every field comes from a public API: [vpnConsentGranted] from
+/// `VpnService.prepare(context) == null`, [vpnTransportActive] from a network
+/// with `TRANSPORT_VPN`. [alwaysOnVpnPackage] reads an `@hide` Settings.Secure
+/// key, so it is nullable and a null means "could not read", never "unset".
+class AndroidScanInputs {
+  const AndroidScanInputs({
+    required this.vpnConsentGranted,
+    required this.vpnTransportActive,
+    required this.reportedStatus,
+    required this.ownPackage,
+    this.alwaysOnVpnPackage,
+  });
+
+  final bool vpnConsentGranted;
+  final bool vpnTransportActive;
+
+  /// PacketTunnelController's own state string.
+  final String reportedStatus;
+  final String ownPackage;
+  final String? alwaysOnVpnPackage;
+}
+
+/// Interface names a VpnService tunnel takes on Android.
+///
+/// Android names a VpnService device `tun<N>`; the legacy and IPsec stacks use
+/// `ppp<N>` and `ipsec<N>`. Matching the name is enough to tell a live tunnel
+/// from the app merely claiming one — on the Pixel 7a the card read 已连接
+/// while `ip link` listed none of these.
+final _vpnInterfaceName = RegExp(r'^(tun|ppp|ipsec)\d*$');
+
+bool isVpnInterfaceName(String name) => _vpnInterfaceName.hasMatch(name);
+
+/// Whether the OS currently carries a VPN interface.
+///
+/// Returns false when the list cannot be read: a scan must not invent a
+/// tunnel it could not see.
+Future<bool> hasVpnInterface({
+  Future<List<NetworkInterface>> Function()? list,
+}) async {
+  try {
+    final interfaces = await (list ?? () => NetworkInterface.list())();
+    return interfaces.any((i) => isVpnInterfaceName(i.name));
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Android conflicts, from the Pixel 7a incident (2026-09-20).
+///
+/// The three findings are ordered by what blocks the user first: without
+/// consent nothing can start, so it is reported before the state mismatch it
+/// causes.
+List<ConflictFinding> scanAndroid(AndroidScanInputs input) {
+  final findings = <ConflictFinding>[];
+
+  if (!input.vpnConsentGranted) {
+    findings.add(const ConflictFinding(
+      kind: FindingKind.vpnConsentMissing,
+      manual: true,
+      fix: RepairActionId.grantVpnConsent,
+    ));
+  }
+
+  // 假绿: the home screen is green while no VPN transport carries traffic.
+  // Only `connected` counts; `connecting` legitimately has no transport yet.
+  if (input.reportedStatus == 'connected' && !input.vpnTransportActive) {
+    findings.add(const ConflictFinding(
+      kind: FindingKind.tunnelStateMismatch,
+      fix: RepairActionId.repairTunnel,
+    ));
+  }
+
+  // Residue is only meaningful when the always-on package cannot actually be
+  // serving: with consent and a live transport this is the normal setup.
+  final alwaysOn = input.alwaysOnVpnPackage;
+  if (alwaysOn != null &&
+      alwaysOn.isNotEmpty &&
+      !input.vpnConsentGranted &&
+      !input.vpnTransportActive) {
+    findings.add(ConflictFinding(
+      kind: FindingKind.alwaysOnVpnResidual,
+      subject: alwaysOn,
+      thirdParty: alwaysOn != input.ownPackage,
+      manual: true,
+      fix: RepairActionId.clearAlwaysOnVpn,
     ));
   }
 

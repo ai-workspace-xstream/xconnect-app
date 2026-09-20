@@ -12,6 +12,10 @@ class MainActivity : FlutterFragmentActivity() {
     private val vpnPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val granted = result.resultCode == Activity.RESULT_OK
+            android.util.Log.i(
+                "XConnectPacketTunnel",
+                "vpn consent result: code=${result.resultCode} granted=$granted"
+            )
             PacketTunnelController.onVpnPermissionResult(this, granted)
         }
 
@@ -36,6 +40,8 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "stopPacketTunnel" -> result.success(PacketTunnelController.stop(this))
                 "getPacketTunnelStatus" -> result.success(PacketTunnelController.status(this))
+                "getVpnConsentState" ->
+                    result.success(PacketTunnelController.vpnConsentState(this))
                 "openVpnSettings" -> result.success(openVpnSettings())
                 "startNodeService", "stopNodeService", "performAction" -> result.success("Android not supported")
                 "checkNodeStatus" -> result.success(false)

@@ -57,4 +57,77 @@ void main() {
       expect(url.toLowerCase(), isNot(startsWith('prefs:')));
     }
   });
+
+  group('android VPN plans', () {
+    test('granting consent is guided and never a shell command', () {
+      final plan = planFor(RepairActionId.grantVpnConsent, os: 'android');
+      expect(plan.mode, RepairMode.guided);
+      expect(plan.command, isNull);
+    });
+
+    test('clearing always-on is guided with no unlaunchable URL', () {
+      final plan = planFor(RepairActionId.clearAlwaysOnVpn, os: 'android');
+      expect(plan.mode, RepairMode.guided);
+      expect(plan.command, isNull);
+      // RepairSection passes settingsUrl to launchUrl; Android has no
+      // resolvable VPN-settings URL, so it must stay null.
+      expect(plan.settingsUrl, isNull);
+    });
+
+    test('every plan on every OS has a launchable scheme or none', () {
+      const oses = ['macos', 'windows', 'linux', 'android', 'ios'];
+      const launchable = {'x-apple.systempreferences', 'ms-settings', 'http', 'https'};
+      for (final os in oses) {
+        for (final id in RepairActionId.values) {
+          final url = planFor(id, os: os).settingsUrl;
+          if (url == null) continue;
+          expect(
+            launchable,
+            contains(url.scheme),
+            reason: '$id on $os uses unresolvable scheme "${url.scheme}"',
+          );
+        }
+      }
+    });
+  });
+
+  group('actionsFor', () {
+    test('Android gets the consent and always-on actions', () {
+      expect(
+        actionsFor('android'),
+        containsAll([
+          RepairActionId.grantVpnConsent,
+          RepairActionId.clearAlwaysOnVpn,
+        ]),
+      );
+    });
+
+    test('other platforms never offer the Android-only actions', () {
+      for (final os in ['macos', 'windows', 'linux', 'ios']) {
+        expect(
+          actionsFor(os),
+          isNot(contains(RepairActionId.grantVpnConsent)),
+          reason: '$os has no VpnService consent step',
+        );
+        expect(
+          actionsFor(os),
+          isNot(contains(RepairActionId.clearAlwaysOnVpn)),
+          reason: '$os has no always_on_vpn_app setting',
+        );
+      }
+    });
+
+    test('the shared actions are offered everywhere', () {
+      for (final os in ['macos', 'windows', 'linux', 'ios', 'android']) {
+        expect(
+          actionsFor(os),
+          containsAll([
+            RepairActionId.flushDnsCache,
+            RepairActionId.resetManualDns,
+            RepairActionId.repairTunnel,
+          ]),
+        );
+      }
+    });
+  });
 }
