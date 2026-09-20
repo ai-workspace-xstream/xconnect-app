@@ -17,6 +17,11 @@ dependencies:
   process_run: 1.1.0
   ffi: ^2.2.0
   sqlite3: 2.4.7
+  # Ships libsqlite3.so inside the APK. Without it the Android build has no
+  # library to dlopen and every node read/write fails at runtime (Pixel 7a,
+  # 2026-09-20). 0.6.0+eol is a no-op tombstone for package:sqlite3 3.x, so
+  # the 0.5.x line is the one that still bundles the native library.
+  sqlite3_flutter_libs: ^0.5.24
   cryptography: ^2.5.0
   flutter_localizations:
     sdk: flutter

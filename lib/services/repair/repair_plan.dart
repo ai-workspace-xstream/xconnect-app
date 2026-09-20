@@ -29,6 +29,25 @@ class RepairPlan {
   final bool nothingToDo;
 }
 
+/// The repair actions that make sense on [os].
+///
+/// VPN consent and the always-on residue are Android concepts: Apple gates a
+/// tunnel on a saved profile (see [FindingKind.profileSaveDenied]) and desktop
+/// has no consent step at all. Offering them elsewhere would walk the user to
+/// a settings page that does not exist on their platform.
+List<RepairActionId> actionsFor(String os) => [
+      for (final id in RepairActionId.values)
+        if (_appliesTo(id, os)) id,
+    ];
+
+bool _appliesTo(RepairActionId id, String os) => switch (id) {
+      RepairActionId.flushDnsCache => true,
+      RepairActionId.resetManualDns => true,
+      RepairActionId.repairTunnel => true,
+      RepairActionId.grantVpnConsent => os == 'android',
+      RepairActionId.clearAlwaysOnVpn => os == 'android',
+    };
+
 RepairPlan planFor(
   RepairActionId id, {
   required String os,
@@ -102,6 +121,36 @@ RepairPlan planFor(
           'repairStepTunnelStop',
           if (desktop) 'repairStepTunnelProxy',
           'repairStepTunnelReconnect',
+        ],
+      );
+
+    case RepairActionId.grantVpnConsent:
+      // Only the user can accept the system VPN dialog; the app may only ask
+      // again. Reconnecting is what re-triggers it.
+      return const RepairPlan(
+        id: RepairActionId.grantVpnConsent,
+        mode: RepairMode.guided,
+        stepKeys: [
+          'repairStepVpnConsentReconnect',
+          'repairStepVpnConsentAccept',
+          'repairStepRecheck',
+        ],
+      );
+
+    case RepairActionId.clearAlwaysOnVpn:
+      // Settings.Secure.always_on_vpn_app is system-owned: an app can neither
+      // write nor clear it, and an uninstall leaves it behind. Guided only.
+      // No settingsUrl: Android has no launchable URL for the VPN page. The
+      // section opens it through NativeBridge.openVpnSettings (ACTION_VPN_
+      // SETTINGS) instead, so nothing here reaches launchUrl with a scheme
+      // the platform cannot resolve.
+      return const RepairPlan(
+        id: RepairActionId.clearAlwaysOnVpn,
+        mode: RepairMode.guided,
+        stepKeys: [
+          'repairStepAlwaysOnOpenSettings',
+          'repairStepAlwaysOnTurnOff',
+          'repairStepRecheck',
         ],
       );
   }

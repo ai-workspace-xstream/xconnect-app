@@ -13,6 +13,41 @@ import '../widgets/permission_guide_dialog.dart';
 import '../widgets/log_console.dart' show LogLevel;
 import '../utils/app_theme.dart';
 
+/// Whether the home card may present a live connection.
+///
+/// A selected node is not a tunnel. On packet-tunnel platforms Android
+/// answers `vpn_permission_requested` the moment it launches the system
+/// consent dialog — a legitimately accepted start that may still end in the
+/// OS refusing consent. Keying the card off the node alone is what painted it
+/// green on the Pixel 7a with no tun device behind it (2026-09-20), so the
+/// tunnel's own state is the authority wherever there is one.
+bool hasLiveTunnel({
+  required String activeNode,
+  required bool requiresPacketTunnelStatus,
+  required String packetTunnelStatus,
+}) {
+  if (activeNode.trim().isEmpty) return false;
+  if (!requiresPacketTunnelStatus) return true;
+  return packetTunnelStatus == 'connected';
+}
+
+/// Whether tapping a node should stop it rather than start it.
+///
+/// This must agree with what the button says. The card, its colour and the
+/// button label all come from [hasLiveTunnel]; branching the action on the
+/// selected node alone made the button read 开始连接 while the handler ran a
+/// disconnect, so a tunnel that had failed could never be retried — tapping
+/// connect just answered "Tunnel disconnected" forever (Pixel 7a, 2026-09-20).
+bool shouldStopInsteadOfStart({
+  required String activeNode,
+  required String tappedNode,
+  required bool hasLiveTunnel,
+  required bool tunnelPending,
+}) {
+  if (activeNode != tappedNode) return false;
+  return hasLiveTunnel || tunnelPending;
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -534,7 +569,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final useTunMode = NativeBridge.isTunMode;
     try {
       // ── Stop active node ──────────────────────────────────────────
-      if (_activeNode == nodeName) {
+      if (shouldStopInsteadOfStart(
+        activeNode: _activeNode,
+        tappedNode: nodeName,
+        hasLiveTunnel: _hasActiveConnection,
+        tunnelPending: _tunnelPending,
+      )) {
         // Prevent leaks if connection mode was changed during an active session by stopping both
         await NativeBridge.stopNodeForTunnel();
         final msg = await NativeBridge.stopNodeService(nodeName);
@@ -814,7 +854,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  bool get _hasActiveConnection => _activeNode.trim().isNotEmpty;
+  bool get _hasActiveConnection => hasLiveTunnel(
+        activeNode: _activeNode,
+        requiresPacketTunnelStatus: _requiresPacketTunnelStatus,
+        packetTunnelStatus: _packetTunnelStatus.status,
+      );
+
+  /// A node is selected and the tunnel has not (yet) come up behind it.
+  ///
+  /// This is the window in which Android is showing its consent dialog. The
+  /// status poll promotes us to connected, or to a failed state if the OS
+  /// denies; either way the card stops claiming a tunnel it does not have.
+  bool get _tunnelPending =>
+      _activeNode.trim().isNotEmpty &&
+      _requiresPacketTunnelStatus &&
+      !_hasActiveConnection &&
+      !_packetTunnelExplicitlyUnavailable;
 
   String _connectionStateLabel(BuildContext context) {
     if (_isSwitchingNode) {
@@ -822,9 +877,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ? context.l10n.get('tunStatusDisconnecting')
           : context.l10n.get('tunStatusConnecting');
     }
-    return _hasActiveConnection
-        ? context.l10n.get('tunStatusConnected')
-        : context.l10n.get('tunStatusDisconnected');
+    if (_hasActiveConnection) {
+      return context.l10n.get('tunStatusConnected');
+    }
+    if (_tunnelPending) {
+      return context.l10n.get('tunStatusConnecting');
+    }
+    return context.l10n.get('tunStatusDisconnected');
   }
 
   Color _connectionStateColor() {
@@ -832,7 +891,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_isSwitchingNode) {
       return xc.warning;
     }
-    return _hasActiveConnection ? xc.success : xc.mutedText;
+    if (_hasActiveConnection) return xc.success;
+    return _tunnelPending ? xc.warning : xc.mutedText;
   }
 
   String _connectionMetaLine(BuildContext context) {

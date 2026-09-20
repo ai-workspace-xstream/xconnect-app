@@ -176,6 +176,12 @@ class AppLocalizations {
       'actResetDns': 'Repair DNS',
       'actResetDnsDesc': 'Go back to the DNS servers your network provides.',
       'actRepairTunnel': 'Repair tunnel settings',
+      'actGrantVpnConsent': 'Grant VPN permission',
+      'actGrantVpnConsentDesc':
+          'Android has not authorised XConnect to run a VPN, so no tunnel can start.',
+      'actClearAlwaysOn': 'Clear leftover always-on VPN',
+      'actClearAlwaysOnDesc':
+          'The system still lists an always-on VPN app that cannot serve it.',
       'actRepairTunnelDesc':
           "Disconnect and reset XConnect's own tunnel and system proxy.",
       'findTunnelInterception':
@@ -186,6 +192,12 @@ class AppLocalizations {
           "XConnect's system proxy is still on with nothing behind it",
       'findOrphanHelper': "{subject}'s system helper is still installed",
       'findProfileDenied': "The system refused to save XConnect's VPN profile",
+      'findVpnConsentMissing':
+          'Android has not granted VPN permission, so no tunnel can be established',
+      'findAlwaysOnResidual':
+          'Always-on VPN still points at {subject}, which cannot serve it',
+      'findTunnelStateMismatch':
+          'XConnect reports a live tunnel but the system carries no VPN traffic',
       'findThirdPartyNote':
           'Belongs to another app. Shown only, never changed.',
       'findProfileDeniedNote':
@@ -203,6 +215,14 @@ class AppLocalizations {
       'repairStepPasteCommand':
           'Paste the command below, press Return, and enter your admin password when asked.',
       'repairStepRecheck': 'Come back here and choose Check again.',
+      'repairStepVpnConsentReconnect':
+          'Go to Home and connect again to bring up the system VPN dialog.',
+      'repairStepVpnConsentAccept':
+          'Choose OK in the "Connection request" dialog Android shows.',
+      'repairStepAlwaysOnOpenSettings':
+          'Open Settings → Network & internet → VPN.',
+      'repairStepAlwaysOnTurnOff':
+          'Turn off Always-on VPN for the app listed there. If no app is listed, the entry is stale and only a system reset clears it.',
       'repairStepAirplaneMode':
           'Turn on airplane mode, wait 10 seconds, then turn it off to reset networking and DNS.',
       'repairStepDnsMacSettings':
@@ -572,6 +592,10 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'actResetDns': '修复 DNS',
       'actResetDnsDesc': '恢复为网络自动分配的 DNS。',
       'actRepairTunnel': '修复隧道配置',
+      'actGrantVpnConsent': '授予 VPN 权限',
+      'actGrantVpnConsentDesc': '系统尚未授权 XConnect 建立 VPN，隧道无法启动。',
+      'actClearAlwaysOn': '清理残留的始终开启 VPN',
+      'actClearAlwaysOnDesc': '系统仍指向一个无法生效的「始终开启 VPN」应用。',
       'actRepairTunnelDesc': '断开并重置 XConnect 自己的隧道与系统代理。',
       'findTunnelInterception': '另一个 VPN 或加速器正在接管网络',
       'findOtherVpn': '另一个 VPN（{subject}）已连接',
@@ -579,6 +603,9 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'findStaleProxy': 'XConnect 的系统代理仍开启，但已无服务在运行',
       'findOrphanHelper': '{subject} 的系统助手仍在运行',
       'findProfileDenied': '系统拒绝保存 XConnect 的 VPN 配置',
+      'findVpnConsentMissing': '系统未授予 VPN 权限，隧道无法建立',
+      'findAlwaysOnResidual': '「始终开启 VPN」仍指向 {subject}，但它无法生效',
+      'findTunnelStateMismatch': 'XConnect 显示已连接，但系统上没有任何 VPN 流量',
       'findThirdPartyNote': '第三方组件，只提示，不修改',
       'findProfileDeniedNote': '通常是构建签名或授权问题，或拒绝了「添加 VPN 配置」弹窗。',
       'findOtherVpnHelp': '同一时刻只能有一个 VPN 生效。请在该应用中断开，或在系统设置中关闭它，再连接 XConnect。',
@@ -591,6 +618,11 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'repairStepOpenAdminShell': '以管理员身份打开 PowerShell。',
       'repairStepPasteCommand': '粘贴下面的命令并回车，按提示输入管理员密码。',
       'repairStepRecheck': '回到这里，点「重新检查」。',
+      'repairStepVpnConsentReconnect': '回到首页重新连接，触发系统的 VPN 授权弹窗。',
+      'repairStepVpnConsentAccept': '在系统弹出的「连接请求」对话框中选择「确定」。',
+      'repairStepAlwaysOnOpenSettings': '打开 设置 → 网络和互联网 → VPN。',
+      'repairStepAlwaysOnTurnOff':
+          '关闭该应用的「始终开启 VPN」。如果列表里根本没有这个应用，说明是卸载残留，只能由系统重置清除。',
       'repairStepAirplaneMode': '打开飞行模式，10 秒后关闭，让系统重建网络与 DNS。',
       'repairStepDnsMacSettings':
           '打开「系统设置 → 网络」，选择对应网络 → 详细信息 → DNS，删除手动添加的服务器。',

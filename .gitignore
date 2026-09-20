@@ -80,3 +80,7 @@ macos/Runner 2026-03-07 17-50-46/xconnect.pkg
 android/key.properties
 android/*.jks
 android/*.keystore
+
+# Android Go bridge build output (produced by build_scripts/build_android_xray.sh).
+# ~50MB per ABI; rebuilt on every Android build, never committed.
+android/app/src/main/jniLibs/

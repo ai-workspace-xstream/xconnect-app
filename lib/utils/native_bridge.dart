@@ -51,6 +51,23 @@ class NativeBridge {
 
   static bool get _isMobile => Platform.isIOS || Platform.isAndroid;
 
+  /// Whether a packet tunnel is holding the system VPN slot.
+  ///
+  /// Proxy mode refuses to start while a tunnel is up, so this decides
+  /// whether the core proxy can run at all. `connecting` counts only while
+  /// the tunnel is genuinely coming up: a start that is merely waiting on the
+  /// system consent dialog owns nothing, and on the Pixel 7a that dialog
+  /// never returned a result, stranding the state at `connecting` and
+  /// blocking proxy mode behind "Packet Tunnel 已在运行" for good.
+  static bool packetTunnelOccupiesVpnSlot({
+    required String status,
+    String? lastError,
+  }) {
+    if (status == 'connected') return true;
+    if (status != 'connecting') return false;
+    return lastError != 'vpn_permission_required';
+  }
+
   static bool isTunnelStartAcceptedMessage(String? message) {
     final normalized = (message ?? '').trim().toLowerCase();
     if (normalized.isEmpty) return false;
@@ -568,8 +585,10 @@ class NativeBridge {
     if (_isMobile || Platform.isMacOS) {
       if (Platform.isAndroid) {
         final tunStatus = await getPacketTunnelStatus();
-        if (tunStatus.status == 'connected' ||
-            tunStatus.status == 'connecting') {
+        if (packetTunnelOccupiesVpnSlot(
+          status: tunStatus.status,
+          lastError: tunStatus.lastError,
+        )) {
           return 'Packet Tunnel 已在运行，请先停止';
         }
       }
@@ -1596,6 +1615,28 @@ class NativeBridge {
         level: LogLevel.error,
       );
       return false;
+    }
+  }
+
+  /// Android VPN authorisation state, for Settings → 诊断/修复.
+  ///
+  /// Returns null off Android and whenever the platform call fails, so a
+  /// caller can tell "no answer" apart from "consent denied". The map keys
+  /// mirror [AndroidScanInputs]: granted, alwaysOnVpnPackage, ownPackage.
+  static Future<Map<String, Object?>?> getVpnConsentState() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+        'getVpnConsentState',
+      );
+      if (raw == null) return null;
+      return {
+        for (final entry in raw.entries) entry.key.toString(): entry.value,
+      };
+    } on MissingPluginException {
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 

@@ -3,9 +3,11 @@ package plus.svc.xconnect
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.provider.Settings
 import org.json.JSONObject
 
 internal object PacketTunnelController {
+    private const val LOG_TAG = "XConnectPacketTunnel"
     private const val PREFS = "xconnect_packet_tunnel"
     private const val KEY_PROFILE = "profile_json"
     private const val KEY_STATE = "state"
@@ -47,8 +49,18 @@ internal object PacketTunnelController {
             ?: return "profile_missing"
 
         val prepareIntent = VpnService.prepare(context)
+        android.util.Log.i(
+            LOG_TAG,
+            "start: prepare=${if (prepareIntent == null) "granted" else "needs-consent"}"
+        )
         if (prepareIntent != null) {
-            writeState(context, STATE_CONNECTING)
+            // Consent is not granted, so nothing is running. Writing
+            // CONNECTING here strands the state whenever the system consent
+            // dialog never delivers a result — which also made proxy mode
+            // refuse to start with "Packet Tunnel 已在运行，请先停止", because
+            // that guard treats CONNECTING as a live tunnel. `permissionPending`
+            // carries the real story for the UI.
+            writeState(context, STATE_DISCONNECTED)
             writeError(context, "vpn_permission_required")
             clearStartedAt(context)
             markPendingPermission(context)
@@ -67,6 +79,7 @@ internal object PacketTunnelController {
     }
 
     fun onVpnPermissionResult(context: Context, granted: Boolean): String {
+        android.util.Log.i(LOG_TAG, "onVpnPermissionResult: granted=$granted")
         if (!granted) {
             writeState(context, STATE_INVALID)
             writeError(context, "vpn_permission_denied")
@@ -88,8 +101,17 @@ internal object PacketTunnelController {
             action = XConnectPacketTunnelService.ACTION_START
             putExtra(XConnectPacketTunnelService.EXTRA_PROFILE_JSON, stored)
         }
-        context.startService(intent)
-        return "start_submitted"
+        return try {
+            context.startService(intent)
+            android.util.Log.i(LOG_TAG, "startService: submitted")
+            "start_submitted"
+        } catch (t: Throwable) {
+            // A background start throws on API 26+; swallowing it left the UI
+            // waiting on a service that was never going to run.
+            android.util.Log.e(LOG_TAG, "startService failed: ${t.javaClass.simpleName}: ${t.message}")
+            markFailed(context, "service_start_failed:${t.javaClass.simpleName}")
+            "启动失败: ${t.javaClass.simpleName}"
+        }
     }
 
     fun stop(context: Context): String {
@@ -111,6 +133,31 @@ internal object PacketTunnelController {
             "lastError" to prefs(context).getString(KEY_ERROR, null),
             "startedAt" to prefs(context).getLong(KEY_STARTED_AT, 0L).takeIf { it > 0L },
             "permissionPending" to prefs(context).getBoolean(KEY_PERMISSION_PENDING, false),
+        )
+    }
+
+    // Read-only VPN authorisation state, for Settings → 诊断/修复.
+    //
+    // `VpnService.prepare` returning null is the only reliable statement that
+    // the OS has granted consent; the app cannot read the ACTIVATE_VPN appop.
+    // `always_on_vpn_app` lives in Settings.Secure, is @hide and system-write
+    // only, so an uninstall leaves it behind and a read may be refused — a
+    // null therefore means "unknown", never "nothing is set".
+    fun vpnConsentState(context: Context): Map<String, Any?> {
+        val granted = try {
+            VpnService.prepare(context) == null
+        } catch (_: Throwable) {
+            false
+        }
+        val alwaysOn = try {
+            Settings.Secure.getString(context.contentResolver, "always_on_vpn_app")
+        } catch (_: Throwable) {
+            null
+        }
+        return mapOf(
+            "granted" to granted,
+            "alwaysOnVpnPackage" to alwaysOn?.takeIf { it.isNotBlank() },
+            "ownPackage" to context.packageName,
         )
     }
 

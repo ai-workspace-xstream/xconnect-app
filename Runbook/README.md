@@ -26,6 +26,7 @@
 | 文档 | 说明 |
 |------|------|
 | [Tunnel-Mode-Site-Diff-From-Proxy-Mode.md](./Tunnel-Mode-Site-Diff-From-Proxy-Mode.md) | Tunnel Mode 与 Proxy Mode 站点可访问性差异排查 |
+| [Android-VPN-Consent-Denied.md](./Android-VPN-Consent-Denied.md) | Android 隧道建不起来：系统秒拒 VPN 授权、always-on 卸载残留、假绿排查 |
 
 ---
 
