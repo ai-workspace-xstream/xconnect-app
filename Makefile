@@ -140,7 +140,7 @@ build-windows-x64: check-flutter check-go
 	@cp bindings/libgo_native_bridge.dll build/windows/x64/runner/Release/ 2>/dev/null || true
 	@echo ">>> Build complete: build/windows/x64/runner/Release/xconnect.exe"
 
-build-linux-x64: check-flutter check-go
+build-linux-x64: check-flutter check-go check-git-submodules
 	@echo ">>> Building Linux x64 release"
 	CC="$${CC:-$$(command -v clang)}" \
 	CXX="$${CXX:-$$(command -v clang++)}" \

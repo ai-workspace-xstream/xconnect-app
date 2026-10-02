@@ -7,39 +7,27 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+extern "C" void RegisterLinuxWindow(void* window);
+
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
   GtkWindow* main_window;
 };
 
-static gboolean can_restore_from_tray(GtkWidget* widget) {
-#ifdef GDK_WINDOWING_X11
-  GdkDisplay* display = gtk_widget_get_display(widget);
-  return GDK_IS_X11_DISPLAY(display);
-#else
-  return FALSE;
-#endif
-}
-
-static gboolean window_state_event(GtkWidget* widget, GdkEventWindowState* event,
-                                   gpointer user_data) {
-  if (event->changed_mask & GDK_WINDOW_STATE_ICONIFIED &&
-      (event->new_window_state & GDK_WINDOW_STATE_ICONIFIED) &&
-      can_restore_from_tray(widget)) {
-    gtk_widget_hide(widget);
-  }
-  return FALSE;
-}
-
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  if (self->main_window != nullptr) {
+    gtk_window_present(self->main_window);
+    return;
+  }
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
   self->main_window = window;
+  RegisterLinuxWindow(window);
 
   // Use a header bar when running in GNOME as this is the common style used
   // by applications and is the setup most users will be using (e.g. Ubuntu
@@ -70,8 +58,6 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
   gtk_widget_show(GTK_WIDGET(window));
-
-  g_signal_connect(window, "window-state-event", G_CALLBACK(window_state_event), NULL);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(project, self->dart_entrypoint_arguments);
@@ -140,8 +126,22 @@ static void my_application_class_init(MyApplicationClass* klass) {
 static void my_application_init(MyApplication* self) {}
 
 MyApplication* my_application_new() {
+  // A user's D-Bus may be shared by several desktop sessions. Scope uniqueness
+  // to the display so a second launch restores the window on the same desktop.
+  const gchar* display = g_getenv("WAYLAND_DISPLAY");
+  const gchar* protocol = "wayland";
+  if (display == nullptr || *display == '\0') {
+    display = g_getenv("DISPLAY");
+    protocol = "x11";
+  }
+  g_autofree gchar* identity =
+      g_strdup_printf("%s:%s", protocol, display == nullptr ? "" : display);
+  g_autofree gchar* digest =
+      g_compute_checksum_for_string(G_CHECKSUM_SHA256, identity, -1);
+  g_autofree gchar* application_id =
+      g_strdup_printf("%s.session_%.16s", APPLICATION_ID, digest);
   return MY_APPLICATION(g_object_new(my_application_get_type(),
-                                     "application-id", APPLICATION_ID,
-                                     "flags", G_APPLICATION_NON_UNIQUE,
+                                     "application-id", application_id,
+                                     "flags", static_cast<GApplicationFlags>(0),
                                      nullptr));
 }

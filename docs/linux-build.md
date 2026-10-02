@@ -23,9 +23,44 @@ CC=/path/to/clang CXX=/path/to/clang++ make build-linux-x64
 
 务必保持 `build_linux.sh` 与 Flutter 桌面构建使用同一套编译器，否则可能出现 `pthread_*` 相关链接错误。
 
-Ubuntu 26.04 默认使用 GNOME Wayland。XConnect 在 Wayland 会保留标准 Dock
-最小化行为；基于 X11 窗口查找的旧托盘恢复功能只在 X11 会话启用，避免窗口
-最小化后无法恢复。
+Ubuntu 26.04 默认使用 GNOME Wayland。XConnect 在 Wayland 和无法识别的会话中
+保留桌面原生窗口/Dock 行为，不尝试通过 X11 隐藏窗口。X11 会话启用托盘菜单与
+最小化到托盘；只有图标和实际托盘宿主均就绪时才隐藏窗口。托盘宿主退出后恢复
+窗口，避免 GNOME 托盘扩展缺失时无法恢复。所有窗口操作与托盘初始化均使用
+Flutter 已有的 GTK 主循环，不再另启 GTK 循环或通过窗口标题轮询。图标路径相对安装程序位置
+解析，因此从 XDG/IceWM/KDE/GNOME 自动启动时不依赖当前工作目录。Linux 主程序
+按桌面 display 采用单实例注册，重复启动激活同一桌面的现有窗口。不同 KDE/XRDP
+与 IceWM 会话仍可各自打开窗口。托盘 Quit 使用已有窗口关闭流程。
+
+验证 Linux 桌面集成时至少覆盖 X11 的 IceWM 和 KDE、Wayland 的 GNOME，以及从
+应用菜单和 XDG autostart 启动两种入口；确认重复启动只激活一个窗口、最小化/恢复
+可用，且连接、断开、系统代理和状态显示行为不变。Wayland 的原生窗口行为不依赖
+托盘扩展存在。
+
+## libXray 上游同步
+
+Linux 桌面与托盘适配代码位于本仓库的 `linux/` 和 `go_core/bridge_linux.go`，
+不修改 `libXray`。构建以父仓库 gitlink 为唯一版本来源；`go_core/go.mod` 的
+`replace` 固定指向该子模块。Linux 构建与 PR 校验会拒绝版本不一致或含 tracked
+改动的子模块，避免把本机未提交改动打入发布包。
+
+升级上游时，在独立干净分支先记录旧 gitlink，fetch 上游并审查候选 commit 的
+API/Go 版本和 core 依赖变化，再 checkout 明确 SHA，提交新的 gitlink。对候选
+版本执行 Go vet、共享库构建以及 Linux/Android/iOS 构建和连接回归，通过 PR
+合并后才用于部署。CI 与节点部署始终使用 `git submodule update --init --recursive`，
+不使用 `--remote`。回滚时同时恢复父仓库 commit、gitlink 和完整安装包。
+
+Home-Lab 的构建记录应包含应用 commit、libXray commit、包 SHA256、安装版本和
+桌面类型。部署前备份 `/opt/xconnect`，保留用户配置与 OAuth 文件；部署后重新
+核验 capability、动态库与实际运行的二进制。
+
+## Home-Lab 网络职责
+
+XConnect-One 负责 VPN 互联，包括 `10.79.0.0/24` 到 Home-Lab 的管理通路。
+XConnect App 负责网络代理/系统 TUN 出站；CPA 使用系统路由，不额外设置
+HTTP_PROXY、HTTPS_PROXY、ALL_PROXY 或 CPA `proxy-url`。在启用 App TUN 前核对
+VPN 互联、局域网、上游服务器端点的排除路由；验收需要同时确认 VPN SSH 通路、
+系统 TUN 出站、CPA 真实模型请求。GUI 窗口存在或服务 active 不代表这些检查通过。
 
 依赖 ImageMagick，若未安装请先安装 `convert` 命令。此外，系统托盘功能依赖 `libayatana-appindicator3-dev`（旧发行版可安装 `libappindicator3-dev`）。若缺失该库，`go build` 会因 `pkg-config` 找不到 `ayatana-appindicator3-0.1` 而报错。
 

@@ -3,6 +3,7 @@ set -e
 
 # 基础目录
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
+bash "$DIR/scripts/ci/check_libxray_contract.sh"
 cd "$DIR/go_core"
 
 # 检查托盘依赖
