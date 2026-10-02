@@ -1,5 +1,12 @@
 # Unreleased
 
+- Linux uses one GTK event loop for tray and window operations, scopes single
+  instance activation to each desktop display, and keeps windows recoverable
+  when no tray host is available. Wayland retains native minimization.
+- Linux builds and PR verification check the clean, pinned libXray gitlink;
+  desktop integrations remain in XConnect so upstream updates do not require
+  carrying a libXray patch.
+
 - Android release builds now use the Vault-backed upload keystore contract and
   publish both the APK and a Play Console-ready App Bundle. Verification builds
   retain an explicit debug-signing fallback.

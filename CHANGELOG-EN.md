@@ -1,5 +1,9 @@
 # Unreleased
 
+- Linux tray/window operations share the existing GTK loop; repeated launches
+  restore the same desktop session's window, and missing tray hosts retain
+  native minimization. Linux builds verify the pinned, clean libXray submodule.
+
 - Windows System Tunnel now waits for the named `XConnect` interface and its
   default route before reporting a successful connection.
 - Linux System Tunnel now uses the named `xconnect-tun0` interface with

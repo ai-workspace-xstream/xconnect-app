@@ -3,68 +3,121 @@
 package main
 
 /*
-#cgo LDFLAGS: -lX11
+#cgo pkg-config: gtk+-3.0 x11
 #include <stdlib.h>
 #include <string.h>
-#include <X11/Xlib.h>
-#include <X11/Xatom.h>
-#include <X11/Xutil.h>
+#include <gtk/gtk.h>
+#ifdef GDK_WINDOWING_X11
+#include <gdk/gdkx.h>
+#endif
 
-static Display* disp = NULL;
-static Window mainWin = 0;
+// All state and GTK calls below are confined to GTK's existing main loop.
+static GtkWindow* trayWindow = NULL;
+static gboolean trayInitialized = FALSE;
+static gboolean trayWindowHidden = FALSE;
+static GDBusConnection* notifierBus = NULL;
 
-static Window getMainWin() {
-    return mainWin;
+static gboolean restoreTrayWindow(gpointer unused) {
+    if (trayWindow != NULL) {
+        gtk_widget_show(GTK_WIDGET(trayWindow));
+        gtk_window_deiconify(trayWindow);
+        gtk_window_present(trayWindow);
+        trayWindowHidden = FALSE;
+    }
+    return G_SOURCE_REMOVE;
 }
 
-static Window findWindow(const char* name) {
-    if (disp == NULL) {
-        disp = XOpenDisplay(NULL);
-        if (disp == NULL) return 0;
-    }
-    Atom clientList = XInternAtom(disp, "_NET_CLIENT_LIST", True);
-    Atom type;
-    int format;
-    unsigned long nitems, bytes;
-    unsigned char* data = NULL;
-    if (XGetWindowProperty(disp, DefaultRootWindow(disp), clientList, 0, 1024, False, XA_WINDOW, &type, &format, &nitems, &bytes, &data) == Success && data) {
-        Window* list = (Window*)data;
-        for (unsigned long i=0; i<nitems; i++) {
-            char* wname = NULL;
-            if (XFetchName(disp, list[i], &wname) > 0) {
-                if (wname && strcmp(wname, name)==0) {
-                    mainWin = list[i];
-                    if (wname) XFree(wname);
-                    XFree(data);
-                    return mainWin;
-                }
-                if (wname) XFree(wname);
-            }
+static gboolean trayHostPresent() {
+    if (!trayInitialized || trayWindow == NULL) return FALSE;
+#ifdef GDK_WINDOWING_X11
+    GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(trayWindow));
+    if (!GDK_IS_X11_DISPLAY(display)) return FALSE;
+    gchar* selection = g_strdup_printf("_NET_SYSTEM_TRAY_S%d",
+        DefaultScreen(GDK_DISPLAY_XDISPLAY(display)));
+    gboolean legacyHost = gdk_selection_owner_get_for_display(display,
+        gdk_atom_intern(selection, FALSE)) != NULL;
+    g_free(selection);
+    if (legacyHost) return TRUE;
+    if (notifierBus != NULL) {
+        GVariant* reply = g_dbus_connection_call_sync(notifierBus,
+            "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
+            "org.freedesktop.DBus.Properties", "Get",
+            g_variant_new("(ss)", "org.kde.StatusNotifierWatcher",
+                          "IsStatusNotifierHostRegistered"),
+            G_VARIANT_TYPE("(v)"), G_DBUS_CALL_FLAGS_NONE, 200, NULL, NULL);
+        if (reply != NULL) {
+            GVariant* value = NULL;
+            g_variant_get(reply, "(v)", &value);
+            gboolean available = g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN)
+                && g_variant_get_boolean(value);
+            g_variant_unref(value);
+            g_variant_unref(reply);
+            return available;
         }
-        XFree(data);
     }
-    return 0;
+#endif
+    return FALSE;
 }
 
-static int isIconic() {
-    if (!disp || mainWin==0) return 0;
-    Atom WM_STATE = XInternAtom(disp, "WM_STATE", True);
-    Atom type; int format; unsigned long items, bytes; unsigned char* prop=NULL;
-    if (XGetWindowProperty(disp, mainWin, WM_STATE, 0, 2, False, WM_STATE, &type, &format, &items, &bytes, &prop) == Success && prop) {
-        long state = *(long*)prop;
-        XFree(prop);
-        return state == IconicState;
+static gboolean trayWindowStateEvent(GtkWidget* widget,
+                                    GdkEventWindowState* event, gpointer unused) {
+    if ((event->changed_mask & GDK_WINDOW_STATE_ICONIFIED) &&
+        (event->new_window_state & GDK_WINDOW_STATE_ICONIFIED) &&
+        trayHostPresent()) {
+        gtk_widget_hide(widget);
+        trayWindowHidden = TRUE;
     }
-    return 0;
+    return FALSE;
 }
 
-static void hideWindow() {
-    if (disp && mainWin) { XUnmapWindow(disp, mainWin); XFlush(disp); }
+static void registerTrayWindow(void* window) {
+    trayWindow = GTK_WINDOW(window);
+    g_object_add_weak_pointer(G_OBJECT(trayWindow), (gpointer*)&trayWindow);
+    g_signal_connect(trayWindow, "window-state-event",
+                     G_CALLBACK(trayWindowStateEvent), NULL);
 }
 
-static void showWindow() {
-    if (disp && mainWin) { XMapRaised(disp, mainWin); XFlush(disp); }
+static void notifierAppeared(GDBusConnection* bus, const gchar* name,
+                            const gchar* owner, gpointer unused) {
+    g_set_object(&notifierBus, bus);
 }
+
+static void notifierVanished(GDBusConnection* bus, const gchar* name,
+                            gpointer unused) {
+    g_clear_object(&notifierBus);
+    if (trayWindowHidden) restoreTrayWindow(NULL);
+}
+
+static gboolean ensureTrayWindowRecoverable(gpointer unused) {
+    if (trayWindow == NULL) return G_SOURCE_REMOVE;
+    if (trayWindowHidden && !trayHostPresent()) restoreTrayWindow(NULL);
+    return G_SOURCE_CONTINUE;
+}
+
+static gboolean enableTrayWindowHiding(gpointer unused) {
+    trayInitialized = TRUE;
+    g_bus_watch_name(G_BUS_TYPE_SESSION, "org.kde.StatusNotifierWatcher",
+        G_BUS_NAME_WATCHER_FLAGS_NONE, notifierAppeared, notifierVanished,
+        NULL, NULL);
+    g_timeout_add_seconds(2, ensureTrayWindowRecoverable, NULL);
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean closeTrayWindow(gpointer unused) {
+    if (trayWindow != NULL) gtk_window_close(trayWindow);
+    return G_SOURCE_REMOVE;
+}
+
+extern void InitializeLinuxTrayOnMainThread(void);
+static gboolean initializeTrayOnMainThread(gpointer unused) {
+    InitializeLinuxTrayOnMainThread();
+    return G_SOURCE_REMOVE;
+}
+
+static void scheduleTrayInit() { g_idle_add(initializeTrayOnMainThread, NULL); }
+static void scheduleTrayReady() { g_idle_add(enableTrayWindowHiding, NULL); }
+static void scheduleTrayShow() { g_idle_add(restoreTrayWindow, NULL); }
+static void scheduleTrayClose() { g_idle_add(closeTrayWindow, NULL); }
 */
 import "C"
 import (
@@ -74,7 +127,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -742,54 +794,46 @@ func GetDesktopRuntimeSnapshot() *C.char {
 
 var trayOnce sync.Once
 
-func monitorMinimize() {
-	for {
-		if C.getMainWin() == 0 {
-			cname := C.CString("xconnect")
-			C.findWindow(cname)
-			C.free(unsafe.Pointer(cname))
-		}
-		if C.getMainWin() != 0 {
-			if C.isIconic() != 0 {
-				C.hideWindow()
-			}
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+//export RegisterLinuxWindow
+func RegisterLinuxWindow(window unsafe.Pointer) {
+	C.registerTrayWindow(window)
 }
 
 //export InitTray
 func InitTray() {
 	trayOnce.Do(func() {
-		go func() {
-			runtime.LockOSThread()
-			systray.Run(func() {
-				icon, err := os.ReadFile("data/flutter_assets/assets/logo.png")
-				if err == nil {
-					systray.SetIcon(icon)
-				}
-				mShow := systray.AddMenuItem("Show", "Show window")
-				mQuit := systray.AddMenuItem("Quit", "Quit")
-				go func() {
-					for {
-						select {
-						case <-mShow.ClickedCh:
-							if C.getMainWin() == 0 {
-								cname := C.CString("xconnect")
-								C.findWindow(cname)
-								C.free(unsafe.Pointer(cname))
-							}
-							if C.getMainWin() != 0 {
-								C.showWindow()
-							}
-						case <-mQuit.ClickedCh:
-							systray.Quit()
-							return
-						}
-					}
-				}()
-				go monitorMinimize()
-			}, func() {})
-		}()
+		C.scheduleTrayInit()
 	})
+}
+
+//export InitializeLinuxTrayOnMainThread
+func InitializeLinuxTrayOnMainThread() {
+	// Flutter already owns the GTK event loop. Register an indicator in that
+	// loop instead of running a second gtk_main() on a Go thread.
+	systray.Register(func() {
+		iconReady := false
+		if executable, err := os.Executable(); err == nil {
+			iconPath := filepath.Join(filepath.Dir(executable), "data", "flutter_assets", "assets", "logo.png")
+			if icon, err := os.ReadFile(iconPath); err == nil && len(icon) > 0 {
+				systray.SetIcon(icon)
+				iconReady = true
+			}
+		}
+		mShow := systray.AddMenuItem("Show", "Show window")
+		mQuit := systray.AddMenuItem("Quit", "Quit")
+		if iconReady {
+			C.scheduleTrayReady()
+		}
+		go func() {
+			for {
+				select {
+				case <-mShow.ClickedCh:
+					C.scheduleTrayShow()
+				case <-mQuit.ClickedCh:
+					C.scheduleTrayClose()
+					return
+				}
+			}
+		}()
+	}, nil)
 }

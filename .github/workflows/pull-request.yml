@@ -9,6 +9,9 @@ on:
       - "assets/**"
       - "pubspec.*"
       - "go_core/**"
+      - "linux/**"
+      - "libXray"
+      - ".gitmodules"
       - "scripts/ci/**"
       - ".github/actions/**"
       - ".github/workflows/**"
@@ -49,6 +52,13 @@ jobs:
       - name: Install verification dependencies
         shell: bash
         run: bash ./scripts/ci/setup_platform_deps.sh linux
+
+      - name: Check pinned libXray and Linux bridge
+        shell: bash
+        run: |
+          bash scripts/ci/check_libxray_contract.sh
+          cd go_core
+          go vet ./...
 
       - name: Run Flutter verification suite
         shell: bash
