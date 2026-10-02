@@ -1,0 +1,8 @@
+# Reviewed historical test fixtures: repeated synthetic credentials and test
+# signing-key IDs. Exempt exact findings only; new commits/files remain scanned.
+7718ad332935cc0d31e509ac27af462ebb9e5a5a:go_core/overlay/controlplane/enrollment_test.go:generic-api-key:158
+7718ad332935cc0d31e509ac27af462ebb9e5a5a:go_core/cmd/xconnect/main_test.go:generic-api-key:645
+7718ad332935cc0d31e509ac27af462ebb9e5a5a:go_core/cmd/xconnect/main_test.go:generic-api-key:646
+7718ad332935cc0d31e509ac27af462ebb9e5a5a:go_core/overlay/usecase/invite_join_test.go:generic-api-key:221
+7718ad332935cc0d31e509ac27af462ebb9e5a5a:go_core/overlay/usecase/invite_join_test.go:generic-api-key:222
+59bba5dd7dbc8ca55ab4189ea4303706fe98294d:go_core/overlay/signedconfig/contract_test.go:generic-api-key:122
