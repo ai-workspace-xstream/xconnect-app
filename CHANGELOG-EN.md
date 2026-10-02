@@ -2,7 +2,10 @@
 
 - Linux tray/window operations share the existing GTK loop; repeated launches
   restore the same desktop session's window, and missing tray hosts retain
-  native minimization. Linux builds verify the pinned, clean libXray submodule.
+  native minimization. Closing the window-manager button now hides to the tray,
+  or iconifies without a tray host, while keeping the process and network
+  runtime alive; only tray Quit exits. Linux builds verify the pinned, clean
+  libXray submodule.
 
 - Windows System Tunnel now waits for the named `XConnect` interface and its
   default route before reporting a successful connection.

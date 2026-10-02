@@ -15,6 +15,7 @@ package main
 static GtkWindow* trayWindow = NULL;
 static gboolean trayInitialized = FALSE;
 static gboolean trayWindowHidden = FALSE;
+static gboolean trayQuitRequested = FALSE;
 static GDBusConnection* notifierBus = NULL;
 
 static gboolean restoreTrayWindow(gpointer unused) {
@@ -70,11 +71,29 @@ static gboolean trayWindowStateEvent(GtkWidget* widget,
     return FALSE;
 }
 
+// Treat the window-manager close button like macOS window close: keep the
+// process, tray and network runtime alive. A real tray host gets a hidden
+// window; without one, iconify it so the app remains recoverable from the
+// desktop task list instead of becoming invisible.
+static gboolean trayWindowDeleteEvent(GtkWidget* widget,
+                                     GdkEvent* event, gpointer unused) {
+    if (trayQuitRequested) return FALSE;
+    if (trayHostPresent()) {
+        gtk_widget_hide(widget);
+        trayWindowHidden = TRUE;
+    } else {
+        gtk_window_iconify(GTK_WINDOW(widget));
+    }
+    return TRUE;
+}
+
 static void registerTrayWindow(void* window) {
     trayWindow = GTK_WINDOW(window);
     g_object_add_weak_pointer(G_OBJECT(trayWindow), (gpointer*)&trayWindow);
     g_signal_connect(trayWindow, "window-state-event",
                      G_CALLBACK(trayWindowStateEvent), NULL);
+    g_signal_connect(trayWindow, "delete-event",
+                     G_CALLBACK(trayWindowDeleteEvent), NULL);
 }
 
 static void notifierAppeared(GDBusConnection* bus, const gchar* name,
@@ -104,7 +123,10 @@ static gboolean enableTrayWindowHiding(gpointer unused) {
 }
 
 static gboolean closeTrayWindow(gpointer unused) {
-    if (trayWindow != NULL) gtk_window_close(trayWindow);
+    if (trayWindow != NULL) {
+        trayQuitRequested = TRUE;
+        gtk_window_close(trayWindow);
+    }
     return G_SOURCE_REMOVE;
 }
 

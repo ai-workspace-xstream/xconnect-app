@@ -30,7 +30,9 @@ Ubuntu 26.04 默认使用 GNOME Wayland。XConnect 在 Wayland 和无法识别�
 Flutter 已有的 GTK 主循环，不再另启 GTK 循环或通过窗口标题轮询。图标路径相对安装程序位置
 解析，因此从 XDG/IceWM/KDE/GNOME 自动启动时不依赖当前工作目录。Linux 主程序
 按桌面 display 采用单实例注册，重复启动激活同一桌面的现有窗口。不同 KDE/XRDP
-与 IceWM 会话仍可各自打开窗口。托盘 Quit 使用已有窗口关闭流程。
+与 IceWM 会话仍可各自打开窗口。窗口管理器的关闭按钮按 macOS 语义处理：有托盘宿主时
+隐藏到托盘，没有托盘宿主时最小化到任务列表；两种情况都保持进程、托盘和网络运行时存活。
+只有托盘菜单的 Quit 才会真正关闭应用。托盘 Quit 使用已有窗口关闭流程。
 
 验证 Linux 桌面集成时至少覆盖 X11 的 IceWM 和 KDE、Wayland 的 GNOME，以及从
 应用菜单和 XDG autostart 启动两种入口；确认重复启动只激活一个窗口、最小化/恢复

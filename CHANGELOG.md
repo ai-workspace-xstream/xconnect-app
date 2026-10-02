@@ -2,7 +2,10 @@
 
 - Linux uses one GTK event loop for tray and window operations, scopes single
   instance activation to each desktop display, and keeps windows recoverable
-  when no tray host is available. Wayland retains native minimization.
+  when no tray host is available. Wayland retains native minimization. Closing
+  the window-manager button now hides to the tray, or iconifies without a tray
+  host, while keeping the process and network runtime alive; only the tray
+  Quit action exits.
 - Linux builds and PR verification check the clean, pinned libXray gitlink;
   desktop integrations remain in XConnect so upstream updates do not require
   carrying a libXray patch.
