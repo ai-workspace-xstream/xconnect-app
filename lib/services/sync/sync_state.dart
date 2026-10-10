@@ -2,29 +2,29 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SyncSummary {
-  final int configVersion;
+  final int nodeCount;
   final DateTime? lastSuccessAt;
   final String? lastError;
-  final String? subscriptionMetadata;
+  final String? nodeIds;
 
   const SyncSummary({
-    required this.configVersion,
+    required this.nodeCount,
     required this.lastSuccessAt,
     required this.lastError,
-    required this.subscriptionMetadata,
+    required this.nodeIds,
   });
 
   SyncSummary copyWith({
-    int? configVersion,
+    int? nodeCount,
     DateTime? lastSuccessAt,
     String? lastError,
-    String? subscriptionMetadata,
+    String? nodeIds,
   }) {
     return SyncSummary(
-      configVersion: configVersion ?? this.configVersion,
+      nodeCount: nodeCount ?? this.nodeCount,
       lastSuccessAt: lastSuccessAt ?? this.lastSuccessAt,
       lastError: lastError,
-      subscriptionMetadata: subscriptionMetadata ?? this.subscriptionMetadata,
+      nodeIds: nodeIds ?? this.nodeIds,
     );
   }
 }
@@ -34,57 +34,54 @@ class SyncStateStore {
 
   static final SyncStateStore instance = SyncStateStore._();
 
-  static const _configVersionKey = 'sync.configVersion';
+  static const _nodeCountKey = 'sync.nodeCount';
   static const _lastSuccessKey = 'sync.lastSuccessAt';
   static const _lastErrorKey = 'sync.lastError';
-  static const _metadataKey = 'sync.subscriptionMetadata';
+  static const _nodeIdsKey = 'sync.nodeIds';
 
   final ValueNotifier<SyncSummary> summary = ValueNotifier<SyncSummary>(
     const SyncSummary(
-      configVersion: 0,
+      nodeCount: 0,
       lastSuccessAt: null,
       lastError: null,
-      subscriptionMetadata: null,
+      nodeIds: null,
     ),
   );
 
-  int get lastConfigVersion => summary.value.configVersion;
+  int get lastNodeCount => summary.value.nodeCount;
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    final configVersion = prefs.getInt(_configVersionKey) ?? 0;
+    final nodeCount = prefs.getInt(_nodeCountKey) ?? 0;
     final lastSuccessMillis = prefs.getInt(_lastSuccessKey);
     final lastError = prefs.getString(_lastErrorKey);
-    final metadata = prefs.getString(_metadataKey);
+    final nodeIds = prefs.getString(_nodeIdsKey);
 
     summary.value = SyncSummary(
-      configVersion: configVersion,
+      nodeCount: nodeCount,
       lastSuccessAt: lastSuccessMillis != null
           ? DateTime.fromMillisecondsSinceEpoch(lastSuccessMillis)
           : null,
       lastError: lastError,
-      subscriptionMetadata: metadata,
+      nodeIds: nodeIds,
     );
   }
 
-  Future<void> recordSuccess({
-    required int configVersion,
-    String? metadata,
-  }) async {
+  Future<void> recordSuccess({required int nodeCount, String? nodeIds}) async {
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now();
-    await prefs.setInt(_configVersionKey, configVersion);
+    await prefs.setInt(_nodeCountKey, nodeCount);
     await prefs.setInt(_lastSuccessKey, now.millisecondsSinceEpoch);
-    if (metadata != null) {
-      await prefs.setString(_metadataKey, metadata);
+    if (nodeIds != null) {
+      await prefs.setString(_nodeIdsKey, nodeIds);
     }
     await prefs.remove(_lastErrorKey);
 
     summary.value = SyncSummary(
-      configVersion: configVersion,
+      nodeCount: nodeCount,
       lastSuccessAt: now,
       lastError: null,
-      subscriptionMetadata: metadata ?? summary.value.subscriptionMetadata,
+      nodeIds: nodeIds ?? summary.value.nodeIds,
     );
   }
 

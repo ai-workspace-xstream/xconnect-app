@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../services/vpn_config_service.dart';
@@ -10,6 +11,7 @@ import '../../utils/tun_config_guard.dart';
 class XrayConfigWriter {
   static const _defaultNodeName = 'Desktop Sync';
   static const _defaultServiceName = 'xconnect.desktop.sync';
+  static const _syncServicePrefix = 'xconnect.sync.';
   static const _defaultCountryCode = 'SYNC';
 
   static Future<String> writeConfig(String json) async {
@@ -27,9 +29,11 @@ class XrayConfigWriter {
     required String json,
     required String nodeName,
     String? countryCode,
+    String? nodeId,
   }) async {
-    final code = _normalizeNodeCode(
+    final code = await _nodeCode(
       (countryCode ?? '').trim().isNotEmpty ? countryCode! : nodeName,
+      nodeId: nodeId,
     );
     final fileName = 'node-$code-config.json';
     final path = await GlobalApplicationConfig.getXrayConfigFilePath(fileName);
@@ -47,25 +51,32 @@ class XrayConfigWriter {
     String? protocol,
     String? transport,
     String? security,
+    String? nodeId,
   }) async {
     final normalizedName = (nodeName ?? '').trim().isNotEmpty
         ? nodeName!.trim()
         : _defaultNodeName;
     final incomingIdentity = await _readOutboundIdentity(configPath);
     final existingByName = VpnConfig.getNodeByName(normalizedName);
+    final serviceName =
+        '$_syncServicePrefix${await _nodeCode('node', nodeId: nodeId ?? normalizedName)}';
     final identityMatches = incomingIdentity == null
         ? <VpnNode>[]
         : await _findNodesByIdentity(incomingIdentity);
     final activeNodeName = GlobalState.activeNodeName.value.trim();
     VpnNode? existing = identityMatches.cast<VpnNode?>().firstWhere(
-          (node) => (node?.name ?? '') == activeNodeName,
-          orElse: () => null,
-        );
+      (node) => (node?.name ?? '') == activeNodeName,
+      orElse: () => null,
+    );
     existing ??= identityMatches.cast<VpnNode?>().firstWhere(
-          (node) => (node?.serviceName ?? '') != _defaultServiceName,
-          orElse: () => null,
-        );
+      (node) => (node?.serviceName ?? '') != _defaultServiceName,
+      orElse: () => null,
+    );
     existing ??= identityMatches.isNotEmpty ? identityMatches.first : null;
+    existing ??= VpnConfig.nodes.cast<VpnNode?>().firstWhere(
+      (node) => node?.serviceName == serviceName,
+      orElse: () => null,
+    );
     existing ??= existingByName;
     final targetNodeName = existing?.name ?? normalizedName;
 
@@ -79,9 +90,11 @@ class XrayConfigWriter {
 
     if (existing == null) {
       final stale = VpnConfig.nodes
-          .where((node) =>
-              node.serviceName == _defaultServiceName &&
-              node.name != targetNodeName)
+          .where(
+            (node) =>
+                node.serviceName == _defaultServiceName &&
+                node.name != targetNodeName,
+          )
           .map((node) => node.name)
           .toList();
       for (final name in stale) {
@@ -96,7 +109,7 @@ class XrayConfigWriter {
         existing?.countryCode ?? _defaultCountryCode,
       ),
       configPath: configPath,
-      serviceName: existing?.serviceName ?? _defaultServiceName,
+      serviceName: existing?.serviceName ?? serviceName,
       protocol: _pickValue(protocol, existing?.protocol),
       transport: _pickValue(transport, existing?.transport),
       security: _pickValue(security, existing?.security),
@@ -109,6 +122,32 @@ class XrayConfigWriter {
     }
     await VpnConfig.saveToFile();
     return node.name;
+  }
+
+  static Future<void> pruneSyncedNodes(Set<String> retainedNames) async {
+    final stale = VpnConfig.nodes
+        .where(
+          (node) =>
+              (node.serviceName == _defaultServiceName ||
+                  node.serviceName.startsWith(_syncServicePrefix)) &&
+              !retainedNames.contains(node.name),
+        )
+        .map((node) => node.name)
+        .toList();
+    for (final name in stale) {
+      VpnConfig.removeNode(name);
+    }
+    if (stale.isNotEmpty) await VpnConfig.saveToFile();
+  }
+
+  static Future<String> _nodeCode(String raw, {String? nodeId}) async {
+    final prefix = _normalizeNodeCode(raw);
+    final digest = await Sha256().hash(utf8.encode(nodeId ?? raw));
+    final suffix = digest.bytes
+        .take(6)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '$prefix-$suffix';
   }
 
   static String _normalizeCountryCode(String? value, String fallback) {
@@ -173,8 +212,9 @@ class XrayConfigWriter {
       }
       if (proxyOutbound == null) return null;
 
-      final protocol =
-          ((proxyOutbound['protocol'] as String?) ?? '').trim().toLowerCase();
+      final protocol = ((proxyOutbound['protocol'] as String?) ?? '')
+          .trim()
+          .toLowerCase();
       if (protocol.isEmpty) return null;
 
       final settings = proxyOutbound['settings'];
@@ -183,8 +223,9 @@ class XrayConfigWriter {
       if (vnext is! List || vnext.isEmpty || vnext.first is! Map) return null;
       final first = vnext.first as Map;
 
-      final address =
-          ((first['address'] as String?) ?? '').trim().toLowerCase();
+      final address = ((first['address'] as String?) ?? '')
+          .trim()
+          .toLowerCase();
       final port = (first['port'] as num?)?.toInt();
       if (address.isEmpty || port == null) return null;
 
@@ -201,8 +242,9 @@ class XrayConfigWriter {
       String sni = '';
       final streamSettings = proxyOutbound['streamSettings'];
       if (streamSettings is Map) {
-        network =
-            ((streamSettings['network'] as String?) ?? '').trim().toLowerCase();
+        network = ((streamSettings['network'] as String?) ?? '')
+            .trim()
+            .toLowerCase();
         security = ((streamSettings['security'] as String?) ?? '')
             .trim()
             .toLowerCase();

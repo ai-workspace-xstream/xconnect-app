@@ -13,6 +13,7 @@ import '../l10n/app_localizations.dart';
 import '../../services/vpn_config_service.dart';
 import '../../services/telemetry/telemetry_service.dart';
 import '../../services/session/session_manager.dart';
+import '../../services/sync/desktop_sync_service.dart';
 import '../../services/mcp/runtime_mcp_service.dart';
 import '../../utils/app_logger.dart';
 import '../utils/app_theme.dart';
@@ -162,13 +163,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _onSyncConfig() async {
-    addAppLog('开始同步配置...');
-    try {
-      await VpnConfig.load();
-      addAppLog('✅ 已同步配置文件');
-    } catch (e) {
-      addAppLog('[错误] 同步失败: $e', level: LogLevel.error);
-    }
+    addAppLog('开始同步区域节点...');
+    final result = await DesktopSyncService.instance.syncNow(manual: true);
+    addAppLog(result.message,
+        level: result.success ? LogLevel.info : LogLevel.error);
   }
 
   Future<void> _prepareImportedNodeForIos(String nodeName) async {
