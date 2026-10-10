@@ -1706,6 +1706,29 @@ class NativeBridge {
   }
 
   static Future<PacketTunnelMetricsSnapshot> getPacketTunnelMetrics() async {
+    if (Platform.isAndroid) {
+      try {
+        final raw = await _channel.invokeMapMethod<Object?, Object?>(
+          'getPacketTunnelMetrics',
+        );
+        if (raw == null) return _tunMetricsFallback;
+        return PacketTunnelMetricsSnapshot(
+          downloadBytesPerSecond:
+              (raw['downloadBytesPerSecond'] as num?)?.toInt(),
+          uploadBytesPerSecond: (raw['uploadBytesPerSecond'] as num?)?.toInt(),
+          memoryBytes: (raw['memoryBytes'] as num?)?.toInt(),
+          cpuPercent: (raw['cpuPercent'] as num?)?.toDouble(),
+          updatedAt: (raw['updatedAt'] as num?)?.toInt(),
+        );
+      } on MissingPluginException {
+        return _tunMetricsFallback;
+      } catch (e) {
+        addAppLog('Android Packet Tunnel metrics query failed: $e',
+            level: LogLevel.error);
+        return _tunMetricsFallback;
+      }
+    }
+
     if (Platform.isWindows || Platform.isLinux) {
       final snapshot = await getDesktopRuntimeSnapshot();
       return PacketTunnelMetricsSnapshot(
