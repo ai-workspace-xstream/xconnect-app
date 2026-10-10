@@ -1,7 +1,42 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xconnect/services/sync/xray_config_writer.dart';
+import 'package:xconnect/services/vpn_config_service.dart';
 
 void main() {
+  group('XrayConfigWriter.isReplaceableFallbackNode', () {
+    test('does not prune region nodes created by sync', () {
+      for (final name in ['jp', 'ph', 'sg', 'us']) {
+        final node = VpnNode(
+          name: name,
+          countryCode: name.toUpperCase(),
+          configPath: '/tmp/$name.json',
+          serviceName: 'xconnect.desktop.sync',
+        );
+        expect(
+          XrayConfigWriter.isReplaceableFallbackNode(node, 'US-Connect'),
+          isFalse,
+        );
+      }
+    });
+
+    test('replaces only the generic fallback sync node', () {
+      final fallback = VpnNode(
+        name: 'Desktop Sync',
+        countryCode: 'SYNC',
+        configPath: '/tmp/fallback.json',
+        serviceName: 'xconnect.desktop.sync',
+      );
+      expect(
+        XrayConfigWriter.isReplaceableFallbackNode(fallback, 'US-Connect'),
+        isTrue,
+      );
+      expect(
+        XrayConfigWriter.isReplaceableFallbackNode(fallback, 'Desktop Sync'),
+        isFalse,
+      );
+    });
+  });
+
   group('XrayConfigWriter.extractOutboundIdentity', () {
     test('extracts stable identity from proxy outbound', () {
       const json = '''

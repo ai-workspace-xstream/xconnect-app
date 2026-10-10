@@ -1,5 +1,7 @@
 # Unreleased
 
+- Android home now reports live Packet Tunnel traffic, CPU, and memory metrics; node sync and local-node migration remove the legacy compatibility node `tky-proxy.svc.plus`.
+
 - Linux uses one GTK event loop for tray and window operations, scopes single
   instance activation to each desktop display, and keeps windows recoverable
   when no tray host is available. Wayland retains native minimization. Closing

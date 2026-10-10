@@ -40,6 +40,8 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "stopPacketTunnel" -> result.success(PacketTunnelController.stop(this))
                 "getPacketTunnelStatus" -> result.success(PacketTunnelController.status(this))
+                "getPacketTunnelMetrics" ->
+                    result.success(PacketTunnelController.metrics(this))
                 "getVpnConsentState" ->
                     result.success(PacketTunnelController.vpnConsentState(this))
                 "openVpnSettings" -> result.success(openVpnSettings())

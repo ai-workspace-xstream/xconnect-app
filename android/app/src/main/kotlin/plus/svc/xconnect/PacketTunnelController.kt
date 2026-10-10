@@ -162,12 +162,14 @@ internal object PacketTunnelController {
     }
 
     fun markConnected(context: Context) {
+        AndroidPacketTunnelMetrics.reset(context)
         writeState(context, STATE_CONNECTED)
         clearError(context)
         prefs(context).edit().putLong(KEY_STARTED_AT, System.currentTimeMillis() / 1000L).apply()
     }
 
     fun markDisconnected(context: Context) {
+        AndroidPacketTunnelMetrics.reset(context)
         writeState(context, STATE_DISCONNECTED)
         clearError(context)
         clearStartedAt(context)
@@ -175,10 +177,18 @@ internal object PacketTunnelController {
     }
 
     fun markFailed(context: Context, message: String) {
+        AndroidPacketTunnelMetrics.reset(context)
         writeState(context, STATE_INVALID)
         writeError(context, message)
         clearStartedAt(context)
         clearPendingPermission(context)
+    }
+
+    fun metrics(context: Context): Map<String, Any?> {
+        if (readState(context) != STATE_CONNECTED) {
+            return AndroidPacketTunnelMetrics.emptySnapshot()
+        }
+        return AndroidPacketTunnelMetrics.snapshot(context)
     }
 
     private fun prefs(context: Context) =

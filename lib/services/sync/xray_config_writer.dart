@@ -90,11 +90,7 @@ class XrayConfigWriter {
 
     if (existing == null) {
       final stale = VpnConfig.nodes
-          .where(
-            (node) =>
-                node.serviceName == _defaultServiceName &&
-                node.name != targetNodeName,
-          )
+          .where((node) => isReplaceableFallbackNode(node, targetNodeName))
           .map((node) => node.name)
           .toList();
       for (final name in stale) {
@@ -149,6 +145,12 @@ class XrayConfigWriter {
         .join();
     return '$prefix-$suffix';
   }
+
+  @visibleForTesting
+  static bool isReplaceableFallbackNode(VpnNode node, String targetNodeName) =>
+      node.serviceName == _defaultServiceName &&
+      node.name == _defaultNodeName &&
+      node.name != targetNodeName;
 
   static String _normalizeCountryCode(String? value, String fallback) {
     final raw = (value ?? '').trim();

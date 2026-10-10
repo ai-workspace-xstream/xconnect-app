@@ -130,6 +130,8 @@ class VpnNode {
 }
 
 class VpnConfig {
+  static const legacyCompatibilityNodeName = 'tky-proxy.svc.plus';
+  static const _regionalNodeCodes = ['jp', 'ph', 'sg', 'us'];
   static const _tunInboundTag = 'tun-in';
   static const _socksInboundTag = 'socks-in';
   static const _httpInboundTag = 'http-in';
@@ -155,7 +157,14 @@ class VpnConfig {
     try {
       final fromDb = await SqliteNodeStore.loadNodes();
       if (fromDb.isNotEmpty) {
-        _nodes = fromDb.map((e) => VpnNode.fromJson(e)).toList();
+        final loaded = fromDb.map((e) => VpnNode.fromJson(e)).toList();
+        _nodes = loaded
+            .where((node) => !isLegacyCompatibilityNodeName(node.name))
+            .toList();
+        final restoredRegions = await _restoreRegionalConfigs();
+        if (_nodes.length != loaded.length || restoredRegions) {
+          await saveToFile();
+        }
         return;
       }
     } catch (e) {
@@ -174,16 +183,81 @@ class VpnConfig {
       debugPrint('⚠️ Failed to load local vpn_nodes.json: $e');
     }
 
-    _nodes = fromLocal;
-    if (_nodes.isNotEmpty) {
+    _nodes = fromLocal
+        .where((node) => !isLegacyCompatibilityNodeName(node.name))
+        .toList();
+    final restoredRegions = await _restoreRegionalConfigs();
+    if (_nodes.isNotEmpty ||
+        _nodes.length != fromLocal.length ||
+        restoredRegions) {
       try {
-        await SqliteNodeStore.replaceAll(
-          _nodes.map((e) => e.toJson()).toList(),
-        );
+        await saveToFile();
       } catch (e) {
         debugPrint('⚠️ Failed to migrate vpn_nodes.json to sqlite: $e');
       }
     }
+  }
+
+  static bool isLegacyCompatibilityNodeName(String name) =>
+      name.trim().toLowerCase() == legacyCompatibilityNodeName;
+
+  /// Re-register regional configs left on disk when an older sync pruned only
+  /// their SQLite rows. Explicit node deletion removes the config file too, so
+  /// this only recovers regions that still have a usable saved config.
+  static Future<bool> _restoreRegionalConfigs() async {
+    var changed = false;
+    final configDirectory = await GlobalApplicationConfig.getConfigsPath();
+    for (final code in _regionalNodeCodes) {
+      final file = File('$configDirectory/node-$code-config.json');
+      if (!await file.exists()) continue;
+
+      final existingByName = _nodes.indexWhere(
+        (node) => node.name.toLowerCase() == code,
+      );
+      if (existingByName >= 0) continue;
+
+      Map<String, dynamic> root;
+      try {
+        final decoded = jsonDecode(await file.readAsString());
+        if (decoded is! Map<String, dynamic>) continue;
+        root = decoded;
+      } catch (_) {
+        continue;
+      }
+      final outbounds = root['outbounds'];
+      if (outbounds is! List) continue;
+      Map? proxy;
+      for (final outbound in outbounds) {
+        if (outbound is Map && outbound['tag'] == 'proxy') {
+          proxy = outbound;
+          break;
+        }
+      }
+      if (proxy == null) continue;
+      final stream = proxy['streamSettings'];
+      final existingByPath = _nodes.indexWhere(
+        (node) => File(node.configPath).absolute.path == file.absolute.path,
+      );
+      final existing = existingByPath >= 0 ? _nodes[existingByPath] : null;
+      if (existingByPath >= 0) {
+        _nodes.removeAt(existingByPath);
+      }
+      _nodes.add(
+        VpnNode(
+          name: code,
+          countryCode: code.toUpperCase(),
+          configPath: file.path,
+          serviceName: existing?.serviceName ??
+              await GlobalApplicationConfig.serviceNameForRegion(code),
+          protocol: proxy['protocol'] as String? ?? '',
+          transport: stream is Map ? stream['network'] as String? ?? '' : '',
+          security: stream is Map ? stream['security'] as String? ?? '' : '',
+          enabled: existing?.enabled ?? true,
+        ),
+      );
+      changed = true;
+    }
+    return changed;
   }
 
   static List<VpnNode> get nodes => _nodes;
@@ -199,6 +273,7 @@ class VpnConfig {
 
   static void addNode(VpnNode node) {
     checkNotEmpty(node.name, 'node.name');
+    if (isLegacyCompatibilityNodeName(node.name)) return;
     _nodes.add(node);
   }
 
@@ -209,6 +284,10 @@ class VpnConfig {
 
   static void updateNode(VpnNode updated) {
     checkNotEmpty(updated.name, 'updated.name');
+    if (isLegacyCompatibilityNodeName(updated.name)) {
+      removeNode(updated.name);
+      return;
+    }
     final index = _nodes.indexWhere((e) => e.name == updated.name);
     if (index != -1) {
       _nodes[index] = updated;
@@ -235,7 +314,10 @@ class VpnConfig {
   static Future<void> importFromJson(String jsonStr) async {
     checkNotEmpty(jsonStr, 'jsonStr');
     final List<dynamic> jsonList = json.decode(jsonStr);
-    _nodes = jsonList.map((e) => VpnNode.fromJson(e)).toList();
+    _nodes = jsonList
+        .map((e) => VpnNode.fromJson(e))
+        .where((node) => !isLegacyCompatibilityNodeName(node.name))
+        .toList();
     await saveToFile();
   }
 

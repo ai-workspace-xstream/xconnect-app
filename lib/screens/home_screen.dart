@@ -232,7 +232,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool get _shouldPollMetrics =>
       _appLifecycleState == AppLifecycleState.resumed &&
       _activeNode.isNotEmpty &&
-      !Platform.isAndroid &&
       ((_requiresPacketTunnelStatus && !_packetTunnelExplicitlyUnavailable) ||
           (!_requiresPacketTunnelStatus &&
               _desktopCapabilities.supportsRuntimeMetrics));
