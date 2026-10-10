@@ -25,9 +25,6 @@
 | lib/services/mcp/runtime_mcp_service.dart | 业务/运行时 service 文件，负责 `runtime_mcp_service` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
 | lib/services/session/session_manager.dart | 业务/运行时 service 文件，负责 `session_manager` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
 | lib/services/sync/desktop_sync_service.dart | 业务/运行时 service 文件，负责 `desktop_sync_service` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
-| lib/services/sync/device_fingerprint.dart | 业务/运行时 service 文件，负责 `device_fingerprint` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
-| lib/services/sync/sync_crypto.dart | 业务/运行时 service 文件，负责 `sync_crypto` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
-| lib/services/sync/sync_payload.dart | 业务/运行时 service 文件，负责 `sync_payload` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
 | lib/services/sync/sync_state.dart | 业务/运行时 service 文件，负责 `sync_state` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
 | lib/services/sync/xray_config_writer.dart | 业务/运行时 service 文件，负责 `xray_config_writer` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
 | lib/services/telemetry/telemetry_service.dart | 业务/运行时 service 文件，负责 `telemetry_service` 相关状态、I/O 或业务逻辑。 | 手写实现，纳入本页覆盖范围。 |
@@ -75,11 +72,6 @@
 | DesktopSyncResult | class | lib/services/sync/desktop_sync_service.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | SyncedNodeMetadata | class | lib/services/sync/desktop_sync_service.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | DesktopSyncService | class | lib/services/sync/desktop_sync_service.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| DeviceFingerprint | class | lib/services/sync/device_fingerprint.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| SyncCrypto | class | lib/services/sync/sync_crypto.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| SyncRequest | class | lib/services/sync/sync_payload.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| SyncResponseStatus | enum | lib/services/sync/sync_payload.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
-| SyncResponse | class | lib/services/sync/sync_payload.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | SyncSummary | class | lib/services/sync/sync_state.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | SyncStateStore | class | lib/services/sync/sync_state.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
 | XrayConfigWriter | class | lib/services/sync/xray_config_writer.dart | 类型/接口/别名定义；具体字段与成员以当前源码为准。 |
@@ -229,36 +221,7 @@
 | _handleSessionChange | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | 无 | void | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
 | isRenderableXrayConfig | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | String? rawJson | bool | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
 | _extractMetadata | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | Map<String, dynamic> payload | String? | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| _extractNodeMetadata | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | List<SyncedNodeMetadata> candidates | SyncedNodeMetadata | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| _firstNonEmptyString | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | List<Object?> candidates | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| _firstNonEmptyStringStatic | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | List<Object?> candidates | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| _nullableString | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | String value | String? | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
 | _extractNodeNameFromVlessUriStatic | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | String? uriText | String? | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| _extractHostFromVlessUri | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | String? uriText | String? | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| _extractHostFromVlessUriStatic | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | String? uriText | String? | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| _countryCodeFromHost | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | String? host | String? | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| _hexEncode | lib/services/sync/desktop_sync_service.dart / DesktopSyncService | List<int> bytes | String | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-
-### `lib/services/sync/device_fingerprint.dart`
-
-业务/运行时 service 文件，负责 `device_fingerprint` 相关状态、I/O 或业务逻辑。
-
-该文件没有独立的手写函数/方法符号，主要提供常量、模板、声明或由框架回调驱动。
-
-### `lib/services/sync/sync_crypto.dart`
-
-业务/运行时 service 文件，负责 `sync_crypto` 相关状态、I/O 或业务逻辑。
-
-该文件没有独立的手写函数/方法符号，主要提供常量、模板、声明或由框架回调驱动。
-
-### `lib/services/sync/sync_payload.dart`
-
-业务/运行时 service 文件，负责 `sync_payload` 相关状态、I/O 或业务逻辑。
-
-| 符号名 | 所在文件/类型 | 参数 | 返回值 | 异常/错误语义 | 副作用或外部依赖 | 主要调用方或用途 |
-| --- | --- | --- | --- | --- | --- | --- |
-| toBytes | lib/services/sync/sync_payload.dart / SyncRequest | 无 | Uint8List | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
-| parseSyncResponse | lib/services/sync/sync_payload.dart / SyncResponse | Uint8List bytes | SyncResponse | 见当前实现；Go/原生桥接多使用错误字符串或 `throws`，其余以返回值和状态回写为主。 | 网络请求、持久化或状态回写。 | 由 Flutter 业务层、页面或桥接层调用。 |
 
 ### `lib/services/sync/sync_state.dart`
 
@@ -395,7 +358,7 @@ Darwin TUN inbound 防御性字段清洗。
 | `VpnConfig` <-> `SqliteNodeStore` | 节点列表以内存模型为主、SQLite 为主持久化，必要时同步 JSON 快照与配置文件。 |
 | `VpnConfig` <-> `NativeBridge` | 节点启动、停止、运行态配置写入和系统隧道切换都通过桥接层下沉到原生或 Go。 |
 | `GlobalState` <-> 各 Service | `GlobalState` 是 Flutter 侧的共享运行态，偏好设置类 service 负责从 `SharedPreferences` 初始化并回写。 |
-| `DesktopSyncService` <-> `SessionManager` / `DeviceFingerprint` / `SyncCrypto` / `XrayConfigWriter` | 同步链路负责认证态、设备身份、加解密、配置写入与本地版本状态的闭环。 |
+| `DesktopSyncService` <-> `SessionManager` / `SyncStateStore` / `XrayConfigWriter` | 同步链路使用现有会话认证，写入区域节点配置并记录最近一次同步状态。 |
 | `DnsControlPlane` / 模板文件 | DNS 与模板文件共同定义运行时 Xray 配置片段，生成逻辑应与模板保持一致。 |
 
 

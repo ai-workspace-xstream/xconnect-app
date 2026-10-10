@@ -194,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final lastSync = summary.lastSuccessAt != null
             ? _formatDateTime(summary.lastSuccessAt!)
             : context.l10n.get('never');
-        final metadata = summary.subscriptionMetadata;
+        final nodeIds = summary.nodeIds;
 
         return Container(
           width: double.infinity,
@@ -222,12 +222,11 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 12),
               _infoRow(context, context.l10n.get('lastSyncTime'), lastSync),
               const SizedBox(height: 4),
-              _infoRow(context, context.l10n.get('configVersion'),
-                  '${summary.configVersion}'),
-              if (metadata != null && metadata.isNotEmpty) ...[
+              _infoRow(context, context.l10n.get('syncedNodes'),
+                  '${summary.nodeCount}'),
+              if (nodeIds != null && nodeIds.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                _infoRow(context, context.l10n.get('subscriptionMetadata'),
-                    metadata),
+                _infoRow(context, context.l10n.get('nodeIds'), nodeIds),
               ],
               if (summary.lastError != null) ...[
                 const SizedBox(height: 8),

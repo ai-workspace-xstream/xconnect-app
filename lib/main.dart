@@ -58,7 +58,6 @@ void main(List<String> args) async {
   await PermissionGuideService.init();
   await ExperimentalFeatures.init();
   await TunSettingsService.init();
-  await DesktopSyncService.instance.init();
   await NativeBridge.initializeLinuxDesktopIntegration();
   final debug = args.contains('--debug') ||
       Platform.executableArguments.contains('--debug');
@@ -67,6 +66,7 @@ void main(List<String> args) async {
     debugPrint('🚀 Flutter main() started in debug mode');
   }
   await VpnConfig.load(); // ✅ 启动时加载 assets + 本地配置
+  await DesktopSyncService.instance.init();
   runApp(const MyApp());
 }
 

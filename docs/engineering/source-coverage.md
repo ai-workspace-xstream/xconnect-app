@@ -34,9 +34,6 @@
 | lib/services/mcp/runtime_mcp_service.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | lib/services/session/session_manager.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | lib/services/sync/desktop_sync_service.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| lib/services/sync/device_fingerprint.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| lib/services/sync/sync_crypto.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
-| lib/services/sync/sync_payload.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | lib/services/sync/sync_state.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | lib/services/sync/xray_config_writer.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
 | lib/services/telemetry/telemetry_service.dart | docs/engineering/flutter-runtime-services.md | 已覆盖 | 手写实现，已映射到对应子系统文档。 |
