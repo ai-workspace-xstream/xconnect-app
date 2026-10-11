@@ -10,6 +10,11 @@ XConnect is an open-source, cross-platform connection client for everyday AI and
 
 XConnect 是一款面向全球用户的开源 AI 连接加速工具，支持 **iOS、Android、macOS、Windows 和 Linux**。连接状态清晰可见；遇到波动时，可查看实时延迟、丢包和网络类型，并按建议检查“本设备 → 路由器 → 节点”链路。
 
+<p align="center">
+  <img src="docs/images/xconnect-platform-overview.png" alt="XConnect across iOS, Android, macOS, Windows, and Linux, with real-time diagnostics" width="100%"/>
+</p>
+<p align="center"><sub>Product overview · 产品界面示意；连接状态与网络指标为演示数据。</sub></p>
+
 ### What you can do | 主要功能
 
 - **Connect across platforms｜跨平台连接** — Manage Xray/VLESS connection profiles and use the connection mode available on your device. VPN/tunnel behavior and system integration vary by platform.
@@ -19,9 +24,12 @@ XConnect 是一款面向全球用户的开源 AI 连接加速工具，支持 **i
 
 ### Start in three steps | 三步开始
 
+**Register → Download → Sign in and connect**<br />
+**注册 → 下载 → 登录并启动全球 AI 加速**
+
 1. **Register｜注册** — Create an XConnect account from the [product page](https://xworktech.com/products/xconnect).
-2. **Download｜下载** — Choose a client for your device from [GitHub Releases](https://github.com/ai-workspace-xstream/xconnect-app/releases).
-3. **Sign in and connect｜登录并启动** — Sign in, select a connection, and start. For manual setup, import a compatible VLESS profile in the client.
+2. **Download｜下载** — Choose the client for your device from [GitHub Releases](https://github.com/ai-workspace-xstream/xconnect-app/releases).
+3. **Sign in and connect｜登录并启动** — Sign in to the client, select a connection, and start. For manual setup, import a compatible VLESS profile.
 
 > Core connection features work without signing in; Sync is optional and does not affect basic connectivity. Core 功能无需登录，Sync 为可选功能，不影响基本连接体验。
 
@@ -54,16 +62,6 @@ make build-macos-arm64
 <!-- SUPPORT_MATRIX:END -->
 
 All download buttons currently point to the latest GitHub release page.
-
-## Snapshots
-
-| Initial Setup | Sync Config |
-| --- | --- |
-| ![Initial Setup](docs/images/init-xray.png) | ![Sync Config](docs/images/sync-config.png) |
-
-| Unlock Status | Custom Node Form |
-| --- | --- |
-| ![Unlock Status](docs/images/unlock-button.png) | ![Custom Node Form](docs/images/custom-node-form.png) |
 
 ## Learn More
 
