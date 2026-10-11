@@ -4,10 +4,28 @@
   <img src="assets/logo.png" alt="XConnect Logo" width="200"/>
 </p>
 
-## Project
+## Open-source global AI connectivity | 开源全球 AI 连接
 
-XConnect is a Flutter-based client for managing Xray node configs, local proxy mode, and Apple Secure Tunnel workflows in one app.
-It is built for users who want a packaged desktop and mobile client with node import, tunnel diagnostics, and system-level networking support on macOS and iOS.
+XConnect is an open-source, cross-platform connection client for everyday AI and developer tools. It brings connection controls, clear live status, and built-in network diagnostics together across **iOS, Android, macOS, Windows, and Linux**.
+
+XConnect 是一款面向全球用户的开源 AI 连接加速工具，支持 **iOS、Android、macOS、Windows 和 Linux**。连接状态清晰可见；遇到波动时，可查看实时延迟、丢包和网络类型，并按建议检查“本设备 → 路由器 → 节点”链路。
+
+### What you can do | 主要功能
+
+- **Connect across platforms｜跨平台连接** — Manage Xray/VLESS connection profiles and use the connection mode available on your device. VPN/tunnel behavior and system integration vary by platform.
+- **See connection status｜状态实时可见** — Review connection state, latency, and traffic at a glance.
+- **Diagnose network issues｜实时网络诊断** — Check latency, packet loss, network type, and each hop in the connection path. Diagnostics use TCP connection probes (not ICMP); results stay on your device.
+- **Open source｜开放共建** — Explore the code, report issues, and contribute through GitHub.
+
+### Start in three steps | 三步开始
+
+1. **Register｜注册** — Create an XConnect account from the [product page](https://xworktech.com/products/xconnect).
+2. **Download｜下载** — Choose a client for your device from [GitHub Releases](https://github.com/ai-workspace-xstream/xconnect-app/releases).
+3. **Sign in and connect｜登录并启动** — Sign in, select a connection, and start. For manual setup, import a compatible VLESS profile in the client.
+
+> Core connection features work without signing in; Sync is optional and does not affect basic connectivity. Core 功能无需登录，Sync 为可选功能，不影响基本连接体验。
+
+See the [XConnect product page](https://xworktech.com/products/xconnect) for the overview and [User Manual](docs/user-manual.md) for setup details. Platform-specific permissions and connection modes may differ.
 
 ## TL;DR
 
