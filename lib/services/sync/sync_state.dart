@@ -85,6 +85,13 @@ class SyncStateStore {
     );
   }
 
+  Future<void> clearNodes() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_nodeCountKey, 0);
+    await prefs.remove(_nodeIdsKey);
+    summary.value = summary.value.copyWith(nodeCount: 0, nodeIds: "");
+  }
+
   Future<void> recordError(String message) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastErrorKey, message);

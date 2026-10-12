@@ -12,6 +12,7 @@ import '../templates/xray_service_macos_template.dart';
 import '../templates/xray_service_linux_template.dart';
 import '../templates/xray_service_windows_template.dart';
 import 'sqlite_node_store.dart';
+import 'session/network_access_policy.dart';
 
 class VlessUriProfile {
   final String name;
@@ -72,6 +73,9 @@ class VpnNode {
   String transport;
   String security;
   bool enabled;
+  String? managedOwner;
+  String? managedTeamId;
+  String? managedNodeId;
 
   VpnNode({
     required this.name,
@@ -82,6 +86,9 @@ class VpnNode {
     this.transport = '',
     this.security = '',
     this.enabled = true,
+    this.managedOwner,
+    this.managedTeamId,
+    this.managedNodeId,
   }) {
     checkNotEmpty(name, 'name');
     checkNotEmpty(countryCode, 'countryCode');
@@ -112,6 +119,9 @@ class VpnNode {
       transport: transport,
       security: security,
       enabled: json['enabled'] ?? true,
+      managedOwner: json['managedOwner'] as String?,
+      managedTeamId: json['managedTeamId'] as String?,
+      managedNodeId: json['managedNodeId'] as String?,
     );
   }
 
@@ -125,6 +135,9 @@ class VpnNode {
       'transport': transport,
       'security': security,
       'enabled': enabled,
+      'managedOwner': managedOwner,
+      'managedTeamId': managedTeamId,
+      'managedNodeId': managedNodeId,
     };
   }
 }
@@ -205,6 +218,7 @@ class VpnConfig {
   /// their SQLite rows. Explicit node deletion removes the config file too, so
   /// this only recovers regions that still have a usable saved config.
   static Future<bool> _restoreRegionalConfigs() async {
+    if (NetworkAccessPolicy.instance.dedicated) return false;
     var changed = false;
     final configDirectory = await GlobalApplicationConfig.getConfigsPath();
     for (final code in _regionalNodeCodes) {
@@ -260,7 +274,13 @@ class VpnConfig {
     return changed;
   }
 
-  static List<VpnNode> get nodes => _nodes;
+  static List<VpnNode> get allNodes => List.unmodifiable(_nodes);
+  static bool canUseNode(VpnNode node) => NetworkAccessPolicy.instance.canUse(
+      serviceName: node.serviceName,
+      nodeOwner: node.managedOwner,
+      nodeTeamId: node.managedTeamId,
+      nodeId: node.managedNodeId);
+  static List<VpnNode> get nodes => _nodes.where(canUseNode).toList();
 
   static VpnNode? getNodeByName(String name) {
     checkNotEmpty(name, 'name');

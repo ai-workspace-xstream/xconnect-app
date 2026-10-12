@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/session/session_manager.dart';
+import '../services/session/network_access_policy.dart';
 import '../services/sync/desktop_sync_service.dart';
 import '../services/sync/sync_state.dart';
 import '../l10n/app_localizations.dart';
@@ -220,6 +221,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
               const SizedBox(height: 12),
+              if (NetworkAccessPolicy.instance.dedicated) ...[
+                _infoRow(context, context.l10n.get('teamDedicated'),
+                    NetworkAccessPolicy.instance.teamName),
+                _infoRow(
+                    context,
+                    context.l10n.get('serviceValidity'),
+                    NetworkAccessPolicy.instance.validUntil
+                            ?.toLocal()
+                            .toString() ??
+                        '-'),
+              ],
               _infoRow(context, context.l10n.get('lastSyncTime'), lastSync),
               const SizedBox(height: 4),
               _infoRow(context, context.l10n.get('syncedNodes'),

@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import '../../utils/app_logger.dart';
 import '../../utils/global_config.dart' show GlobalState;
 import '../session/session_manager.dart';
+import '../session/network_access_policy.dart';
+import '../../utils/native_bridge.dart';
 import '../vpn_config_service.dart';
 import 'sync_state.dart';
 import 'xray_config_writer.dart';
@@ -46,15 +48,19 @@ class DesktopSyncService {
 
   static const _nodesPath = '/api/agent-server/v1/nodes';
   static const _autoInterval = Duration(minutes: 10);
+  @visibleForTesting
+  late http.Client client = http.Client();
   final syncing = ValueNotifier<bool>(false);
   Timer? _timer;
+  Timer? _expiryTimer;
   bool _initialized = false;
   bool _running = false;
 
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
-    await SessionManager.instance.init();
+    // Session is initialized before node restoration in main().
+    SessionManager.instance.onSessionReset = clearManagedConnections;
     await SyncStateStore.instance.init();
     SessionManager.instance.status.addListener(_onSessionChanged);
     _onSessionChanged();
@@ -62,6 +68,8 @@ class DesktopSyncService {
 
   void dispose() {
     _timer?.cancel();
+    _expiryTimer?.cancel();
+    SessionManager.instance.onSessionReset = null;
     SessionManager.instance.status.removeListener(_onSessionChanged);
     _initialized = false;
   }
@@ -75,6 +83,8 @@ class DesktopSyncService {
     }
     _running = true;
     syncing.value = true;
+    final generation = SessionManager.instance.generation;
+    final policy = NetworkAccessPolicy.instance;
     try {
       final session = SessionManager.instance;
       final headers = <String, String>{'Accept': 'application/json'};
@@ -84,21 +94,71 @@ class DesktopSyncService {
       if ((session.cookie ?? '').trim().isNotEmpty) {
         headers['Cookie'] = session.cookie!.trim();
       }
-      final response = await http
+      var owner = '${session.baseUrl.value}|${session.currentUser.value}';
+      final accessResponse = await client
+          .get(
+            session.buildEndpoint('/api/auth/network-access'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 20));
+      if (generation != session.generation) {
+        return const DesktopSyncResult(
+            success: false, message: 'Session changed');
+      }
+      if (accessResponse.statusCode == 401) {
+        await session.logout();
+        return const DesktopSyncResult(
+            success: false, message: 'Session expired');
+      }
+      if (accessResponse.statusCode == 404 && !policy.dedicated) {
+        await policy.apply({'mode': 'personal', 'allowed': true}, owner);
+      } else if (accessResponse.statusCode == 200) {
+        final access = jsonDecode(accessResponse.body);
+        if (access is! Map<String, dynamic>) {
+          throw const FormatException('Invalid network access');
+        }
+        owner = '${session.baseUrl.value}|${access["accountId"] ?? session.currentUser.value}';
+        await policy.apply(access, owner);
+      } else {
+        policy.invalidate(signedIn: true);
+        await clearManagedConnections();
+        throw FormatException(
+            'Network access returned ${accessResponse.statusCode}');
+      }
+      if (!policy.allowed) {
+        await clearManagedConnections();
+        throw const FormatException('Team access is inactive');
+      }
+      if (generation != session.generation) {
+        return const DesktopSyncResult(
+            success: false, message: 'Session changed');
+      }
+      final response = await client
           .get(session.buildEndpoint(_nodesPath), headers: headers)
           .timeout(const Duration(seconds: 20));
+      if (generation != session.generation) {
+        return const DesktopSyncResult(
+            success: false, message: 'Session changed');
+      }
       if (response.statusCode == 401) {
         const message = '会话已过期，请重新登录';
         await SyncStateStore.instance.recordError(message);
         await session.logout();
         return const DesktopSyncResult(success: false, message: message);
       }
-      if (response.statusCode == 403) {
+      if (response.statusCode == 403 ||
+          (response.statusCode == 503 && policy.dedicated)) {
+        policy.invalidate(signedIn: true);
+        await clearManagedConnections();
         const message = '账号没有可用节点';
         await SyncStateStore.instance.recordError(message);
         return const DesktopSyncResult(success: false, message: message);
       }
       if (response.statusCode != 200) {
+        if (policy.dedicated || policy.pending) {
+          policy.invalidate(signedIn: true);
+          await clearManagedConnections();
+        }
         final message = '节点同步接口返回 ${response.statusCode}';
         await SyncStateStore.instance.recordError(message);
         return DesktopSyncResult(success: false, message: message);
@@ -113,13 +173,23 @@ class DesktopSyncService {
           .whereType<SyncedNodeMetadata>()
           .toList();
       if (nodes.isEmpty) {
-        const message = '服务端当前没有可用区域节点';
+        policy.invalidate(signedIn: true);
+        await clearManagedConnections();
+        const message = '服务端当前没有可用节点';
         await SyncStateStore.instance.recordError(message);
         return const DesktopSyncResult(success: false, message: message);
       }
 
+      // Prevent a current manual/public tunnel surviving entry into team mode.
+      policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
+      if (policy.dedicated) await _stopUnauthorizedActiveNode();
       final retained = <String>{};
       for (final node in nodes) {
+        if (generation != session.generation) {
+          await clearManagedConnections();
+          return const DesktopSyncResult(
+              success: false, message: 'Session changed');
+        }
         final config = await VpnConfig.tryGenerateXrayJsonFromVlessUri(
           node.vlessUri,
         );
@@ -131,6 +201,8 @@ class DesktopSyncService {
           nodeName: node.name,
           countryCode: node.region,
           nodeId: node.id,
+          owner: owner,
+          teamId: policy.teamId,
         );
         final name = await XrayConfigWriter.registerNode(
           configPath: path,
@@ -140,10 +212,26 @@ class DesktopSyncService {
           transport: node.transport,
           security: node.security,
           nodeId: node.id,
+          owner: owner,
+          teamId: policy.teamId,
         );
         retained.add(name);
       }
+      if (generation != session.generation) {
+        await clearManagedConnections();
+        return const DesktopSyncResult(
+            success: false, message: 'Session changed');
+      }
       await XrayConfigWriter.pruneSyncedNodes(retained);
+      policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
+      policy.pending = false;
+      _expiryTimer?.cancel();
+      if (policy.dedicated && policy.validUntil != null) {
+        _expiryTimer = Timer(policy.validUntil!.difference(DateTime.now()), () {
+          policy.invalidate(signedIn: SessionManager.instance.isLoggedIn);
+          unawaited(clearManagedConnections());
+        });
+      }
       GlobalState.nodeListRevision.value++;
       await SyncStateStore.instance.recordSuccess(
         nodeCount: nodes.length,
@@ -155,13 +243,39 @@ class DesktopSyncService {
         message: '同步成功 (${nodes.length} 个区域)',
       );
     } catch (error) {
+      if (policy.dedicated || policy.pending) {
+        policy.invalidate(signedIn: SessionManager.instance.isLoggedIn);
+        await clearManagedConnections();
+      }
       final message = '同步失败: $error';
       await SyncStateStore.instance.recordError(message);
       return DesktopSyncResult(success: false, message: message);
     } finally {
       _running = false;
       syncing.value = false;
+      if (generation != SessionManager.instance.generation &&
+          SessionManager.instance.isLoggedIn) {
+        unawaited(syncNow());
+      }
     }
+  }
+
+  Future<void> _stopUnauthorizedActiveNode() async {
+    final active = GlobalState.activeNodeName.value;
+    if (active.trim().isEmpty) return;
+    final node = VpnConfig.getNodeByName(active);
+    if (node == null || VpnConfig.canUseNode(node)) return;
+    await NativeBridge.stopNodeForTunnel();
+    await NativeBridge.stopNodeService(active);
+    GlobalState.activeNodeName.value = '';
+  }
+
+  Future<void> clearManagedConnections() async {
+    _expiryTimer?.cancel();
+    await _stopUnauthorizedActiveNode();
+    await XrayConfigWriter.pruneSyncedNodes({});
+    await SyncStateStore.instance.clearNodes();
+    GlobalState.nodeListRevision.value++;
   }
 
   void _onSessionChanged() {
