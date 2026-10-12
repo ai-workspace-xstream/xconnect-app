@@ -13,3 +13,11 @@
 自测：`flutter analyze`；`flutter test test/sync/team_access_sync_test.dart test/sync/xray_config_writer_test.dart test/services/vpn_config_legacy_node_test.dart test/screens/home_connection_state_test.dart`。
 
 UAT 必须验证两账号切换、公共旧节点缓存、授权空列表、节点故障、到期、移除成员、在途同步和真实隧道断开。macOS/iOS 签名、真机和安装验证分别留证，静态检查与单元测试不能替代。
+
+## 本机 SIT 与打包检查
+
+2026-10-12：本机 Accounts `127.0.0.1:18081` 与 Portal `127.0.0.1:13000` 已启动，独立 PostgreSQL 17 只含测试数据；管理/成员授权的 18 项 HTTP 检查通过，专属空节点/完整配置返回 503，撤销后返回 403。App 的服务端配置必须显式选择该本机 Accounts 地址，不能用缓存的共享环境地址进行 SIT。
+
+首轮 GitHub Flutter verification 通过。macOS CI 因原有 `connectivity_plus: ^7.0.0` 浮动解析到 7.3.1 而失败，新插件使用 `NWPath.isUltraConstrained`，当前 runner SDK 无该符号。将插件精确固定到原声明的 7.0.0，并检查实际解析源码不含此符号；未修改 Runner、PacketTunnel 或签名配置。固定后 `flutter analyze` 通过，团队同步/配置/兼容 19 项测试和网络诊断 11 项测试通过，打包仍须由最新 PR CI 验证。
+
+本机原生 App 尚缺 Runner/PacketTunnel 的 Mac App Development provisioning profile，尚未安装或验证真实 VPN。此门槛保留在 Project，不能把上述纯 Dart 与 HTTP SIT 当成原生连接验收。
