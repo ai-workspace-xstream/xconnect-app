@@ -127,13 +127,13 @@ jobs:
               build/windows/x64/runner/Release/*.msi
           - platform: macos
             arch: arm64
-            runs_on: macos-14
+            runs_on: macos-26
             artifact_name: build-macos-arm64
             artifact_paths: |
               build/macos/*.dmg
           - platform: ios
             arch: arm64
-            runs_on: macos-14
+            runs_on: macos-26
             artifact_name: build-ios-arm64
             artifact_paths: |
               build/ios/iphoneos/xconnect.app.zip
@@ -156,7 +156,10 @@ jobs:
     env:
       PLATFORM: ${{ matrix.platform }}
       ARCH: ${{ matrix.arch }}
-      REQUIRE_ANDROID_SIGNING: ${{ github.event_name != 'pull_request' }}
+      # GitHub Release publishing must not be blocked by a missing upload key.
+      # Set repository variable XCONNECT_REQUIRE_ANDROID_SIGNING=true once the
+      # Vault keystore is provisioned to enforce release signing again.
+      REQUIRE_ANDROID_SIGNING: ${{ github.event_name != 'pull_request' && vars.XCONNECT_REQUIRE_ANDROID_SIGNING == 'true' }}
 
     steps:
       - name: Checkout source
@@ -194,6 +197,7 @@ jobs:
 
       - name: Load Vault secrets (Android)
         id: vault_android
+        continue-on-error: ${{ vars.XCONNECT_REQUIRE_ANDROID_SIGNING != 'true' }}
         # Pull requests use the explicit verification-signing fallback and
         # must never read the Android upload key from Vault. Release branches,
         # tags, and manual production runs retain the Vault-backed key path.
@@ -226,6 +230,9 @@ jobs:
             echo "ANDROID_KEY_ALIAS=${ANDROID_KEY_ALIAS:-}"
             echo "ANDROID_KEY_PASSWORD=${ANDROID_KEY_PASSWORD:-}"
           } >> "$GITHUB_ENV"
+          if [[ -z "${ANDROID_KEYSTORE_BASE64:-}" && "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "::warning title=Android signing::Vault upload keystore unavailable; Android artifacts fall back to debug signing (not suitable for Google Play)."
+          fi
 
       - name: Install platform dependencies
         shell: bash
