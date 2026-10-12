@@ -14,9 +14,10 @@ if [[ "${#files[@]}" -eq 0 ]]; then
 fi
 
 if gh release view "$tag" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-  echo "Release $tag exists. Recreating release to publish fresh artifacts..."
-  gh release delete "$tag" --yes --repo "${GITHUB_REPOSITORY}" --cleanup-tag || true
+  echo "Release $tag exists. Updating release metadata and uploading artifacts..."
+  gh release edit "$tag" --repo "${GITHUB_REPOSITORY}" --title "$title" --notes "$notes" || true
+  gh release upload "$tag" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
+else
+  echo "Creating release $tag with ${#files[@]} artifacts..."
+  gh release create "$tag" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --title "$title" --notes "$notes"
 fi
-
-echo "Creating release $tag with ${#files[@]} artifacts..."
-gh release create "$tag" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --title "$title" --notes "$notes"
