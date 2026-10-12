@@ -51,9 +51,7 @@ make build-macos-arm64
 | 平台 | 架构 | 测试状态 | 下载 |
 |------|------|----------|------|
 | macOS | arm64 | ✅ 已测试 | [DMG](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/xconnect-dev-0a025b4.dmg) |
-| macOS | x64 | ⚠️ 未测试 | — |
 | Linux | x64 | ✅ 已测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/xconnect-linux.zip) / [AppImage](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/xconnect-linux.AppImage) / [DEB](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/xconnect-linux-amd64.deb) / [RPM](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/xconnect-linux-x86_64.rpm) |
-| Linux | arm64 | ⚠️ 未测试 | — |
 | Windows | x64 | ✅ 已测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/xconnect-windows.zip) / [MSI](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/xconnect-windows.msi) |
 | Android | arm64 | ✅ 已测试 | [APK](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/app-release.apk) |
 | iOS | arm64 | ✅ 已测试 | [IPA](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/main-213/xconnect.ipa) |
