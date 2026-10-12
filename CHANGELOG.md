@@ -1,5 +1,7 @@
 # Unreleased
 
+- Add managed team connections with server-owned access, account-scoped sync, cached-node cleanup on withdrawal, and no public-node fallback in dedicated mode.
+
 - Android home now reports live Packet Tunnel traffic, CPU, and memory metrics; node sync and local-node migration remove the legacy compatibility node `tky-proxy.svc.plus`.
 
 - Linux uses one GTK event loop for tray and window operations, scopes single

@@ -55,6 +55,17 @@ class SqliteNodeStore {
       );
     ''');
 
+    final columns =
+        db.select('PRAGMA table_info(vpn_nodes)').map((r) => r['name']).toSet();
+    for (final column in [
+      'managed_owner',
+      'managed_team_id',
+      'managed_node_id'
+    ]) {
+      if (!columns.contains(column)) {
+        db.execute('ALTER TABLE vpn_nodes ADD COLUMN $column TEXT');
+      }
+    }
     _db = db;
     return db;
   }
@@ -63,7 +74,7 @@ class SqliteNodeStore {
     final db = await _openDb();
     final rs = db.select('''
       SELECT name, country_code, config_path, service_name,
-             protocol, transport, security, enabled
+             protocol, transport, security, enabled, managed_owner, managed_team_id, managed_node_id
       FROM vpn_nodes
       ORDER BY updated_at DESC, name ASC
     ''');
@@ -78,6 +89,9 @@ class SqliteNodeStore {
         'transport': (row['transport'] as String?) ?? '',
         'security': (row['security'] as String?) ?? '',
         'enabled': ((row['enabled'] as int?) ?? 1) == 1,
+        'managedOwner': row['managed_owner'],
+        'managedTeamId': row['managed_team_id'],
+        'managedNodeId': row['managed_node_id'],
       };
     }).toList();
   }
@@ -92,8 +106,8 @@ class SqliteNodeStore {
       final stmt = db.prepare('''
         INSERT INTO vpn_nodes(
           name, country_code, config_path, service_name,
-          protocol, transport, security, enabled, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          protocol, transport, security, enabled, updated_at, managed_owner, managed_team_id, managed_node_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''');
       try {
         for (final node in nodes) {
@@ -107,6 +121,9 @@ class SqliteNodeStore {
             (node['security'] as String?) ?? '',
             ((node['enabled'] as bool?) ?? true) ? 1 : 0,
             now,
+            node['managedOwner'],
+            node['managedTeamId'],
+            node['managedNodeId'],
           ]);
         }
       } finally {
