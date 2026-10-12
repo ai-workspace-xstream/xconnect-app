@@ -111,13 +111,13 @@ jobs:
               build/windows/x64/runner/Release/*.msi
           - platform: macos
             arch: arm64
-            runs_on: macos-14
+            runs_on: macos-26
             artifact_name: build-macos-arm64
             artifact_paths: |
               build/macos/*.dmg
           - platform: ios
             arch: arm64
-            runs_on: macos-14
+            runs_on: macos-26
             artifact_name: build-ios-arm64
             artifact_paths: |
               build/ios/iphoneos/xconnect.app.zip
