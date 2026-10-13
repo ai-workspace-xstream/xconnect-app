@@ -11,9 +11,17 @@ class AboutScreen extends StatelessWidget {
 
   static const _githubUrl =
       'https://github.com/ai-workspace-xstream/xconnect-app';
+  static const _companyUrl = 'https://xworktech.com/';
 
   Future<void> _openGithub() async {
     final uri = Uri.parse(_githubUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _openCompanyWebsite() async {
+    final uri = Uri.parse(_companyUrl);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
@@ -48,14 +56,24 @@ class AboutScreen extends StatelessWidget {
               },
             ),
             const SizedBox(height: 16),
-            const Text('© 2025-2026 svc.plus'),
+            const Text('© 2025-2026 XWork Technologies LLC'),
             const SizedBox(height: 4),
             Text(
-              'XConnect is a client-only, self-hosted connector app. '
-              'Optional workspace sync, when enabled, is provided by svc.plus.',
+              'XConnect is developed by XWork Technologies LLC.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).disabledColor,
                   ),
+            ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: _openCompanyWebsite,
+              child: Text(
+                _companyUrl,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+              ),
             ),
             const SizedBox(height: 16),
             InkWell(
@@ -71,11 +89,10 @@ class AboutScreen extends StatelessWidget {
             const SizedBox(height: 16),
             const Text(
               'XConnect is licensed under the Apache License 2.0.\n\n'
-              'This application includes components from:\n'
-              '• Xray-core v26.2.6 (12ee51e, go1.25.7 darwin/arm64)\n'
-              '  Xray, high-performance secure tunnel engine.\n'
-              '  https://github.com/XTLS/Xray-core\n'
-              '  Licensed under the Mozilla Public License 2.0',
+              'Core uses libXray and Xray-core.\n'
+              'Thanks to the XTLS open-source project.\n'
+              'libXray (MIT): https://github.com/XTLS/libXray\n'
+              'Xray-core (MPL 2.0): https://github.com/XTLS/Xray-core',
             ),
           ],
         ),
