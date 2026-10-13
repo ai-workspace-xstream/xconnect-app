@@ -1121,9 +1121,8 @@ class NativeBridge {
       final effectiveBlockQuic =
           !GlobalState.http3Passthrough.value || !proxySupportsUdp443;
 
-      sourceJson['dns'] = VpnConfig.buildSecureDnsConfig();
-      sourceJson['routing'] = VpnConfig.buildSecureDnsRoutingConfig(
-        sourceJson['routing'],
+      VpnConfig.applySecureDnsConfig(
+        sourceJson,
         enableTunnelMode: isTunMode,
         forceBlockQuic: effectiveBlockQuic,
       );

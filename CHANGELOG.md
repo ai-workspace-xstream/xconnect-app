@@ -1,5 +1,11 @@
 # Unreleased
 
+- The existing DoH switch now routes application A queries through
+  Packet Tunnel → Xray DNS → proxy → existing DoH resolvers. Node
+  domains, direct-domain exceptions, and other DNS record types retain the
+  established forwarding path. Disable DoH and reconnect to
+  restore the previous tunnel DNS routing.
+
 - Android home now reports live Packet Tunnel traffic, CPU, and memory metrics; node sync and local-node migration remove the legacy compatibility node `tky-proxy.svc.plus`.
 
 - Linux uses one GTK event loop for tray and window operations, scopes single

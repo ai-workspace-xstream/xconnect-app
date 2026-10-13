@@ -442,6 +442,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _onToggleDnsOverHttps(bool enabled) {
     setState(() => DnsConfig.setDohEnabled(enabled));
     addAppLog('代理 DNS / DoH: ${enabled ? "开启" : "关闭"}');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.get('dnsReconnectHint'))),
+    );
   }
 
   Future<void> _refreshTunStatus() async {

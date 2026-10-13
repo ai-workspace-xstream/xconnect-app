@@ -3,6 +3,45 @@ enum ResolverTransport {
   doh,
 }
 
+/// Handling of application A queries inside the existing secure tunnel.
+/// The final rule deliberately forwards every unmatched query, including
+/// non-A records, instead of using the DNS outbound's empty-response default.
+class BusinessDnsPolicy {
+  static const outboundTag = 'xconnect-business-dns';
+  static const localDomains = <String>[
+    'full:localhost',
+    'dotless:',
+    'domain:localhost',
+    'domain:local',
+    'domain:lan',
+    'domain:internal',
+    'domain:home.arpa',
+  ];
+
+  static Map<String, dynamic> buildOutbound(List<String> exceptions) =>
+      <String, dynamic>{
+        'tag': outboundTag,
+        'protocol': 'dns',
+        // "direct" in DNS rules means forward the original query. This
+        // detour keeps that forwarding on the same proxy as before.
+        'proxySettings': <String, dynamic>{'tag': 'proxy'},
+        'settings': <String, dynamic>{
+          'rules': <Map<String, dynamic>>[
+            if (exceptions.isNotEmpty)
+              <String, dynamic>{
+                'action': 'direct',
+                'domain': exceptions.toSet().toList(),
+              },
+            <String, dynamic>{
+              'action': 'hijack',
+              'qType': 1,
+            },
+            <String, dynamic>{'action': 'direct'},
+          ],
+        },
+      };
+}
+
 class ResolverServerPolicy {
   final String address;
   final String tag;
@@ -89,6 +128,7 @@ class RoutePolicy {
     required String tunInboundTag,
     required List<String> directResolverInboundTags,
     required List<String> proxyResolverInboundTags,
+    String tunnelDnsOutboundTag = 'proxy',
   }) {
     return <Map<String, dynamic>>[
       if (enableTunnelMode && forceTunnelDnsToProxy)
@@ -97,7 +137,7 @@ class RoutePolicy {
           'inboundTag': <String>[tunInboundTag],
           'network': 'tcp,udp',
           'port': '53',
-          'outboundTag': 'proxy',
+          'outboundTag': tunnelDnsOutboundTag,
         },
       if (enableTunnelMode && blockQuic) ...<Map<String, dynamic>>[
         <String, dynamic>{
