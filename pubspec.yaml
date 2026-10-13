@@ -36,7 +36,8 @@ dependencies:
   file_picker: ^10.3.10
   zxing2: ^0.2.4
   image: ^4.3.0
-  connectivity_plus: ^7.0.0
+  # 7.1+ uses macOS 26 SDK APIs; keep compatible with the current macOS CI SDK.
+  connectivity_plus: 7.0.0
   network_info_plus: ^7.0.0
 
 dependency_overrides:

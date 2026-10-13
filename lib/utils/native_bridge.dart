@@ -345,13 +345,22 @@ class NativeBridge {
   /// - **Linux**: FFI → `startXray(configJson)` (TUN inbound handled by xray-core tun2socks)
   static Future<String> startNodeForTunnel(String nodeName) {
     return _runSerializedConnectionOp(
-      () => _startNodeForTunnelInternal(nodeName),
+      () async {
+        final result = await _startNodeForTunnelInternal(nodeName);
+        final node = VpnConfig.getNodeByName(nodeName);
+        if (node == null || !VpnConfig.canUseNode(node)) {
+          await _stopNodeForTunnelInternal();
+          return "Connection is not authorized";
+        }
+        return result;
+      },
     );
   }
 
   static Future<String> _startNodeForTunnelInternal(String nodeName) async {
     final node = VpnConfig.getNodeByName(nodeName);
     if (node == null) return '未知节点: $nodeName';
+    if (!VpnConfig.canUseNode(node)) return 'Connection is not authorized';
 
     final sourceConfigPath = await _resolveNodeConfigSource(node);
     if (sourceConfigPath == null) {
@@ -558,13 +567,22 @@ class NativeBridge {
   // 启动节点服务（防止重复启动）— 代理模式
   static Future<String> startNodeService(String nodeName) {
     return _runSerializedConnectionOp(
-      () => _startNodeServiceInternal(nodeName),
+      () async {
+        final result = await _startNodeServiceInternal(nodeName);
+        final node = VpnConfig.getNodeByName(nodeName);
+        if (node == null || !VpnConfig.canUseNode(node)) {
+          await _stopNodeServiceInternal(nodeName);
+          return "Connection is not authorized";
+        }
+        return result;
+      },
     );
   }
 
   static Future<String> _startNodeServiceInternal(String nodeName) async {
     final node = VpnConfig.getNodeByName(nodeName);
     if (node == null) return '未知节点: $nodeName';
+    if (!VpnConfig.canUseNode(node)) return 'Connection is not authorized';
     final sourceConfigPath = await _resolveNodeConfigSource(node);
     if (sourceConfigPath == null) {
       final configsPath = await GlobalApplicationConfig.getConfigsPath();

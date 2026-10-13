@@ -22,6 +22,7 @@ import 'services/global_proxy_service.dart';
 import 'services/permission_guide_service.dart';
 import 'services/desktop/desktop_platform_capabilities.dart';
 import 'services/sync/desktop_sync_service.dart';
+import 'services/session/session_manager.dart';
 import 'services/tun_settings_service.dart';
 import 'widgets/permission_guide_dialog.dart';
 import 'widgets/log_console.dart' show LogLevel;
@@ -65,6 +66,7 @@ void main(List<String> args) async {
   if (debug) {
     debugPrint('🚀 Flutter main() started in debug mode');
   }
+  await SessionManager.instance.init();
   await VpnConfig.load(); // ✅ 启动时加载 assets + 本地配置
   await DesktopSyncService.instance.init();
   runApp(const MyApp());

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'network_access_policy.dart';
 
 /// Session lifecycle states for account authentication.
 enum SessionStatus { unknown, loggedOut, mfaRequired, loggedIn }
@@ -39,6 +40,9 @@ class SessionManager {
   // ship pre-pointed at any specific commercial service.
   final ValueNotifier<String> baseUrl = ValueNotifier<String>('');
 
+  int generation = 0;
+  Future<void> Function()? onSessionReset;
+
   String? _cookie;
   String? _sessionToken;
   String? _mfaTicket;
@@ -50,6 +54,7 @@ class SessionManager {
   String? get mfaTicket => _mfaTicket;
 
   Future<void> init() async {
+    await NetworkAccessPolicy.instance.init();
     final prefs = await SharedPreferences.getInstance();
     final storedBaseUrl = prefs.getString(_prefsBaseUrlKey);
     if (storedBaseUrl != null && storedBaseUrl.isNotEmpty) {
@@ -61,14 +66,17 @@ class SessionManager {
     currentUser.value = prefs.getString(_prefsUserKey);
 
     if ((_sessionToken ?? '').isNotEmpty || (_cookie ?? '').isNotEmpty) {
+      NetworkAccessPolicy.instance.invalidate(signedIn: true);
       status.value = SessionStatus.loggedIn;
     } else {
+      NetworkAccessPolicy.instance.invalidate(signedIn: false);
       status.value = SessionStatus.loggedOut;
     }
   }
 
   Future<void> setBaseUrl(String url) async {
     final normalized = _normalizeBaseUrl(url);
+    if (baseUrl.value != normalized) await logout();
     baseUrl.value = normalized;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsBaseUrlKey, normalized);
@@ -219,11 +227,14 @@ class SessionManager {
       return LoginResult(success: false, message: lastError.value!);
     }
 
+    await logout();
     _sessionToken = token;
-    _cookie = cookie ?? _cookie;
+    _cookie = cookie;
     _mfaTicket = null;
     final savedUser = _extractLoginIdentity(payload, fallbackUsername);
     currentUser.value = savedUser;
+    generation++;
+    NetworkAccessPolicy.instance.invalidate(signedIn: true);
     status.value = SessionStatus.loggedIn;
 
     final prefs = await SharedPreferences.getInstance();
@@ -243,13 +254,19 @@ class SessionManager {
   }
 
   Future<void> logout() async {
+    generation++;
+    NetworkAccessPolicy.instance.invalidate(signedIn: false);
     _cookie = null;
     _sessionToken = null;
     _mfaTicket = null;
     currentUser.value = null;
     status.value = SessionStatus.loggedOut;
     lastError.value = null;
-    await _clearPrefs();
+    try {
+      await onSessionReset?.call();
+    } finally {
+      await _clearPrefs();
+    }
   }
 
   Future<void> _clearPrefs() async {
