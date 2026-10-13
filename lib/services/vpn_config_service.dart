@@ -12,7 +12,9 @@ import '../templates/xray_service_macos_template.dart';
 import '../templates/xray_service_linux_template.dart';
 import '../templates/xray_service_windows_template.dart';
 import 'sqlite_node_store.dart';
+import 'dns/dns_control_plane.dart';
 import 'session/network_access_policy.dart';
+import 'tunnel_endpoint_resolver.dart';
 
 class VlessUriProfile {
   final String name;
@@ -818,9 +820,8 @@ class VpnConfig {
         streamSettings['xhttpSettings'] = xhttpSettings;
       }
 
-      jsonObj['dns'] = buildSecureDnsConfig();
-      jsonObj['routing'] = buildSecureDnsRoutingConfig(
-        jsonObj['routing'],
+      applySecureDnsConfig(
+        jsonObj,
         enableTunnelMode: enableTunnelMode,
         forceBlockQuic: !(supportsVisionFlow &&
             effectiveFlow.toLowerCase() == 'xtls-rprx-vision-udp443'),
@@ -1091,10 +1092,107 @@ class VpnConfig {
     return controlPlane.dnsPolicy.toXrayDnsConfig();
   }
 
+  /// Used both for new profiles and when an existing profile is prepared for
+  /// reconnect. Only the dedicated outbound is managed here; node transports,
+  /// DNS server addresses supplied to the OS, and user outbounds are retained.
+  static void applySecureDnsConfig(
+    Map<String, dynamic> config, {
+    required bool enableTunnelMode,
+    bool? forceBlockQuic,
+  }) {
+    final outbounds = List<dynamic>.from(config['outbounds'] as List? ?? []);
+    final reserved = outbounds.where(
+      (value) => value is Map && value['tag'] == BusinessDnsPolicy.outboundTag,
+    );
+    bool isManaged(Object? value) {
+      if (value is! Map ||
+          value['protocol'] != 'dns' ||
+          value['proxySettings'] is! Map ||
+          (value['proxySettings'] as Map)['tag'] != 'proxy') {
+        return false;
+      }
+      final settings = value['settings'];
+      if (settings is! Map || settings['rules'] is! List) return false;
+      final rules = settings['rules'] as List;
+      return rules.isNotEmpty &&
+          rules.last is Map &&
+          (rules.last as Map)['action'] == 'direct' &&
+          rules.any((rule) =>
+              rule is Map &&
+              rule['action'] == 'hijack' &&
+              rule['qType'] == 1 &&
+              rule['domain'] == null);
+    }
+
+    // A conflicting user outbound must never be overwritten.
+    final hasConflict = reserved.any((value) => !isManaged(value));
+    final enabled = !hasConflict &&
+        enableTunnelMode &&
+        DnsConfig.dohEnabled &&
+        (Platform.isIOS || DnsConfig.tunnelDnsViaProxy.value) &&
+        outbounds.any((value) => value is Map && value['tag'] == 'proxy');
+
+    final exceptions = <String>{
+      ...BusinessDnsPolicy.localDomains,
+      ...DnsConfig.directDomainSet,
+    };
+    final routing = config['routing'];
+    if (routing is Map && routing['rules'] is List) {
+      for (final rule in routing['rules'] as List) {
+        if (rule is Map &&
+            rule['outboundTag'] == 'direct' &&
+            rule['domain'] is List) {
+          exceptions.addAll((rule['domain'] as List).whereType<String>());
+        }
+      }
+    }
+    for (final outbound in outbounds) {
+      if (outbound is! Map ||
+          !TunnelEndpointResolver.dialingProtocols
+              .contains(outbound['protocol'])) {
+        continue;
+      }
+      final settings = outbound['settings'];
+      if (settings is! Map) continue;
+      for (final key in const ['vnext', 'servers']) {
+        final entries = settings[key];
+        if (entries is! List) continue;
+        for (final entry in entries) {
+          if (entry is! Map || entry['address'] is! String) continue;
+          final address = (entry['address'] as String)
+              .trim()
+              .toLowerCase()
+              .replaceFirst(RegExp(r'\.$'), '');
+          if (address.isNotEmpty && InternetAddress.tryParse(address) == null) {
+            exceptions.add('full:$address');
+          }
+        }
+      }
+    }
+    outbounds.removeWhere((value) =>
+        value is Map &&
+        value['tag'] == BusinessDnsPolicy.outboundTag &&
+        isManaged(value));
+    if (enabled) {
+      outbounds.add(BusinessDnsPolicy.buildOutbound(exceptions.toList()));
+    }
+    config['outbounds'] = outbounds;
+    config['dns'] = buildSecureDnsConfig();
+    config['routing'] = buildSecureDnsRoutingConfig(
+      routing,
+      enableTunnelMode: enableTunnelMode,
+      forceBlockQuic: forceBlockQuic,
+      tunnelDnsOutboundTag: enabled ? BusinessDnsPolicy.outboundTag : 'proxy',
+      removeBusinessDnsRule: !hasConflict,
+    );
+  }
+
   static Map<String, dynamic> buildSecureDnsRoutingConfig(
     Object? existingRouting, {
     required bool enableTunnelMode,
     bool? forceBlockQuic,
+    String tunnelDnsOutboundTag = 'proxy',
+    bool removeBusinessDnsRule = false,
   }) {
     final controlPlane = DnsConfig.controlPlane(
       dnsDirectPrimaryTag: _dnsDirectPrimaryTag,
@@ -1127,6 +1225,15 @@ class VpnConfig {
         return false;
       }
       if (type == 'field' && outboundTag == 'proxy' && rule['port'] == '53') {
+        return false;
+      }
+      if (removeBusinessDnsRule &&
+          type == 'field' &&
+          outboundTag == BusinessDnsPolicy.outboundTag &&
+          rule['port'] == '53' &&
+          inboundTag is List &&
+          inboundTag.length == 1 &&
+          inboundTag.single == _tunInboundTag) {
         return false;
       }
       if (type == 'field' &&
@@ -1170,6 +1277,7 @@ class VpnConfig {
         _dnsProxyPrimaryTag,
         _dnsProxySecondaryTag,
       ],
+      tunnelDnsOutboundTag: tunnelDnsOutboundTag,
     );
     routing['domainStrategy'] = 'AsIs';
     routing['rules'] = <dynamic>[

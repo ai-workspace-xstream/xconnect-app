@@ -1,5 +1,11 @@
 # Unreleased
 
+- The existing DoH switch now routes application A queries through
+  Packet Tunnel → Xray DNS → proxy → existing DoH resolvers. Node
+  domains, direct-domain exceptions, and other DNS record types retain the
+  established forwarding path. Disable DoH and reconnect to
+  restore the previous tunnel DNS routing.
+
 - Add managed team connections with server-owned access, account-scoped sync, cached-node cleanup on withdrawal, and no public-node fallback in dedicated mode.
 - Pin connectivity_plus to 7.0.0 so existing macOS CI does not resolve APIs requiring the macOS 26 SDK.
 

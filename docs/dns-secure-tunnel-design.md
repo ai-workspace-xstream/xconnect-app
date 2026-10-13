@@ -123,7 +123,48 @@ macOS 与 iOS 继续使用：
 
 只有在验证发现 Xray 能稳定承接系统 DNS 请求后，才会把“隧道内专用 DNS 地址 + `dns` outbound”提升为 Darwin 默认路径；若仍不稳定，再评估补充本地 DNS stub。
 
-### 3.3 DoH 路由原则
+### 3.3 业务 IPv4 DNS 接管
+
+开启现有 `DNS over HTTPS` 且隧道 DNS 走代理时，TCP/UDP 53 查询由
+`xconnect-business-dns` outbound 承接。其处理顺序为：
+
+新安装的默认配置已开启 DoH 和隧道 DNS 走代理，生成节点配置时自动应用此
+路径，无需附加开关或填写 DoH URL。已有配置在重连准备时也会应用当前策略；
+用户之前主动关闭的设置继续保留。
+
+1. 当前配置中的节点域名、内网名称、现有 direct 域名规则：保留原查询转发。
+2. 其余业务域名的 A 查询：交给 Xray 内置 DNS，经 `proxy` 查询现有
+   Cloudflare / Google DoH 上游。范围覆盖全部业务域名，不限于特定网站。
+3. 其他记录类型和未接管查询：保留原查询转发，包括 AAAA、TXT、MX、SRV、
+   HTTPS/SVCB。此版本不新增 IPv6 能力。
+
+原查询转发明确设置 `proxySettings.tag = proxy`，继续使用原 DNS 目标和协议；
+DNS 规则中的 `direct` 动作表示转发原查询，不表示从物理网络直接查询。
+DoH 查询继续使用 `https://.../dns-query` 与现有 proxy DNS tags。
+
+保持 Packet Tunnel 的系统 DNS 地址和节点启动解析不变，无需本地 DNS stub。
+关闭 DoH 后重连会移除业务 DNS outbound，恢复原 `tun-in:53 → proxy` 路径；
+关闭桌面端“隧道 DNS 走代理”或使用本地代理模式时也不启用接管。
+不会覆盖同名自定义 outbound；发生 tag 冲突时保留原隧道 DNS 路径。
+
+内网名称包含 localhost、单标签名称、`.local`、`.lan`、`.internal` 和
+`.home.arpa`。自定义企业分域应通过现有 direct 域名规则明确声明。
+两个 DoH 上游均不可达时查询失败，不自动降级为本地明文 DNS。
+验收须覆盖真实核心的 A 查询、非 A 转发、节点和 direct 例外、上游切换以及回退。
+
+核心回归测试使用本地 SOCKS 网关和具有受信任测试证书的 HTTP/2 DoH 服务，
+无需公网或设备权限。生成的配置来自 Dart 服务层，Go 测试使用 `go_core/go.mod`
+锁定的 Xray 版本：
+
+```sh
+XCONNECT_BUSINESS_DNS_FIXTURE=/tmp/xconnect-business-dns-fixture.json \
+  flutter test test/services/business_dns_policy_test.dart
+cd go_core
+XCONNECT_BUSINESS_DNS_FIXTURE=/tmp/xconnect-business-dns-fixture.json \
+  go test -mod=readonly -v ../test/integration/business_dns_runtime_test.go
+```
+
+### 3.4 DoH 传输约束
 
 `Proxy Resolver` 的 DoH 仅允许使用：
 
