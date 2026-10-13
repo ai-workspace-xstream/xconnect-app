@@ -31,8 +31,10 @@ type dnsRelay struct {
 	tlsAddress string
 	mu         sync.Mutex
 	plain      int
+	fallback   int
 	doh        map[string]int
 	failDoH    bool
+	blackhole  string
 }
 
 func dnsResponse(query []byte, address [4]byte) []byte {
@@ -57,11 +59,17 @@ func dnsResponse(query []byte, address [4]byte) []byte {
 	return response
 }
 
-func (relay *dnsRelay) original(query []byte) []byte {
+func (relay *dnsRelay) original(query []byte, fallback bool) []byte {
 	relay.mu.Lock()
-	relay.plain++
+	address := [4]byte{198, 18, 0, 20}
+	if fallback {
+		relay.fallback++
+		address[3] = 30
+	} else {
+		relay.plain++
+	}
 	relay.mu.Unlock()
-	return dnsResponse(query, [4]byte{198, 18, 0, 20})
+	return dnsResponse(query, address)
 }
 
 func (relay *dnsRelay) handleSOCKS(conn net.Conn, udpPort int) {
@@ -113,7 +121,7 @@ func (relay *dnsRelay) handleSOCKS(conn net.Conn, udpPort int) {
 		return
 	}
 	_, _ = conn.Write([]byte{5, 0, 0, 1, 127, 0, 0, 1, 0, 0})
-	if host == "198.51.100.53" && binary.BigEndian.Uint16(port[:]) == 53 {
+	if (host == "198.51.100.53" || host == "198.51.100.54") && binary.BigEndian.Uint16(port[:]) == 53 {
 		for {
 			if _, err := io.ReadFull(conn, port[:]); err != nil {
 				return
@@ -122,7 +130,7 @@ func (relay *dnsRelay) handleSOCKS(conn net.Conn, udpPort int) {
 			if _, err := io.ReadFull(conn, query); err != nil {
 				return
 			}
-			response := relay.original(query)
+			response := relay.original(query, host == "198.51.100.54")
 			binary.BigEndian.PutUint16(port[:], uint16(len(response)))
 			_, _ = conn.Write(append(port[:], response...))
 		}
@@ -170,7 +178,12 @@ func TestBusinessDnsRuntime(t *testing.T) {
 		relay.mu.Lock()
 		relay.doh[r.Host]++
 		fail := relay.failDoH
+		blackhole := relay.blackhole
 		relay.mu.Unlock()
+		if blackhole == "*" || blackhole == r.Host {
+			<-r.Context().Done()
+			return
+		}
 		if fail {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -201,10 +214,14 @@ func TestBusinessDnsRuntime(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if n < 10 || buffer[2] != 0 || buffer[3] != 1 || net.IP(buffer[4:8]).String() != "198.51.100.53" {
+			if n < 10 || buffer[2] != 0 || buffer[3] != 1 || binary.BigEndian.Uint16(buffer[8:10]) != 53 {
 				continue
 			}
-			response := append(append([]byte{}, buffer[:10]...), relay.original(buffer[10:n])...)
+			host := net.IP(buffer[4:8]).String()
+			if host != "198.51.100.53" && host != "198.51.100.54" {
+				continue
+			}
+			response := append(append([]byte{}, buffer[:10]...), relay.original(buffer[10:n], host == "198.51.100.54")...)
 			_, _ = udp.WriteToUDP(response, peer)
 		}
 	}()
@@ -225,9 +242,10 @@ func TestBusinessDnsRuntime(t *testing.T) {
 	socksPort := socks.Addr().(*net.TCPAddr).Port
 
 	cases := []struct {
-		name, domain, network, primary string
-		qtype                          dnsmessage.Type
-		forward, disabled, fail        bool
+		name, domain, network, primary, blackhole string
+		qtype                                     dnsmessage.Type
+		forward, disabled, fail, fallback         bool
+		minDuration, maxDuration                  time.Duration
 	}{
 		{name: "global A UDP", domain: "unlisted.business.example", network: "udp", qtype: 1},
 		{name: "global A TCP", domain: "unlisted.business.example", network: "tcp", qtype: 1},
@@ -243,7 +261,10 @@ func TestBusinessDnsRuntime(t *testing.T) {
 		{name: "AAAA unchanged", domain: "business.example", network: "udp", qtype: 28, forward: true},
 		{name: "certificate failure uses secondary", domain: "business.example", network: "udp", qtype: 1, primary: "203.0.113.55"},
 		{name: "DoH off restores forwarding", domain: "business.example", network: "udp", qtype: 1, forward: true, disabled: true},
-		{name: "both DoH fail without plaintext downgrade", domain: "business.example", network: "udp", qtype: 1, fail: true},
+		{name: "primary blackhole uses secondary within budget", domain: "business.example", network: "udp", qtype: 1, blackhole: "203.0.113.53", minDuration: 1200 * time.Millisecond, maxDuration: 2500 * time.Millisecond},
+		{name: "both DoH 503 use tunnel fallback UDP", domain: "business.example", network: "udp", qtype: 1, fail: true, fallback: true},
+		{name: "both DoH 503 use tunnel fallback TCP", domain: "business.example", network: "tcp", qtype: 1, fail: true, fallback: true},
+		{name: "both DoH blackholes use tunnel fallback within budget", domain: "business.example", network: "udp", qtype: 1, blackhole: "*", fallback: true, minDuration: 2700 * time.Millisecond, maxDuration: 4200 * time.Millisecond},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -288,10 +309,12 @@ func TestBusinessDnsRuntime(t *testing.T) {
 					upstream["address"] = "https://" + primary + "/dns-query"
 				case "dns-proxy-secondary":
 					upstream["address"] = "https://203.0.113.54/dns-query"
+				case "dns-proxy-fallback":
+					upstream["address"] = "198.51.100.54"
 				}
 			}
 			relay.mu.Lock()
-			relay.plain, relay.failDoH, relay.doh = 0, tc.fail, make(map[string]int)
+			relay.plain, relay.fallback, relay.failDoH, relay.doh, relay.blackhole = 0, 0, tc.fail, make(map[string]int), tc.blackhole
 			relay.mu.Unlock()
 			encoded, _ := json.Marshal(config)
 			loaded, err := core.LoadConfig("json", strings.NewReader(string(encoded)))
@@ -316,11 +339,8 @@ func TestBusinessDnsRuntime(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer conn.Close()
-			deadline := 5 * time.Second
-			if tc.fail {
-				deadline = 2 * time.Second
-			}
-			_ = conn.SetDeadline(time.Now().Add(deadline))
+			_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+			started := time.Now()
 			var response []byte
 			if tc.network == "tcp" {
 				var size [2]byte
@@ -344,16 +364,15 @@ func TestBusinessDnsRuntime(t *testing.T) {
 			}
 			if err != nil {
 				relay.mu.Lock()
-				plain, providers := relay.plain, len(relay.doh)
+				plain, fallback, providers := relay.plain, relay.fallback, len(relay.doh)
 				relay.mu.Unlock()
-				// The pinned core may leave transport-level upstream failures
-				// unanswered. Verify the failure uses both encrypted providers
-				// and never sends the query to the plaintext resolver.
-				if timeout, ok := err.(net.Error); tc.fail && ok && timeout.Timeout() && plain == 0 && providers == 2 {
-					return
-				}
-				t.Fatalf("%v (plain=%d DoH providers=%d)", err, plain, providers)
+				t.Fatalf("%v (plain=%d fallback=%d DoH providers=%d)", err, plain, fallback, providers)
 			}
+			elapsed := time.Since(started)
+			if tc.maxDuration != 0 && (elapsed < tc.minDuration || elapsed > tc.maxDuration) {
+				t.Fatalf("upstream timeout budget: got %s, expected %s..%s", elapsed, tc.minDuration, tc.maxDuration)
+			}
+			t.Logf("response received in %s", elapsed)
 			var reply dnsmessage.Message
 			if err := reply.Unpack(response); err != nil {
 				t.Fatal(err)
@@ -364,25 +383,30 @@ func TestBusinessDnsRuntime(t *testing.T) {
 				t.Fatalf("query identity was not preserved: %+v", reply)
 			}
 			if tc.forward {
-				if relay.plain == 0 || len(relay.doh) != 0 {
+				if relay.plain == 0 || relay.fallback != 0 || len(relay.doh) != 0 {
 					t.Fatalf("original query did not stay on proxy forwarding: plain=%d doh=%v", relay.plain, relay.doh)
 				}
+			} else if tc.fallback {
+				if relay.plain != 0 || relay.fallback == 0 || len(relay.doh) != 2 {
+					t.Fatalf("fallback did not stay on proxy after both DoH: plain=%d fallback=%d doh=%v", relay.plain, relay.fallback, relay.doh)
+				}
 			} else {
-				if relay.plain != 0 || len(relay.doh) == 0 {
+				if relay.plain != 0 || relay.fallback != 0 || len(relay.doh) == 0 {
 					t.Fatalf("query did not use proxied DoH: plain=%d doh=%v", relay.plain, relay.doh)
 				}
-				if tc.primary != "" && relay.doh["203.0.113.54"] == 0 {
-					t.Fatal("secondary DoH did not recover from certificate mismatch")
+				if (tc.primary != "" || tc.blackhole != "") && relay.doh["203.0.113.54"] == 0 {
+					t.Fatal("secondary DoH did not recover from primary failure")
 				}
 			}
-			if tc.fail {
-				if reply.RCode != dnsmessage.RCodeServerFailure || len(relay.doh) != 2 {
-					t.Fatalf("expected failure after both encrypted upstreams: rcode=%v doh=%v", reply.RCode, relay.doh)
-				}
-			} else if tc.qtype == dnsmessage.TypeA {
+			if reply.RCode != dnsmessage.RCodeSuccess {
+				t.Fatalf("expected successful DNS reply: rcode=%v", reply.RCode)
+			}
+			if tc.qtype == dnsmessage.TypeA {
 				expected := [4]byte{198, 18, 0, 10}
 				if tc.forward {
 					expected[3] = 20
+				} else if tc.fallback {
+					expected[3] = 30
 				}
 				if len(reply.Answers) != 1 || reply.Answers[0].Body.(*dnsmessage.AResource).A != expected {
 					t.Fatalf("unexpected A result: %+v", reply.Answers)
