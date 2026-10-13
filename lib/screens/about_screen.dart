@@ -89,13 +89,10 @@ class AboutScreen extends StatelessWidget {
             const SizedBox(height: 16),
             const Text(
               'XConnect is licensed under the Apache License 2.0.\n\n'
-              'This application includes components from:\n'
-              '• libXray v1.260728.0\n'
-              '  Go library for integrating Xray-core into applications.\n'
-              '  https://github.com/XTLS/libXray\n'
-              '  Licensed under the MIT License.\n'
-              '  Includes Xray-core v26.2.6 (12ee51e, go1.25.7 darwin/arm64),\n'
-              '  Licensed under the Mozilla Public License 2.0',
+              'Core powered by libXray and Xray-core.\n'
+              'Thanks to the XTLS open-source projects.\n'
+              'libXray (MIT): https://github.com/XTLS/libXray\n'
+              'Xray-core (MPL 2.0): https://github.com/XTLS/Xray-core',
             ),
           ],
         ),
