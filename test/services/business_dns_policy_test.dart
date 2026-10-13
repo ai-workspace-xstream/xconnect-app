@@ -62,6 +62,7 @@ void main() {
   setUp(() {
     DnsConfig.setDohEnabled(true);
     DnsConfig.tunnelDnsViaProxy.value = true;
+    DnsConfig.updateDirectServers(primary: '1.1.1.1', secondary: '8.8.8.8');
   });
 
   test('fresh defaults generate application DoH without extra settings',
@@ -125,7 +126,25 @@ void main() {
           'https://1.1.1.1/dns-query',
           'https://8.8.8.8/dns-query',
         ]));
-    for (final tag in ['dns-proxy-primary', 'dns-proxy-secondary']) {
+    expect(
+      servers
+          .where((server) => server['tag'] == 'dns-proxy-primary')
+          .single['timeoutMs'],
+      ResolverServerPolicy.dohTimeoutMs,
+    );
+    expect(
+      servers
+          .where((server) => server['tag'] == 'dns-proxy-secondary')
+          .single['timeoutMs'],
+      ResolverServerPolicy.dohTimeoutMs,
+    );
+    expect(servers.last['address'], '1.1.1.1');
+    expect(servers.last['tag'], ResolverServerPolicy.proxyFallbackTag);
+    for (final tag in [
+      'dns-proxy-primary',
+      'dns-proxy-secondary',
+      ResolverServerPolicy.proxyFallbackTag,
+    ]) {
       expect(
           _rules(config).singleWhere(
             (rule) =>
@@ -141,6 +160,40 @@ void main() {
     if (fixture != null) {
       File(fixture).writeAsStringSync(jsonEncode(config));
     }
+  });
+
+  test('configured fallback stays on proxy ahead of direct IP exceptions', () {
+    DnsConfig.updateDirectServers(
+        primary: '192.168.1.53', secondary: '9.9.9.9');
+    final config = _config();
+    VpnConfig.applySecureDnsConfig(config, enableTunnelMode: true);
+    final servers = (config['dns'] as Map)['servers'] as List;
+    expect(servers.last['address'], '192.168.1.53');
+    final rules = _rules(config);
+    final fallbackIndex = rules.indexWhere((rule) =>
+        rule['inboundTag'] is List &&
+        (rule['inboundTag'] as List)
+            .contains(ResolverServerPolicy.proxyFallbackTag));
+    expect(rules[fallbackIndex]['outboundTag'], 'proxy');
+    expect(
+        fallbackIndex,
+        lessThan(rules.indexWhere(
+            (rule) => rule['outboundTag'] == 'direct' && rule['ip'] != null)));
+
+    DnsConfig.setDohEnabled(false);
+    VpnConfig.applySecureDnsConfig(config, enableTunnelMode: true);
+    expect(
+      (config['dns'] as Map)['servers'].where(
+          (server) => server['tag'] == ResolverServerPolicy.proxyFallbackTag),
+      isEmpty,
+    );
+    expect(
+      _rules(config).where((rule) =>
+          rule['inboundTag'] is List &&
+          (rule['inboundTag'] as List)
+              .contains(ResolverServerPolicy.proxyFallbackTag)),
+      isEmpty,
+    );
   });
 
   test('reconnect is idempotent and DoH off restores the original DNS route',

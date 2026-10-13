@@ -63,3 +63,16 @@ jobs:
       - name: Run Flutter verification suite
         shell: bash
         run: bash ./scripts/ci/run_flutter_ci_suite.sh
+
+      - name: Generate business DNS runtime fixture
+        shell: bash
+        env:
+          XCONNECT_BUSINESS_DNS_FIXTURE: ${{ runner.temp }}/business-dns-fixture.json
+        run: flutter test test/services/business_dns_policy_test.dart
+
+      - name: Verify business DNS with pinned Xray core
+        shell: bash
+        working-directory: go_core
+        env:
+          XCONNECT_BUSINESS_DNS_FIXTURE: ${{ runner.temp }}/business-dns-fixture.json
+        run: go test -mod=readonly -v ../test/integration/business_dns_runtime_test.go

@@ -541,6 +541,14 @@ class DnsConfig {
         tag: dnsProxySecondaryTag,
         transport: proxyTransport,
       ),
+      // Keep the pre-DoH resolver available through the secure tunnel if
+      // neither encrypted upstream responds. Never use local-mode DNS here.
+      if (dohEnabled)
+        ResolverServerPolicy(
+          address: effectiveDirectResolvers.first,
+          tag: ResolverServerPolicy.proxyFallbackTag,
+          transport: ResolverTransport.plain,
+        ),
     ];
 
     return DnsControlPlane(

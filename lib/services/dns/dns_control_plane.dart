@@ -43,6 +43,9 @@ class BusinessDnsPolicy {
 }
 
 class ResolverServerPolicy {
+  static const dohTimeoutMs = 1500;
+  static const proxyFallbackTag = 'dns-proxy-fallback';
+
   final String address;
   final String tag;
   final ResolverTransport transport;
@@ -63,6 +66,9 @@ class ResolverServerPolicy {
       'tag': tag,
       'queryStrategy': 'UseIPv4',
     };
+    if (transport == ResolverTransport.doh) {
+      server['timeoutMs'] = dohTimeoutMs;
+    }
     if (domains.isNotEmpty) {
       server['domains'] = domains;
     }
@@ -154,6 +160,13 @@ class RoutePolicy {
           'outboundTag': 'block',
         },
       ],
+      // Resolver transport tags must win over direct IP/domain exceptions,
+      // including when the configured fallback is a private DNS address.
+      <String, dynamic>{
+        'type': 'field',
+        'inboundTag': proxyResolverInboundTags,
+        'outboundTag': 'proxy',
+      },
       if (domainSets.direct.isNotEmpty)
         <String, dynamic>{
           'type': 'field',
@@ -170,11 +183,6 @@ class RoutePolicy {
         'type': 'field',
         'inboundTag': directResolverInboundTags,
         'outboundTag': 'direct',
-      },
-      <String, dynamic>{
-        'type': 'field',
-        'inboundTag': proxyResolverInboundTags,
-        'outboundTag': 'proxy',
       },
     ];
   }

@@ -1081,16 +1081,15 @@ class VpnConfig {
     return applyXhttpAdvancedSettingsToFile(node.configPath);
   }
 
-  static Map<String, dynamic> buildSecureDnsConfig() {
-    final controlPlane = DnsConfig.controlPlane(
-      dnsDirectPrimaryTag: _dnsDirectPrimaryTag,
-      dnsDirectSecondaryTag: _dnsDirectSecondaryTag,
-      dnsProxyPrimaryTag: _dnsProxyPrimaryTag,
-      dnsProxySecondaryTag: _dnsProxySecondaryTag,
-    );
+  static DnsControlPlane _secureDnsControlPlane() => DnsConfig.controlPlane(
+        dnsDirectPrimaryTag: _dnsDirectPrimaryTag,
+        dnsDirectSecondaryTag: _dnsDirectSecondaryTag,
+        dnsProxyPrimaryTag: _dnsProxyPrimaryTag,
+        dnsProxySecondaryTag: _dnsProxySecondaryTag,
+      );
 
-    return controlPlane.dnsPolicy.toXrayDnsConfig();
-  }
+  static Map<String, dynamic> buildSecureDnsConfig() =>
+      _secureDnsControlPlane().dnsPolicy.toXrayDnsConfig();
 
   /// Used both for new profiles and when an existing profile is prepared for
   /// reconnect. Only the dedicated outbound is managed here; node transports,
@@ -1126,10 +1125,11 @@ class VpnConfig {
 
     // A conflicting user outbound must never be overwritten.
     final hasConflict = reserved.any((value) => !isManaged(value));
+    final controlPlane = _secureDnsControlPlane();
     final enabled = !hasConflict &&
         enableTunnelMode &&
         DnsConfig.dohEnabled &&
-        (Platform.isIOS || DnsConfig.tunnelDnsViaProxy.value) &&
+        controlPlane.routePolicy.forceTunnelDnsToProxy &&
         outbounds.any((value) => value is Map && value['tag'] == 'proxy');
 
     final exceptions = <String>{
@@ -1194,12 +1194,7 @@ class VpnConfig {
     String tunnelDnsOutboundTag = 'proxy',
     bool removeBusinessDnsRule = false,
   }) {
-    final controlPlane = DnsConfig.controlPlane(
-      dnsDirectPrimaryTag: _dnsDirectPrimaryTag,
-      dnsDirectSecondaryTag: _dnsDirectSecondaryTag,
-      dnsProxyPrimaryTag: _dnsProxyPrimaryTag,
-      dnsProxySecondaryTag: _dnsProxySecondaryTag,
-    );
+    final controlPlane = _secureDnsControlPlane();
     final routing = existingRouting is Map
         ? Map<String, dynamic>.from(existingRouting)
         : <String, dynamic>{};
@@ -1273,10 +1268,9 @@ class VpnConfig {
         _dnsDirectPrimaryTag,
         _dnsDirectSecondaryTag,
       ],
-      proxyResolverInboundTags: <String>[
-        _dnsProxyPrimaryTag,
-        _dnsProxySecondaryTag,
-      ],
+      proxyResolverInboundTags: controlPlane.dnsPolicy.proxyResolvers
+          .map((resolver) => resolver.tag)
+          .toList(),
       tunnelDnsOutboundTag: tunnelDnsOutboundTag,
     );
     routing['domainStrategy'] = 'AsIs';

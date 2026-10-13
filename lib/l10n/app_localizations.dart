@@ -311,7 +311,7 @@ class AppLocalizations {
       'tunSettings': 'TUN Settings',
       'dnsOverHttps': 'DNS over HTTPS',
       'dnsOverHttpsHint':
-          'Resolves application IPv4 addresses with Cloudflare and Google encrypted DNS through the tunnel. Node, local, and direct-domain exceptions keep their existing policy. Requires tunnel DNS via proxy; reconnect after changing.',
+          'Resolves application IPv4 A records with Cloudflare and Google DoH through the tunnel. If both fail, uses Base DNS through the same tunnel. Node, local, direct-domain exceptions and other record types keep their existing forwarding. Requires tunnel DNS via proxy.',
       'dnsReconnectHint': 'Reconnect the tunnel to apply DNS changes.',
       'tunStatus': 'TUN Status',
       'tunStatusConnected': 'Connected',
@@ -331,7 +331,7 @@ class AppLocalizations {
       'tunnelDnsViaProxyHint':
           'Routes all TUN DNS queries through the proxy resolver, so resolution keeps working when a local DoH endpoint is unavailable. On by default.',
       'dnsDialogHintDirect':
-          'Enter IP addresses, e.g. 1.1.1.1. Used to resolve local and direct-routed domains and as the VPN system DNS address. Hostnames are replaced with dialable IP addresses.',
+          'Enter IP addresses, e.g. 1.1.1.1. Sets the system DNS and resolver for exceptions and non-A records. With DoH enabled, the primary is also the tunnel-only fallback if both encrypted resolvers fail. Base DNS uses plaintext from the exit node to the resolver.',
       'globalProxy': 'Global Proxy',
       'experimentalFeatures': 'Experimental Features',
       'tunnelProxyMode': 'Tunnel Mode',
@@ -702,7 +702,7 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'tunSettings': 'TUN 设置',
       'dnsOverHttps': 'DNS over HTTPS',
       'dnsOverHttpsHint':
-          '通过隧道使用 Cloudflare 与 Google 加密解析业务域名的 IPv4 地址。节点、内网及直连例外保留原有策略。需开启隧道 DNS 走代理，修改后请重连。',
+          '通过隧道使用 Cloudflare 与 Google DoH 解析业务域名的 IPv4 A 记录。两者均失败时，经同一隧道使用基础 DNS。节点、内网、直连例外及其他记录保留原有转发。需开启隧道 DNS 走代理。',
       'dnsReconnectHint': '请重新连接隧道以应用 DNS 更改。',
       'tunStatus': 'TUN 状态',
       'tunStatusConnected': '已连接',
@@ -721,8 +721,9 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'tunnelDnsViaProxy': '隧道 DNS 走代理',
       'tunnelDnsViaProxyHint':
           '将所有 TUN DNS 查询交由代理解析器处理，本地 DoH 端点不可用时仍能正常解析。默认已开启。',
-      'dnsDialogHintDirect': '请输入 IP 地址，例如 1.1.1.1。用于解析本地域名和直连域名，'
-          '并作为 VPN 的系统 DNS 地址；填入域名会被替换为可拨号的 IP 地址。',
+      'dnsDialogHintDirect': '请输入 IP 地址，例如 1.1.1.1。设置系统 DNS，'
+          '用于例外域名和非 A 记录。开启 DoH 后，主 DNS 也作为两个加密上游均失败时的隧道内兜底。'
+          '基础 DNS 在出口节点到解析器之间使用明文协议。',
       'globalProxy': '全局代理',
       'experimentalFeatures': '实验特性',
       'tunnelProxyMode': '隧道模式',
