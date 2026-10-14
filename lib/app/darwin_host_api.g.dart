@@ -94,6 +94,9 @@ class TunnelProfile {
     required this.ipv6IncludedRoutes,
     required this.ipv6ExcludedRoutes,
     required this.configPath,
+    this.nodeId,
+    this.goMemoryLimitMB,
+    this.goGCPercent,
   });
 
   int mtu;
@@ -124,6 +127,16 @@ class TunnelProfile {
 
   String configPath;
 
+  /// Server node ID of the profile, so a later tuning change can refresh the
+  /// persisted profile without guessing the node from a file path.
+  String? nodeId;
+
+  /// Go runtime tuning for the Packet Tunnel; null keeps the built-in default.
+  /// A memory limit of 0 removes the Go soft limit.
+  int? goMemoryLimitMB;
+
+  int? goGCPercent;
+
   Object encode() {
     return <Object?>[
       mtu,
@@ -140,6 +153,9 @@ class TunnelProfile {
       ipv6IncludedRoutes,
       ipv6ExcludedRoutes,
       configPath,
+      nodeId,
+      goMemoryLimitMB,
+      goGCPercent,
     ];
   }
 
@@ -160,6 +176,63 @@ class TunnelProfile {
       ipv6IncludedRoutes: (result[11] as List<Object?>?)!.cast<TunnelRouteV6>(),
       ipv6ExcludedRoutes: (result[12] as List<Object?>?)!.cast<TunnelRouteV6>(),
       configPath: result[13]! as String,
+      nodeId: result[14] as String?,
+      goMemoryLimitMB: result[15] as int?,
+      goGCPercent: result[16] as int?,
+    );
+  }
+}
+
+/// The persisted Packet Tunnel profile, as the system will relaunch it.
+class SavedTunnelProfile {
+  SavedTunnelProfile({
+    required this.configPath,
+    this.nodeId,
+  });
+
+  String configPath;
+
+  String? nodeId;
+
+  Object encode() {
+    return <Object?>[
+      configPath,
+      nodeId,
+    ];
+  }
+
+  static SavedTunnelProfile decode(Object result) {
+    result as List<Object?>;
+    return SavedTunnelProfile(
+      configPath: result[0]! as String,
+      nodeId: result[1] as String?,
+    );
+  }
+}
+
+/// Runtime tuning to write into the persisted Packet Tunnel profile.
+class TunnelRuntimeTuning {
+  TunnelRuntimeTuning({
+    this.goMemoryLimitMB,
+    this.goGCPercent,
+  });
+
+  int? goMemoryLimitMB;
+
+  int? goGCPercent;
+
+  Object encode() {
+    return <Object?>[
+      goMemoryLimitMB,
+      goGCPercent,
+    ];
+  }
+
+  static TunnelRuntimeTuning decode(Object result) {
+    result as List<Object?>;
+    return TunnelRuntimeTuning(
+      goMemoryLimitMB: result[0] as int?,
+      goGCPercent: result[1] as int?,
     );
   }
 }
@@ -207,6 +280,16 @@ class TunnelMetricsSnapshot {
     this.memoryBytes,
     this.cpuPercent,
     this.updatedAt,
+    this.footprintBytes,
+    this.peakFootprintBytes,
+    this.goHeapInUseBytes,
+    this.goHeapIdleBytes,
+    this.goHeapReleasedBytes,
+    this.goSysBytes,
+    this.goNumGC,
+    this.goGoroutines,
+    this.goMemoryLimitBytes,
+    this.goGCPercent,
   });
 
   int? downloadBytesPerSecond;
@@ -219,6 +302,28 @@ class TunnelMetricsSnapshot {
 
   int? updatedAt;
 
+  /// Physical footprint and its peak, the figures jetsam enforces.
+  int? footprintBytes;
+
+  int? peakFootprintBytes;
+
+  /// Go runtime share of the process and the pacing in effect.
+  int? goHeapInUseBytes;
+
+  int? goHeapIdleBytes;
+
+  int? goHeapReleasedBytes;
+
+  int? goSysBytes;
+
+  int? goNumGC;
+
+  int? goGoroutines;
+
+  int? goMemoryLimitBytes;
+
+  int? goGCPercent;
+
   Object encode() {
     return <Object?>[
       downloadBytesPerSecond,
@@ -226,6 +331,16 @@ class TunnelMetricsSnapshot {
       memoryBytes,
       cpuPercent,
       updatedAt,
+      footprintBytes,
+      peakFootprintBytes,
+      goHeapInUseBytes,
+      goHeapIdleBytes,
+      goHeapReleasedBytes,
+      goSysBytes,
+      goNumGC,
+      goGoroutines,
+      goMemoryLimitBytes,
+      goGCPercent,
     ];
   }
 
@@ -237,6 +352,16 @@ class TunnelMetricsSnapshot {
       memoryBytes: result[2] as int?,
       cpuPercent: result[3] as double?,
       updatedAt: result[4] as int?,
+      footprintBytes: result[5] as int?,
+      peakFootprintBytes: result[6] as int?,
+      goHeapInUseBytes: result[7] as int?,
+      goHeapIdleBytes: result[8] as int?,
+      goHeapReleasedBytes: result[9] as int?,
+      goSysBytes: result[10] as int?,
+      goNumGC: result[11] as int?,
+      goGoroutines: result[12] as int?,
+      goMemoryLimitBytes: result[13] as int?,
+      goGCPercent: result[14] as int?,
     );
   }
 }
@@ -257,11 +382,17 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is TunnelProfile) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
-    } else if (value is TunnelStatus) {
+    } else if (value is SavedTunnelProfile) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    } else if (value is TunnelMetricsSnapshot) {
+    } else if (value is TunnelRuntimeTuning) {
       buffer.putUint8(133);
+      writeValue(buffer, value.encode());
+    } else if (value is TunnelStatus) {
+      buffer.putUint8(134);
+      writeValue(buffer, value.encode());
+    } else if (value is TunnelMetricsSnapshot) {
+      buffer.putUint8(135);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -278,8 +409,12 @@ class _PigeonCodec extends StandardMessageCodec {
       case 131:
         return TunnelProfile.decode(readValue(buffer)!);
       case 132:
-        return TunnelStatus.decode(readValue(buffer)!);
+        return SavedTunnelProfile.decode(readValue(buffer)!);
       case 133:
+        return TunnelRuntimeTuning.decode(readValue(buffer)!);
+      case 134:
+        return TunnelStatus.decode(readValue(buffer)!);
+      case 135:
         return TunnelMetricsSnapshot.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -564,6 +699,63 @@ class DarwinHostApi {
       );
     } else {
       return (pigeonVar_replyList[0] as TunnelMetricsSnapshot?)!;
+    }
+  }
+
+  /// The persisted profile, or null when none has been saved.
+  Future<SavedTunnelProfile?> savedPacketTunnelProfile() async {
+    final String pigeonVar_channelName =
+        'dev.flutter.pigeon.xconnect.DarwinHostApi.savedPacketTunnelProfile$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel =
+        BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(null) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else {
+      return (pigeonVar_replyList[0] as SavedTunnelProfile?);
+    }
+  }
+
+  /// Reloads the persisted profile's config file and writes [tuning] into it,
+  /// so an automatic relaunch uses current values. Never creates a new VPN
+  /// configuration.
+  Future<String> refreshPacketTunnelProfile(TunnelRuntimeTuning tuning) async {
+    final String pigeonVar_channelName =
+        'dev.flutter.pigeon.xconnect.DarwinHostApi.refreshPacketTunnelProfile$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel =
+        BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[tuning]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as String?)!;
     }
   }
 }

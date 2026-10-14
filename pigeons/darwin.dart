@@ -44,6 +44,9 @@ class TunnelProfile {
     required this.ipv6IncludedRoutes,
     required this.ipv6ExcludedRoutes,
     required this.configPath,
+    this.nodeId,
+    this.goMemoryLimitMB,
+    this.goGCPercent,
   });
 
   int mtu;
@@ -60,6 +63,31 @@ class TunnelProfile {
   List<TunnelRouteV6> ipv6IncludedRoutes;
   List<TunnelRouteV6> ipv6ExcludedRoutes;
   String configPath;
+
+  /// Server node ID of the profile, so a later tuning change can refresh the
+  /// persisted profile without guessing the node from a file path.
+  String? nodeId;
+
+  /// Go runtime tuning for the Packet Tunnel; null keeps the built-in default.
+  /// A memory limit of 0 removes the Go soft limit.
+  int? goMemoryLimitMB;
+  int? goGCPercent;
+}
+
+/// The persisted Packet Tunnel profile, as the system will relaunch it.
+class SavedTunnelProfile {
+  SavedTunnelProfile({required this.configPath, this.nodeId});
+
+  String configPath;
+  String? nodeId;
+}
+
+/// Runtime tuning to write into the persisted Packet Tunnel profile.
+class TunnelRuntimeTuning {
+  TunnelRuntimeTuning({this.goMemoryLimitMB, this.goGCPercent});
+
+  int? goMemoryLimitMB;
+  int? goGCPercent;
 }
 
 class TunnelStatus {
@@ -83,6 +111,16 @@ class TunnelMetricsSnapshot {
     this.memoryBytes,
     this.cpuPercent,
     this.updatedAt,
+    this.footprintBytes,
+    this.peakFootprintBytes,
+    this.goHeapInUseBytes,
+    this.goHeapIdleBytes,
+    this.goHeapReleasedBytes,
+    this.goSysBytes,
+    this.goNumGC,
+    this.goGoroutines,
+    this.goMemoryLimitBytes,
+    this.goGCPercent,
   });
 
   int? downloadBytesPerSecond;
@@ -90,6 +128,20 @@ class TunnelMetricsSnapshot {
   int? memoryBytes;
   double? cpuPercent;
   int? updatedAt;
+
+  /// Physical footprint and its peak, the figures jetsam enforces.
+  int? footprintBytes;
+  int? peakFootprintBytes;
+
+  /// Go runtime share of the process and the pacing in effect.
+  int? goHeapInUseBytes;
+  int? goHeapIdleBytes;
+  int? goHeapReleasedBytes;
+  int? goSysBytes;
+  int? goNumGC;
+  int? goGoroutines;
+  int? goMemoryLimitBytes;
+  int? goGCPercent;
 }
 
 @HostApi()
@@ -120,6 +172,16 @@ abstract class DarwinHostApi {
 
   @async
   TunnelMetricsSnapshot getPacketTunnelMetrics();
+
+  /// The persisted profile, or null when none has been saved.
+  @async
+  SavedTunnelProfile? savedPacketTunnelProfile();
+
+  /// Reloads the persisted profile's config file and writes [tuning] into it,
+  /// so an automatic relaunch uses current values. Never creates a new VPN
+  /// configuration.
+  @async
+  String refreshPacketTunnelProfile(TunnelRuntimeTuning tuning);
 }
 
 @FlutterApi()

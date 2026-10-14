@@ -626,21 +626,34 @@ class XhttpAdvancedConfig {
   static final ValueNotifier<String> xmuxMaxConcurrency =
       ValueNotifier<String>(defaultXmuxMaxConcurrency);
 
+  /// True once the user has saved the value in settings. A user's choice
+  /// takes precedence over control-plane tuning; untouched values follow it.
+  static bool modeCustomized = false;
+  static bool xmuxMaxConcurrencyCustomized = false;
+
+  static SharedPreferences? _prefs;
+
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    _prefs = prefs;
     mode.value = _normalizeMode(prefs.getString(_modeKey));
     alpn.value = _normalizeAlpn(prefs.getStringList(_alpnKey));
     xmuxMaxConcurrency.value = _normalizeXmuxMaxConcurrency(
       prefs.getString(_xmuxMaxConcurrencyKey),
     );
+    // A stored key means the user saved the value; see setMode.
+    modeCustomized = prefs.containsKey(_modeKey);
+    xmuxMaxConcurrencyCustomized = prefs.containsKey(_xmuxMaxConcurrencyKey);
 
     mode.addListener(() {
+      modeCustomized = true;
       prefs.setString(_modeKey, _normalizeMode(mode.value));
     });
     alpn.addListener(() {
       prefs.setStringList(_alpnKey, _normalizeAlpn(alpn.value));
     });
     xmuxMaxConcurrency.addListener(() {
+      xmuxMaxConcurrencyCustomized = true;
       prefs.setString(
         _xmuxMaxConcurrencyKey,
         _normalizeXmuxMaxConcurrency(xmuxMaxConcurrency.value),
@@ -648,16 +661,24 @@ class XhttpAdvancedConfig {
     });
   }
 
+  /// Records the user's explicit choice. It is persisted and marked as
+  /// customized even when it equals the current value, so saving the default
+  /// still overrides control-plane tuning after a restart.
   static void setMode(String value) {
     mode.value = _normalizeMode(value);
+    modeCustomized = true;
+    _prefs?.setString(_modeKey, mode.value);
   }
 
   static void setAlpn(List<String> values) {
     alpn.value = _normalizeAlpn(values);
   }
 
+  /// Records the user's explicit choice, like [setMode].
   static void setXmuxMaxConcurrency(String value) {
     xmuxMaxConcurrency.value = _normalizeXmuxMaxConcurrency(value);
+    xmuxMaxConcurrencyCustomized = true;
+    _prefs?.setString(_xmuxMaxConcurrencyKey, xmuxMaxConcurrency.value);
   }
 
   static void toggleAlpn(String value, bool enabled) {

@@ -1,5 +1,17 @@
 # Unreleased
 
+- The control plane can now tune XHTTP upload and connection-reuse settings
+  and the DoH upstream timeout through
+  `GET /api/agent-server/v1/client-tuning`, fetched after each node sync and
+  applied on the next connect. Values are range-checked, and settings the
+  user changed keep precedence. See `docs/architecture/client-tuning.md`.
+- Apple Packet Tunnels accept a tuned Go memory limit and GC percentage
+  through the typed tunnel profile and a new explicit bridge entry; `0`
+  now truly removes the Go soft limit. Persisted profiles are refreshed when
+  tuning changes, and metrics report the footprint peak and Go pacing.
+- Production connects run Xray at the `warning` log level; profiles saved
+  at `debug` or `info` are lowered when they connect.
+
 - The existing DoH switch now routes application A queries through
   Packet Tunnel → Xray DNS → proxy → existing DoH resolvers. Node
   domains, direct-domain exceptions, and other DNS record types retain the

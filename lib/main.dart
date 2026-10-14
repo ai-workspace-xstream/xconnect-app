@@ -24,6 +24,7 @@ import 'services/desktop/desktop_platform_capabilities.dart';
 import 'services/sync/desktop_sync_service.dart';
 import 'services/session/session_manager.dart';
 import 'services/tun_settings_service.dart';
+import 'services/tuning/client_tuning.dart';
 import 'widgets/permission_guide_dialog.dart';
 import 'widgets/log_console.dart' show LogLevel;
 import 'widgets/app_breadcrumb.dart';
@@ -55,6 +56,7 @@ void main(List<String> args) async {
   await TelemetryService.init();
   await DnsConfig.init();
   await XhttpAdvancedConfig.init();
+  await ClientTuning.init();
   await GlobalProxyService.init();
   await PermissionGuideService.init();
   await ExperimentalFeatures.init();

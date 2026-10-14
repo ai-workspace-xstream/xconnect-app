@@ -3,7 +3,7 @@
 const String defaultXrayJsonTemplate = r'''
 {
   "log": {
-    "loglevel": "info"
+    "loglevel": "warning"
   },
   "dns": {
     "servers": [],

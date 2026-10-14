@@ -132,6 +132,13 @@ struct TunnelProfile {
   var ipv6IncludedRoutes: [TunnelRouteV6]
   var ipv6ExcludedRoutes: [TunnelRouteV6]
   var configPath: String
+  /// Server node ID of the profile, so a later tuning change can refresh the
+  /// persisted profile without guessing the node from a file path.
+  var nodeId: String? = nil
+  /// Go runtime tuning for the Packet Tunnel; null keeps the built-in default.
+  /// A memory limit of 0 removes the Go soft limit.
+  var goMemoryLimitMB: Int64? = nil
+  var goGCPercent: Int64? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -150,6 +157,9 @@ struct TunnelProfile {
     let ipv6IncludedRoutes = pigeonVar_list[11] as! [TunnelRouteV6]
     let ipv6ExcludedRoutes = pigeonVar_list[12] as! [TunnelRouteV6]
     let configPath = pigeonVar_list[13] as! String
+    let nodeId: String? = nilOrValue(pigeonVar_list[14])
+    let goMemoryLimitMB: Int64? = nilOrValue(pigeonVar_list[15])
+    let goGCPercent: Int64? = nilOrValue(pigeonVar_list[16])
 
     return TunnelProfile(
       mtu: mtu,
@@ -165,7 +175,10 @@ struct TunnelProfile {
       ipv6NetworkPrefixLengths: ipv6NetworkPrefixLengths,
       ipv6IncludedRoutes: ipv6IncludedRoutes,
       ipv6ExcludedRoutes: ipv6ExcludedRoutes,
-      configPath: configPath
+      configPath: configPath,
+      nodeId: nodeId,
+      goMemoryLimitMB: goMemoryLimitMB,
+      goGCPercent: goGCPercent
     )
   }
   func toList() -> [Any?] {
@@ -184,6 +197,61 @@ struct TunnelProfile {
       ipv6IncludedRoutes,
       ipv6ExcludedRoutes,
       configPath,
+      nodeId,
+      goMemoryLimitMB,
+      goGCPercent,
+    ]
+  }
+}
+
+/// The persisted Packet Tunnel profile, as the system will relaunch it.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct SavedTunnelProfile {
+  var configPath: String
+  var nodeId: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> SavedTunnelProfile? {
+    let configPath = pigeonVar_list[0] as! String
+    let nodeId: String? = nilOrValue(pigeonVar_list[1])
+
+    return SavedTunnelProfile(
+      configPath: configPath,
+      nodeId: nodeId
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      configPath,
+      nodeId,
+    ]
+  }
+}
+
+/// Runtime tuning to write into the persisted Packet Tunnel profile.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct TunnelRuntimeTuning {
+  var goMemoryLimitMB: Int64? = nil
+  var goGCPercent: Int64? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> TunnelRuntimeTuning? {
+    let goMemoryLimitMB: Int64? = nilOrValue(pigeonVar_list[0])
+    let goGCPercent: Int64? = nilOrValue(pigeonVar_list[1])
+
+    return TunnelRuntimeTuning(
+      goMemoryLimitMB: goMemoryLimitMB,
+      goGCPercent: goGCPercent
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      goMemoryLimitMB,
+      goGCPercent,
     ]
   }
 }
@@ -227,6 +295,18 @@ struct TunnelMetricsSnapshot {
   var memoryBytes: Int64? = nil
   var cpuPercent: Double? = nil
   var updatedAt: Int64? = nil
+  /// Physical footprint and its peak, the figures jetsam enforces.
+  var footprintBytes: Int64? = nil
+  var peakFootprintBytes: Int64? = nil
+  /// Go runtime share of the process and the pacing in effect.
+  var goHeapInUseBytes: Int64? = nil
+  var goHeapIdleBytes: Int64? = nil
+  var goHeapReleasedBytes: Int64? = nil
+  var goSysBytes: Int64? = nil
+  var goNumGC: Int64? = nil
+  var goGoroutines: Int64? = nil
+  var goMemoryLimitBytes: Int64? = nil
+  var goGCPercent: Int64? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -236,13 +316,33 @@ struct TunnelMetricsSnapshot {
     let memoryBytes: Int64? = nilOrValue(pigeonVar_list[2])
     let cpuPercent: Double? = nilOrValue(pigeonVar_list[3])
     let updatedAt: Int64? = nilOrValue(pigeonVar_list[4])
+    let footprintBytes: Int64? = nilOrValue(pigeonVar_list[5])
+    let peakFootprintBytes: Int64? = nilOrValue(pigeonVar_list[6])
+    let goHeapInUseBytes: Int64? = nilOrValue(pigeonVar_list[7])
+    let goHeapIdleBytes: Int64? = nilOrValue(pigeonVar_list[8])
+    let goHeapReleasedBytes: Int64? = nilOrValue(pigeonVar_list[9])
+    let goSysBytes: Int64? = nilOrValue(pigeonVar_list[10])
+    let goNumGC: Int64? = nilOrValue(pigeonVar_list[11])
+    let goGoroutines: Int64? = nilOrValue(pigeonVar_list[12])
+    let goMemoryLimitBytes: Int64? = nilOrValue(pigeonVar_list[13])
+    let goGCPercent: Int64? = nilOrValue(pigeonVar_list[14])
 
     return TunnelMetricsSnapshot(
       downloadBytesPerSecond: downloadBytesPerSecond,
       uploadBytesPerSecond: uploadBytesPerSecond,
       memoryBytes: memoryBytes,
       cpuPercent: cpuPercent,
-      updatedAt: updatedAt
+      updatedAt: updatedAt,
+      footprintBytes: footprintBytes,
+      peakFootprintBytes: peakFootprintBytes,
+      goHeapInUseBytes: goHeapInUseBytes,
+      goHeapIdleBytes: goHeapIdleBytes,
+      goHeapReleasedBytes: goHeapReleasedBytes,
+      goSysBytes: goSysBytes,
+      goNumGC: goNumGC,
+      goGoroutines: goGoroutines,
+      goMemoryLimitBytes: goMemoryLimitBytes,
+      goGCPercent: goGCPercent
     )
   }
   func toList() -> [Any?] {
@@ -252,6 +352,16 @@ struct TunnelMetricsSnapshot {
       memoryBytes,
       cpuPercent,
       updatedAt,
+      footprintBytes,
+      peakFootprintBytes,
+      goHeapInUseBytes,
+      goHeapIdleBytes,
+      goHeapReleasedBytes,
+      goSysBytes,
+      goNumGC,
+      goGoroutines,
+      goMemoryLimitBytes,
+      goGCPercent,
     ]
   }
 }
@@ -266,8 +376,12 @@ private class MessagesPigeonCodecReader: FlutterStandardReader {
     case 131:
       return TunnelProfile.fromList(self.readValue() as! [Any?])
     case 132:
-      return TunnelStatus.fromList(self.readValue() as! [Any?])
+      return SavedTunnelProfile.fromList(self.readValue() as! [Any?])
     case 133:
+      return TunnelRuntimeTuning.fromList(self.readValue() as! [Any?])
+    case 134:
+      return TunnelStatus.fromList(self.readValue() as! [Any?])
+    case 135:
       return TunnelMetricsSnapshot.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -286,11 +400,17 @@ private class MessagesPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? TunnelProfile {
       super.writeByte(131)
       super.writeValue(value.toList())
-    } else if let value = value as? TunnelStatus {
+    } else if let value = value as? SavedTunnelProfile {
       super.writeByte(132)
       super.writeValue(value.toList())
-    } else if let value = value as? TunnelMetricsSnapshot {
+    } else if let value = value as? TunnelRuntimeTuning {
       super.writeByte(133)
+      super.writeValue(value.toList())
+    } else if let value = value as? TunnelStatus {
+      super.writeByte(134)
+      super.writeValue(value.toList())
+    } else if let value = value as? TunnelMetricsSnapshot {
+      super.writeByte(135)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -325,6 +445,12 @@ protocol DarwinHostApi {
   func stopPacketTunnel(completion: @escaping (Result<Void, Error>) -> Void)
   func getPacketTunnelStatus(completion: @escaping (Result<TunnelStatus, Error>) -> Void)
   func getPacketTunnelMetrics(completion: @escaping (Result<TunnelMetricsSnapshot, Error>) -> Void)
+  /// The persisted profile, or null when none has been saved.
+  func savedPacketTunnelProfile(completion: @escaping (Result<SavedTunnelProfile?, Error>) -> Void)
+  /// Reloads the persisted profile's config file and writes [tuning] into it,
+  /// so an automatic relaunch uses current values. Never creates a new VPN
+  /// configuration.
+  func refreshPacketTunnelProfile(tuning: TunnelRuntimeTuning, completion: @escaping (Result<String, Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -482,6 +608,42 @@ class DarwinHostApiSetup {
       }
     } else {
       getPacketTunnelMetricsChannel.setMessageHandler(nil)
+    }
+    /// The persisted profile, or null when none has been saved.
+    let savedPacketTunnelProfileChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.savedPacketTunnelProfile\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      savedPacketTunnelProfileChannel.setMessageHandler { _, reply in
+        api.savedPacketTunnelProfile { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      savedPacketTunnelProfileChannel.setMessageHandler(nil)
+    }
+    /// Reloads the persisted profile's config file and writes [tuning] into it,
+    /// so an automatic relaunch uses current values. Never creates a new VPN
+    /// configuration.
+    let refreshPacketTunnelProfileChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.refreshPacketTunnelProfile\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      refreshPacketTunnelProfileChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let tuningArg = args[0] as! TunnelRuntimeTuning
+        api.refreshPacketTunnelProfile(tuning: tuningArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      refreshPacketTunnelProfileChannel.setMessageHandler(nil)
     }
   }
 }

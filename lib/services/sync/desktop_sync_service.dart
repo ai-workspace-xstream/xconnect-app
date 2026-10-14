@@ -9,6 +9,8 @@ import '../../utils/global_config.dart' show GlobalState;
 import '../session/session_manager.dart';
 import '../session/network_access_policy.dart';
 import '../../utils/native_bridge.dart';
+import '../../widgets/log_console.dart' show LogLevel;
+import '../tuning/client_tuning.dart';
 import '../vpn_config_service.dart';
 import 'sync_state.dart';
 import 'xray_config_writer.dart';
@@ -232,6 +234,17 @@ class DesktopSyncService {
           unawaited(clearManagedConnections());
         });
       }
+      await _refreshClientTuning(
+        session,
+        headers,
+        isCurrent: () => generation == session.generation && session.isLoggedIn,
+      );
+      // Signing out or switching accounts during the tuning request must not
+      // let this older sync report success.
+      if (generation != session.generation) {
+        return const DesktopSyncResult(
+            success: false, message: 'Session changed');
+      }
       GlobalState.nodeListRevision.value++;
       await SyncStateStore.instance.recordSuccess(
         nodeCount: nodes.length,
@@ -272,10 +285,47 @@ class DesktopSyncService {
 
   Future<void> clearManagedConnections() async {
     _expiryTimer?.cancel();
+    // Invalidate in-flight tuning requests before any await below.
+    final tuningCleared = ClientTuning.clear();
     await _stopUnauthorizedActiveNode();
     await XrayConfigWriter.pruneSyncedNodes({});
     await SyncStateStore.instance.clearNodes();
+    await tuningCleared;
+    // Withdraw server overrides from the persisted Packet Tunnel profile too.
+    unawaited(NativeBridge.refreshPersistedTunnelProfileTuning());
     GlobalState.nodeListRevision.value++;
+  }
+
+  /// Best effort: tuning never fails a node sync, and a failed fetch keeps
+  /// the last known good tuning. It applies on the next connect, and a change
+  /// is written into the persisted Packet Tunnel profile for system relaunch.
+  Future<void> _refreshClientTuning(
+    SessionManager session,
+    Map<String, String> headers, {
+    required bool Function() isCurrent,
+  }) async {
+    final before = jsonEncode(ClientTuning.profile?.toJson());
+    try {
+      final revision = await ClientTuning.refresh(
+        client,
+        session.buildEndpoint(ClientTuning.endpointPath),
+        headers,
+        isCurrent: isCurrent,
+      );
+      addAppLog(revision == null
+          ? '服务端未下发连接调优参数，使用内置默认值'
+          : '连接调优参数已更新 (revision $revision)，下次连接生效');
+      if (jsonEncode(ClientTuning.profile?.toJson()) != before) {
+        unawaited(NativeBridge.refreshPersistedTunnelProfileTuning());
+      }
+    } on ClientTuningStaleException {
+      addAppLog('会话已变化，丢弃旧会话的连接调优参数');
+    } catch (error) {
+      addAppLog(
+        '连接调优参数获取失败，继续使用上次的参数: $error',
+        level: LogLevel.warning,
+      );
+    }
   }
 
   void _onSessionChanged() {

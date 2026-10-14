@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ffi' as ffi;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:ffi/ffi.dart';
 import '../../services/tunnel_data_plane_probe.dart';
 import '../../services/tunnel_endpoint_resolver.dart';
 import '../../services/vpn_config_service.dart'; // 引入新的 VpnConfig 类
+import '../services/tuning/client_tuning.dart';
 import '../bindings/bridge_bindings.dart';
 import '../app/darwin_host_api.g.dart' as darwin_host;
 import '../widgets/log_console.dart' show LogLevel;
@@ -378,6 +380,7 @@ class NativeBridge {
     final runtimeConfigPath = await _prepareCanonicalTunnelConfigPath(
       sourceConfigPath,
       isTunMode: true,
+      nodeId: node.managedNodeId,
     );
 
     // ── Android: MethodChannel → savePacketTunnelProfile + startPacketTunnel
@@ -424,6 +427,7 @@ class NativeBridge {
         final profile = await _buildDefaultTunnelProfile(
           configPath: pinned.configPath,
           excludedIpv4: pinned.excludedIpv4,
+          nodeId: node.managedNodeId,
         );
         final saveResult = Platform.isIOS
             ? await _saveIosPacketTunnelProfileIfNeeded(profile)
@@ -598,6 +602,7 @@ class NativeBridge {
     final runtimeConfigPath = await _prepareCanonicalTunnelConfigPath(
       sourceConfigPath,
       isTunMode: false,
+      nodeId: node.managedNodeId,
     );
 
     if (_isMobile || Platform.isMacOS) {
@@ -951,11 +956,18 @@ class NativeBridge {
     }
   }
 
+  /// [nodeId] is resolved before pinning, so node-specific Go tuning follows
+  /// the node rather than the runtime file the profile points at.
   static Future<darwin_host.TunnelProfile> _buildDefaultTunnelProfile({
     required String configPath,
     List<String> excludedIpv4 = const <String>[],
+    String? nodeId,
   }) async {
+    final tuning = ClientTuning.effective(nodeId: nodeId);
     return darwin_host.TunnelProfile(
+      nodeId: nodeId,
+      goMemoryLimitMB: tuning.goMemoryLimitMB,
+      goGCPercent: tuning.goGCPercent,
       mtu: 1500,
       tun46Setting: 0,
       defaultNicSupport6: false,
@@ -1019,7 +1031,10 @@ class NativeBridge {
     };
   }
 
-  static Future<String?> _resolveTunnelConfigPath() async {
+  /// Resolves the node to connect together with its canonical config path,
+  /// so its identity is known before pinning writes a runtime copy.
+  static Future<({VpnNode node, String configPath})?>
+      _resolveTunnelNodeConfig() async {
     try {
       await VpnConfig.load();
     } catch (_) {}
@@ -1035,7 +1050,7 @@ class NativeBridge {
             VpnConfig.updateNode(node);
             await VpnConfig.saveToFile();
           }
-          return resolved;
+          return (node: node, configPath: resolved);
         }
       }
     }
@@ -1049,7 +1064,7 @@ class NativeBridge {
           VpnConfig.updateNode(node);
           await VpnConfig.saveToFile();
         }
-        return resolved;
+        return (node: node, configPath: resolved);
       }
     }
 
@@ -1061,18 +1076,30 @@ class NativeBridge {
           VpnConfig.updateNode(node);
           await VpnConfig.saveToFile();
         }
-        return resolved;
+        return (node: node, configPath: resolved);
       }
     }
     return null;
   }
 
-  static Future<String> _resolveOrBootstrapIosTunnelConfigPath() async {
-    final resolved = await _resolveTunnelConfigPath();
+  static Future<({String configPath, String? nodeId})>
+      _resolveOrBootstrapIosTunnelConfigPath() async {
+    final resolved = await _resolveTunnelNodeConfig();
     if (resolved != null) {
-      return _prepareCanonicalTunnelConfigPath(resolved, isTunMode: true);
+      final nodeId = resolved.node.managedNodeId;
+      return (
+        configPath: await _prepareCanonicalTunnelConfigPath(
+          resolved.configPath,
+          isTunMode: true,
+          nodeId: nodeId,
+        ),
+        nodeId: nodeId,
+      );
     }
-    return _bootstrapNodeConfigPath(isTunMode: true);
+    return (
+      configPath: await _bootstrapNodeConfigPath(isTunMode: true),
+      nodeId: null,
+    );
   }
 
   static Future<String> _darwinTunnelConfigsPath() async {
@@ -1095,9 +1122,12 @@ class NativeBridge {
     }
   }
 
+  /// [nodeId] is the server ID of the node being connected, resolved by the
+  /// caller before pinning; it selects node-specific tuning.
   static Future<String> _prepareCanonicalTunnelConfigPath(
     String sourcePath, {
     required bool isTunMode,
+    String? nodeId,
   }) async {
     final normalized = sourcePath.trim();
     if (normalized.isEmpty) return sourcePath;
@@ -1134,7 +1164,11 @@ class NativeBridge {
 
       // Apply current advanced settings to legacy XHTTP configs before the
       // Packet Tunnel or local engine reads the file.
-      VpnConfig.applyXhttpAdvancedSettings(sourceJson);
+      VpnConfig.applyXhttpAdvancedSettings(
+        sourceJson,
+        nodeId: nodeId,
+      );
+      VpnConfig.applyRuntimeLogLevel(sourceJson);
 
       final effectiveBlockQuic =
           !GlobalState.http3Passthrough.value || !proxySupportsUdp443;
@@ -1401,6 +1435,7 @@ class NativeBridge {
     final runtimeConfigPath = await _prepareCanonicalTunnelConfigPath(
       sourceConfigPath,
       isTunMode: true,
+      nodeId: node.managedNodeId,
     );
 
     _ensureDarwinFlutterApiReady();
@@ -1409,6 +1444,7 @@ class NativeBridge {
       final profile = await _buildDefaultTunnelProfile(
         configPath: pinned.configPath,
         excludedIpv4: pinned.excludedIpv4,
+        nodeId: node.managedNodeId,
       );
       final saveResult = await _saveIosPacketTunnelProfileIfNeeded(profile);
       return saveResult == 'profile_saved' || saveResult == 'profile_unchanged'
@@ -1430,8 +1466,11 @@ class NativeBridge {
 
     _ensureDarwinFlutterApiReady();
     try {
-      final configPath = await _resolveOrBootstrapIosTunnelConfigPath();
-      final profile = await _buildDefaultTunnelProfile(configPath: configPath);
+      final resolved = await _resolveOrBootstrapIosTunnelConfigPath();
+      final profile = await _buildDefaultTunnelProfile(
+        configPath: resolved.configPath,
+        nodeId: resolved.nodeId,
+      );
       final saveResult = await _saveIosPacketTunnelProfileIfNeeded(
         profile,
         force: true,
@@ -1459,13 +1498,14 @@ class NativeBridge {
         if (!await _ensurePacketTunnelStoppedBeforeStart()) {
           return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
         }
-        final configPath = await _resolveTunnelConfigPath();
-        if (configPath == null) {
+        final resolved = await _resolveTunnelNodeConfig();
+        if (resolved == null) {
           return '未找到可用的节点配置';
         }
         final canonicalPath = await _prepareCanonicalTunnelConfigPath(
-          configPath,
+          resolved.configPath,
           isTunMode: true,
+          nodeId: resolved.node.managedNodeId,
         );
         stopXray();
         _mobileActiveNodeName = null;
@@ -1496,18 +1536,20 @@ class NativeBridge {
         return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
       }
       await _stopIosLocalEngineIfNeeded();
-      final configPath = await _resolveTunnelConfigPath();
-      if (configPath == null) {
+      final resolved = await _resolveTunnelNodeConfig();
+      if (resolved == null) {
         return '未找到可用的节点配置';
       }
       final canonicalPath = await _prepareCanonicalTunnelConfigPath(
-        configPath,
+        resolved.configPath,
         isTunMode: true,
+        nodeId: resolved.node.managedNodeId,
       );
       final pinned = await _prepareRuntimeTunnelConfig(canonicalPath);
       final profile = await _buildDefaultTunnelProfile(
         configPath: pinned.configPath,
         excludedIpv4: pinned.excludedIpv4,
+        nodeId: resolved.node.managedNodeId,
       );
       final saveResult = Platform.isIOS
           ? await _saveIosPacketTunnelProfileIfNeeded(profile)
@@ -1722,6 +1764,95 @@ class NativeBridge {
     }
   }
 
+  static DateTime? _lastTunnelRuntimeDiagnosticsAt;
+
+  /// Logs the tunnel's footprint and Go pacing at most once a minute. Sampled
+  /// figures only describe the moment; jetsam evidence comes from the
+  /// footprint peak and the device's JetsamEvent reports.
+  static void _recordTunnelRuntimeDiagnostics(
+    PacketTunnelMetricsSnapshot metrics,
+  ) {
+    if (metrics.footprintBytes == null && metrics.goSysBytes == null) return;
+    final now = DateTime.now();
+    final last = _lastTunnelRuntimeDiagnosticsAt;
+    if (last != null && now.difference(last) < const Duration(minutes: 1)) {
+      return;
+    }
+    _lastTunnelRuntimeDiagnosticsAt = now;
+    String mib(int? bytes) => bytes == null
+        ? '-'
+        : bytes >= 0x7fffffffffffffff
+            ? 'none'
+            : (bytes / (1 << 20)).toStringAsFixed(1);
+    addAppLog(
+      '[tunnel] footprint=${mib(metrics.footprintBytes)}MiB '
+      'peak=${mib(metrics.peakFootprintBytes)}MiB '
+      'rss=${mib(metrics.memoryBytes)}MiB '
+      'goHeap=${mib(metrics.goHeapInUseBytes)}MiB '
+      'goSys=${mib(metrics.goSysBytes)}MiB numGC=${metrics.goNumGC ?? '-'} '
+      'goLimit=${mib(metrics.goMemoryLimitBytes)} '
+      'goGC=${metrics.goGCPercent ?? '-'}',
+    );
+  }
+
+  /// Rewrites the persisted Darwin Packet Tunnel profile after tuning
+  /// changes, so a system relaunch (on demand or reconnect) uses current
+  /// values without Flutter. Withdrawn overrides are restored from the record
+  /// in the config file; the running session keeps its values until it next
+  /// starts. Never creates a VPN configuration.
+  static Future<String> refreshPersistedTunnelProfileTuning() async {
+    if (!_isDarwin) return 'unsupported';
+    _ensureDarwinFlutterApiReady();
+    try {
+      final saved = await _darwinHostApi.savedPacketTunnelProfile();
+      if (saved == null) return 'profile_missing';
+      final file = File(saved.configPath);
+      if (await file.exists()) {
+        final updated = rewritePersistedTunnelConfig(
+          await file.readAsString(),
+          nodeId: saved.nodeId,
+        );
+        if (updated != null) await file.writeAsString(updated);
+      }
+      final tuning = ClientTuning.effective(nodeId: saved.nodeId);
+      return await _darwinHostApi.refreshPacketTunnelProfile(
+        darwin_host.TunnelRuntimeTuning(
+          goMemoryLimitMB: tuning.goMemoryLimitMB,
+          goGCPercent: tuning.goGCPercent,
+        ),
+      );
+    } on MissingPluginException {
+      return 'unsupported';
+    } catch (e) {
+      addAppLog(
+        'Packet Tunnel profile tuning refresh failed: $e',
+        level: LogLevel.warning,
+      );
+      return 'failed: $e';
+    }
+  }
+
+  /// Re-applies current tuning to a persisted runtime config: withdrawn XHTTP
+  /// overrides return to their recorded originals and the DNS section is
+  /// rebuilt. Node addresses, already pinned, are left alone. Returns null
+  /// when nothing changes.
+  static String? rewritePersistedTunnelConfig(String raw, {String? nodeId}) {
+    final config = jsonDecode(raw) as Map<String, dynamic>;
+    VpnConfig.applyXhttpAdvancedSettings(config, nodeId: nodeId);
+    if (config['dns'] is Map) {
+      config['dns'] = VpnConfig.buildSecureDnsConfig();
+    }
+    final updated = const JsonEncoder.withIndent('  ').convert(config);
+    return updated == raw ? null : updated;
+  }
+
+  @visibleForTesting
+  static Future<darwin_host.TunnelProfile> buildDefaultTunnelProfileForTesting({
+    required String configPath,
+    String? nodeId,
+  }) =>
+      _buildDefaultTunnelProfile(configPath: configPath, nodeId: nodeId);
+
   static Future<PacketTunnelMetricsSnapshot> getPacketTunnelMetrics() async {
     if (Platform.isAndroid) {
       try {
@@ -1761,13 +1892,22 @@ class NativeBridge {
     _ensureDarwinFlutterApiReady();
     try {
       final snapshot = await _darwinHostApi.getPacketTunnelMetrics();
-      return PacketTunnelMetricsSnapshot(
+      final metrics = PacketTunnelMetricsSnapshot(
         downloadBytesPerSecond: snapshot.downloadBytesPerSecond,
         uploadBytesPerSecond: snapshot.uploadBytesPerSecond,
         memoryBytes: snapshot.memoryBytes,
         cpuPercent: snapshot.cpuPercent,
         updatedAt: snapshot.updatedAt,
+        footprintBytes: snapshot.footprintBytes,
+        peakFootprintBytes: snapshot.peakFootprintBytes,
+        goHeapInUseBytes: snapshot.goHeapInUseBytes,
+        goSysBytes: snapshot.goSysBytes,
+        goNumGC: snapshot.goNumGC,
+        goMemoryLimitBytes: snapshot.goMemoryLimitBytes,
+        goGCPercent: snapshot.goGCPercent,
       );
+      _recordTunnelRuntimeDiagnostics(metrics);
+      return metrics;
     } on MissingPluginException {
       addAppLog(
         'Packet Tunnel metrics query unavailable: DarwinHostApi channel missing',
@@ -2060,11 +2200,28 @@ class PacketTunnelMetricsSnapshot {
   final double? cpuPercent;
   final int? updatedAt;
 
+  /// Darwin only: physical footprint and its peak, the figures jetsam
+  /// enforces, and the Go runtime's share with the pacing in effect.
+  final int? footprintBytes;
+  final int? peakFootprintBytes;
+  final int? goHeapInUseBytes;
+  final int? goSysBytes;
+  final int? goNumGC;
+  final int? goMemoryLimitBytes;
+  final int? goGCPercent;
+
   const PacketTunnelMetricsSnapshot({
     this.downloadBytesPerSecond,
     this.uploadBytesPerSecond,
     this.memoryBytes,
     this.cpuPercent,
     this.updatedAt,
+    this.footprintBytes,
+    this.peakFootprintBytes,
+    this.goHeapInUseBytes,
+    this.goSysBytes,
+    this.goNumGC,
+    this.goMemoryLimitBytes,
+    this.goGCPercent,
   });
 }
