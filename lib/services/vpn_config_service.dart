@@ -15,6 +15,7 @@ import 'sqlite_node_store.dart';
 import 'dns/dns_control_plane.dart';
 import 'session/network_access_policy.dart';
 import 'tunnel_endpoint_resolver.dart';
+import 'tuning/client_tuning.dart';
 
 class VlessUriProfile {
   final String name;
@@ -970,9 +971,22 @@ class VpnConfig {
     return '/$normalized';
   }
 
+  /// Control-plane tuning for [nodeId] fills in what the user has not set in
+  /// settings. Tuned upload limits are written inside `extra`, because Xray
+  /// replaces every XHTTP field except host, path and mode with it. A tuned
+  /// value stays in the saved profile until the server sends another one.
   static XhttpAdvancedConfigApplyResult applyXhttpAdvancedSettings(
-    Map<String, dynamic> config,
-  ) {
+    Map<String, dynamic> config, {
+    String? nodeId,
+  }) {
+    final tuning = ClientTuning.effective(nodeId: nodeId);
+    final mode = XhttpAdvancedConfig.modeCustomized
+        ? XhttpAdvancedConfig.mode.value
+        : tuning.xhttpMode ?? XhttpAdvancedConfig.mode.value;
+    final maxConcurrency = XhttpAdvancedConfig.xmuxMaxConcurrencyCustomized
+        ? XhttpAdvancedConfig.xmuxMaxConcurrency.value
+        : tuning.xmuxMaxConcurrency ??
+            XhttpAdvancedConfig.xmuxMaxConcurrency.value;
     final rawOutbounds = config['outbounds'];
     if (rawOutbounds is! List) {
       return const XhttpAdvancedConfigApplyResult(
@@ -1002,7 +1016,7 @@ class VpnConfig {
       final xhttpSettings = Map<String, dynamic>.from(
         streamSettings['xhttpSettings'] as Map? ?? const {},
       );
-      xhttpSettings['mode'] = XhttpAdvancedConfig.mode.value;
+      xhttpSettings['mode'] = mode;
 
       final extra = Map<String, dynamic>.from(
         xhttpSettings['extra'] as Map? ?? const {},
@@ -1010,20 +1024,30 @@ class VpnConfig {
       final xmux = Map<String, dynamic>.from(
         extra['xmux'] as Map? ?? const {},
       );
-      xmux['maxConcurrency'] = XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+      xmux['maxConcurrency'] = maxConcurrency;
       final hMaxRequestTimes = xmux['hMaxRequestTimes'];
-      if (hMaxRequestTimes == null ||
+      if (tuning.xmuxHMaxRequestTimes != null) {
+        xmux['hMaxRequestTimes'] = tuning.xmuxHMaxRequestTimes;
+      } else if (hMaxRequestTimes == null ||
           (hMaxRequestTimes is String && hMaxRequestTimes.trim().isEmpty)) {
         xmux['hMaxRequestTimes'] =
             XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes;
       }
       final hMaxReusableSecs = xmux['hMaxReusableSecs'];
-      if (hMaxReusableSecs == null ||
+      if (tuning.xmuxHMaxReusableSecs != null) {
+        xmux['hMaxReusableSecs'] = tuning.xmuxHMaxReusableSecs;
+      } else if (hMaxReusableSecs == null ||
           (hMaxReusableSecs is String && hMaxReusableSecs.trim().isEmpty)) {
         xmux['hMaxReusableSecs'] =
             XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs;
       }
       extra['xmux'] = xmux;
+      if (tuning.scMaxEachPostBytes != null) {
+        extra['scMaxEachPostBytes'] = tuning.scMaxEachPostBytes;
+      }
+      if (tuning.scMinPostsIntervalMs != null) {
+        extra['scMinPostsIntervalMs'] = tuning.scMinPostsIntervalMs;
+      }
       xhttpSettings['extra'] = extra;
       streamSettings['xhttpSettings'] = xhttpSettings;
 
@@ -1081,6 +1105,19 @@ class VpnConfig {
     return applyXhttpAdvancedSettingsToFile(node.configPath);
   }
 
+  /// Production runs never log per-connection detail: it costs CPU and memory
+  /// in the Packet Tunnel. Profiles saved by older versions at debug or info
+  /// are lowered on every connect; quieter levels are kept. `--debug` runs
+  /// leave the profile as written.
+  static void applyRuntimeLogLevel(Map<String, dynamic> config) {
+    if (GlobalState.debugMode.value) return;
+    final log = Map<String, dynamic>.from(config['log'] as Map? ?? const {});
+    final level = (log['loglevel'] as String? ?? '').trim().toLowerCase();
+    if (level.isNotEmpty && level != 'debug' && level != 'info') return;
+    log['loglevel'] = 'warning';
+    config['log'] = log;
+  }
+
   static DnsControlPlane _secureDnsControlPlane() => DnsConfig.controlPlane(
         dnsDirectPrimaryTag: _dnsDirectPrimaryTag,
         dnsDirectSecondaryTag: _dnsDirectSecondaryTag,
@@ -1088,8 +1125,35 @@ class VpnConfig {
         dnsProxySecondaryTag: _dnsProxySecondaryTag,
       );
 
-  static Map<String, dynamic> buildSecureDnsConfig() =>
-      _secureDnsControlPlane().dnsPolicy.toXrayDnsConfig();
+  /// Control-plane tuning may replace the DoH upstream timeout
+  /// ([ResolverServerPolicy.dohTimeoutMs] by default) and turn on parallel
+  /// queries; resolver addresses and routing are never tunable.
+  static Map<String, dynamic> buildSecureDnsConfig() {
+    final config = _secureDnsControlPlane().dnsPolicy.toXrayDnsConfig();
+    final tuning = ClientTuning.effective();
+    final timeoutMs = tuning.dohTimeoutMs;
+    if (timeoutMs != null) {
+      for (final server in config['servers'] as List) {
+        if (server is Map && server.containsKey('timeoutMs')) {
+          server['timeoutMs'] = timeoutMs;
+        }
+      }
+    }
+    if (tuning.dnsParallelQuery == true) {
+      config['enableParallelQuery'] = true;
+    }
+    return config;
+  }
+
+  /// Server node ID of the synced node whose profile lives at [configPath],
+  /// used to pick node-specific tuning.
+  static String? managedNodeIdForConfigPath(String configPath) {
+    final path = configPath.trim();
+    for (final node in _nodes) {
+      if (node.configPath.trim() == path) return node.managedNodeId;
+    }
+    return null;
+  }
 
   /// Used both for new profiles and when an existing profile is prepared for
   /// reconnect. Only the dedicated outbound is managed here; node transports,

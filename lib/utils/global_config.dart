@@ -626,6 +626,11 @@ class XhttpAdvancedConfig {
   static final ValueNotifier<String> xmuxMaxConcurrency =
       ValueNotifier<String>(defaultXmuxMaxConcurrency);
 
+  /// True once the user has changed the value in settings. A user's choice
+  /// takes precedence over control-plane tuning; untouched values follow it.
+  static bool modeCustomized = false;
+  static bool xmuxMaxConcurrencyCustomized = false;
+
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     mode.value = _normalizeMode(prefs.getString(_modeKey));
@@ -633,14 +638,20 @@ class XhttpAdvancedConfig {
     xmuxMaxConcurrency.value = _normalizeXmuxMaxConcurrency(
       prefs.getString(_xmuxMaxConcurrencyKey),
     );
+    // Values are only persisted when they change, so a stored key means the
+    // user picked it.
+    modeCustomized = prefs.containsKey(_modeKey);
+    xmuxMaxConcurrencyCustomized = prefs.containsKey(_xmuxMaxConcurrencyKey);
 
     mode.addListener(() {
+      modeCustomized = true;
       prefs.setString(_modeKey, _normalizeMode(mode.value));
     });
     alpn.addListener(() {
       prefs.setStringList(_alpnKey, _normalizeAlpn(alpn.value));
     });
     xmuxMaxConcurrency.addListener(() {
+      xmuxMaxConcurrencyCustomized = true;
       prefs.setString(
         _xmuxMaxConcurrencyKey,
         _normalizeXmuxMaxConcurrency(xmuxMaxConcurrency.value),

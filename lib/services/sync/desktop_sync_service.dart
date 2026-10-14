@@ -9,6 +9,8 @@ import '../../utils/global_config.dart' show GlobalState;
 import '../session/session_manager.dart';
 import '../session/network_access_policy.dart';
 import '../../utils/native_bridge.dart';
+import '../../widgets/log_console.dart' show LogLevel;
+import '../tuning/client_tuning.dart';
 import '../vpn_config_service.dart';
 import 'sync_state.dart';
 import 'xray_config_writer.dart';
@@ -232,6 +234,9 @@ class DesktopSyncService {
           unawaited(clearManagedConnections());
         });
       }
+      if (generation == session.generation) {
+        await _refreshClientTuning(session, headers);
+      }
       GlobalState.nodeListRevision.value++;
       await SyncStateStore.instance.recordSuccess(
         nodeCount: nodes.length,
@@ -275,7 +280,31 @@ class DesktopSyncService {
     await _stopUnauthorizedActiveNode();
     await XrayConfigWriter.pruneSyncedNodes({});
     await SyncStateStore.instance.clearNodes();
+    await ClientTuning.clear();
     GlobalState.nodeListRevision.value++;
+  }
+
+  /// Best effort: tuning never fails a node sync, and a failed fetch keeps
+  /// the last known good tuning. It applies on the next connect.
+  Future<void> _refreshClientTuning(
+    SessionManager session,
+    Map<String, String> headers,
+  ) async {
+    try {
+      final revision = await ClientTuning.refresh(
+        client,
+        session.buildEndpoint(ClientTuning.endpointPath),
+        headers,
+      );
+      addAppLog(revision == null
+          ? '服务端未下发连接调优参数，使用内置默认值'
+          : '连接调优参数已更新 (revision $revision)，下次连接生效');
+    } catch (error) {
+      addAppLog(
+        '连接调优参数获取失败，继续使用上次的参数: $error',
+        level: LogLevel.warning,
+      );
+    }
   }
 
   void _onSessionChanged() {
