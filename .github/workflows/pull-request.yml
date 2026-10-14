@@ -59,6 +59,7 @@ jobs:
           bash scripts/ci/check_libxray_contract.sh
           cd go_core
           go vet ./...
+          go test -mod=readonly -count=1 -run 'TunnelGovernor' .
 
       - name: Run Flutter verification suite
         shell: bash

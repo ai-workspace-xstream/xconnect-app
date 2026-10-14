@@ -291,16 +291,20 @@ class DesktopSyncService {
     await XrayConfigWriter.pruneSyncedNodes({});
     await SyncStateStore.instance.clearNodes();
     await tuningCleared;
+    // Withdraw server overrides from the persisted Packet Tunnel profile too.
+    unawaited(NativeBridge.refreshPersistedTunnelProfileTuning());
     GlobalState.nodeListRevision.value++;
   }
 
   /// Best effort: tuning never fails a node sync, and a failed fetch keeps
-  /// the last known good tuning. It applies on the next connect.
+  /// the last known good tuning. It applies on the next connect, and a change
+  /// is written into the persisted Packet Tunnel profile for system relaunch.
   Future<void> _refreshClientTuning(
     SessionManager session,
     Map<String, String> headers, {
     required bool Function() isCurrent,
   }) async {
+    final before = jsonEncode(ClientTuning.profile?.toJson());
     try {
       final revision = await ClientTuning.refresh(
         client,
@@ -311,6 +315,9 @@ class DesktopSyncService {
       addAppLog(revision == null
           ? '服务端未下发连接调优参数，使用内置默认值'
           : '连接调优参数已更新 (revision $revision)，下次连接生效');
+      if (jsonEncode(ClientTuning.profile?.toJson()) != before) {
+        unawaited(NativeBridge.refreshPersistedTunnelProfileTuning());
+      }
     } on ClientTuningStaleException {
       addAppLog('会话已变化，丢弃旧会话的连接调优参数');
     } catch (error) {

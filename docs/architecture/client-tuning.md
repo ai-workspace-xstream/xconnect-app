@@ -38,7 +38,8 @@ on its next reconnect.
       "scMaxEachPostBytes": 1000000,
       "scMinPostsIntervalMs": 30
     },
-    "dns": { "dohTimeoutMs": 1500, "parallelQuery": false }
+    "dns": { "dohTimeoutMs": 1500, "parallelQuery": false },
+    "tunnel": { "goMemoryLimitMB": 64, "goGCPercent": 40 }
   },
   "platforms": { "ios": { "xhttp": { "xmuxMaxConcurrency": "1-2" } } },
   "nodes": { "<node id from /nodes>": { "xhttp": { "scMaxEachPostBytes": 524288 } } }
@@ -59,9 +60,38 @@ use `defaults` and `platforms` only.
 | `xhttp.scMinPostsIntervalMs` | 1–1000 | `extra.scMinPostsIntervalMs` |
 | `dns.dohTimeoutMs` | 500–8000 | `timeoutMs` of the DoH upstreams (default 1500) |
 | `dns.parallelQuery` | `true` / `false` | `dns.enableParallelQuery` |
+| `tunnel.goMemoryLimitMB` | `0`, or 32–256 | Go soft memory limit in the Apple Packet Tunnel; `0` removes it |
+| `tunnel.goGCPercent` | 20–200 | Go GC target percentage in the Apple Packet Tunnel |
 
 Out-of-range values and unknown fields are ignored. Nothing in the document
 can change addresses, outbounds, routing or TLS settings.
+
+## Apple Packet Tunnel runtime
+
+`tunnel` values reach the Packet Tunnel through the typed Pigeon
+`TunnelProfile` and the persisted `providerConfiguration["options"]`, and the
+extension passes them to the Go bridge's `StartXrayTunnelWithFdTuned`. Absent
+values keep the built-in defaults (64 MiB, GC 40); an out-of-range value fails
+the start rather than being guessed. They apply when the tunnel next starts:
+a running session keeps its values, and stopping or a failed start restores
+the process defaults.
+
+The memory limit is a soft cap on the Go heap only, not on the process.
+On iOS the extension is killed by jetsam once its whole physical footprint
+(Go, Swift and Network Extension) passes the Packet Tunnel cap, which is far
+below 256 MiB; a Go limit near or above that cap protects nothing, so the
+upper bound is not a safe iOS value. Choose values from device soaks that
+watch the footprint peak and JetsamEvent reports. macOS has more headroom.
+
+When tuning changes, or is withdrawn by a `404` or sign-out, the client
+rewrites the persisted runtime config and profile options so an on-demand or
+system relaunch uses current values without Flutter running. This only
+refreshes an existing VPN configuration; it never creates one.
+
+Both platforms report, through `TunnelMetricsSnapshot`, the physical
+footprint and its peak, resident size, Go heap and sys, GC count, and the
+limit and GC percent in effect. The client logs them at most once a minute.
+Sampled figures do not replace the footprint peak or JetsamEvent evidence.
 
 ## Rules
 

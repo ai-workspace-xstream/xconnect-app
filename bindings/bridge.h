@@ -23,8 +23,17 @@ char* StartXray(const char* config);
 char* StopXray(void);
 long long StartXrayTunnel(const char* config);
 long long StartXrayTunnelWithFd(const char* config, int32_t tunFd, const char* interfaceName);
+/* Explicit runtime tuning for one session: a negative value selects the
+   default, memoryLimitMB 0 removes the Go soft limit. Out-of-range values
+   fail the start with an error from GetLastXrayTunnelError. */
+long long StartXrayTunnelWithFdTuned(const char* config,
+                                     int32_t tunFd,
+                                     const char* interfaceName,
+                                     long long memoryLimitMB,
+                                     int32_t gcPercent);
 char* GetLastXrayTunnelError(void);
-/* JSON: heapInUse, heapIdle, heapReleased, sys, numGC, goroutines. */
+/* JSON: heapInUse, heapIdle, heapReleased, sys, numGC, goroutines,
+   memoryLimit (bytes in effect), gcPercent (-1 outside a session). */
 char* XrayTunnelMemoryStats(void);
 int32_t SubmitInboundPacket(long long handle,
                             const uint8_t* data,

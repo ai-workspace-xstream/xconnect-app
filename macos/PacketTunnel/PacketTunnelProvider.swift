@@ -69,8 +69,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             config: configData,
             fd: fd,
             fdDetail: resolvedTun.detail,
-            egressInterface: egressInterface
+            egressInterface: egressInterface,
+            governor: GoGovernorSettings(options: map)
           )
+          self.metricsSampler.goStatsReader = { [weak self] in
+            self?.engine.memoryStatsJSON()
+          }
           self.metricsSampler.start(interfaceName: resolvedTun.interfaceName)
           self.statusStore.markConnected()
           os_log("PacketTunnelProvider: Engine started successfully", log: tunnelLog, type: .info)
@@ -699,6 +703,10 @@ private final class PacketTunnelMetricsSampler {
   private var lastResourceSampleAt: TimeInterval?
   private var cachedCpuPercent: Double?
   private var cachedMemoryBytes: Int64?
+  private var cachedGoMemory: GoMemoryStats?
+  private var cachedFootprint: ProcessFootprint?
+  /// Returns the Go runtime's XrayTunnelMemoryStats JSON.
+  var goStatsReader: (() -> String?)?
 
   func start(interfaceName: String?) {
     stop()
@@ -708,7 +716,9 @@ private final class PacketTunnelMetricsSampler {
         downloadBytesPerSecond: nil,
         uploadBytesPerSecond: nil,
         memoryBytes: cachedMemoryBytes,
-        cpuPercent: cachedCpuPercent
+        cpuPercent: cachedCpuPercent,
+        goMemory: cachedGoMemory,
+        footprint: cachedFootprint
       )
       return
     }
@@ -720,7 +730,9 @@ private final class PacketTunnelMetricsSampler {
       downloadBytesPerSecond: 0,
       uploadBytesPerSecond: 0,
       memoryBytes: cachedMemoryBytes,
-      cpuPercent: cachedCpuPercent
+      cpuPercent: cachedCpuPercent,
+      goMemory: cachedGoMemory,
+      footprint: cachedFootprint
     )
 
     let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -740,6 +752,8 @@ private final class PacketTunnelMetricsSampler {
     lastResourceSampleAt = nil
     cachedCpuPercent = nil
     cachedMemoryBytes = nil
+    cachedGoMemory = nil
+    cachedFootprint = nil
     store.clear()
   }
 
@@ -751,7 +765,9 @@ private final class PacketTunnelMetricsSampler {
         downloadBytesPerSecond: nil,
         uploadBytesPerSecond: nil,
         memoryBytes: cachedMemoryBytes,
-        cpuPercent: cachedCpuPercent
+        cpuPercent: cachedCpuPercent,
+        goMemory: cachedGoMemory,
+        footprint: cachedFootprint
       )
       lastSample = nil
       return
@@ -779,7 +795,9 @@ private final class PacketTunnelMetricsSampler {
       downloadBytesPerSecond: downloadBytesPerSecond,
       uploadBytesPerSecond: uploadBytesPerSecond,
       memoryBytes: cachedMemoryBytes,
-      cpuPercent: cachedCpuPercent
+      cpuPercent: cachedCpuPercent,
+      goMemory: cachedGoMemory,
+      footprint: cachedFootprint
     )
   }
 
@@ -894,7 +912,54 @@ private final class PacketTunnelMetricsSampler {
     }
     cachedCpuPercent = currentCpuPercent()
     cachedMemoryBytes = currentMemoryBytes()
+    cachedFootprint = currentFootprint()
+    cachedGoMemory = readGoMemoryStats()
     lastResourceSampleAt = timestamp
+  }
+
+  private func readGoMemoryStats() -> GoMemoryStats? {
+    guard
+      let json = goStatsReader?(),
+      let data = json.data(using: .utf8),
+      let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+      return nil
+    }
+    func number(_ key: String) -> Int64? {
+      (root[key] as? NSNumber)?.int64Value
+    }
+    guard let heapInUse = number("heapInUse"), let sys = number("sys") else {
+      return nil
+    }
+    return GoMemoryStats(
+      heapInUseBytes: heapInUse,
+      heapIdleBytes: number("heapIdle") ?? 0,
+      heapReleasedBytes: number("heapReleased") ?? 0,
+      sysBytes: sys,
+      numGC: number("numGC") ?? 0,
+      goroutines: number("goroutines") ?? 0,
+      memoryLimitBytes: number("memoryLimit"),
+      gcPercent: number("gcPercent")
+    )
+  }
+
+  /// Physical footprint and its lifetime peak, which resident size misses.
+  private func currentFootprint() -> ProcessFootprint? {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(
+      MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+    let result = withUnsafeMutablePointer(to: &info) { pointer in
+      pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+        task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), rebound, &count)
+      }
+    }
+    guard result == KERN_SUCCESS else {
+      return nil
+    }
+    return ProcessFootprint(
+      bytes: Int64(info.phys_footprint),
+      peakBytes: Int64(info.ledger_phys_footprint_peak)
+    )
   }
 
   private struct InterfaceCounters {
@@ -913,11 +978,31 @@ private final class PacketTunnelMetricsSnapshotStore {
     downloadBytesPerSecond: Int64?,
     uploadBytesPerSecond: Int64?,
     memoryBytes: Int64?,
-    cpuPercent: Double?
+    cpuPercent: Double?,
+    goMemory: GoMemoryStats? = nil,
+    footprint: ProcessFootprint? = nil
   ) {
     var snapshot: [String: Any] = [
       "updatedAt": Int64(Date().timeIntervalSince1970 * 1000)
     ]
+    if let goMemory {
+      snapshot["goHeapInUseBytes"] = NSNumber(value: goMemory.heapInUseBytes)
+      snapshot["goHeapIdleBytes"] = NSNumber(value: goMemory.heapIdleBytes)
+      snapshot["goHeapReleasedBytes"] = NSNumber(value: goMemory.heapReleasedBytes)
+      snapshot["goSysBytes"] = NSNumber(value: goMemory.sysBytes)
+      snapshot["goNumGC"] = NSNumber(value: goMemory.numGC)
+      snapshot["goGoroutines"] = NSNumber(value: goMemory.goroutines)
+      if let memoryLimit = goMemory.memoryLimitBytes {
+        snapshot["goMemoryLimitBytes"] = NSNumber(value: memoryLimit)
+      }
+      if let gcPercent = goMemory.gcPercent {
+        snapshot["goGCPercent"] = NSNumber(value: gcPercent)
+      }
+    }
+    if let footprint {
+      snapshot["footprintBytes"] = NSNumber(value: footprint.bytes)
+      snapshot["peakFootprintBytes"] = NSNumber(value: footprint.peakBytes)
+    }
     if let downloadBytesPerSecond {
       snapshot["downloadBytesPerSecond"] = NSNumber(value: downloadBytesPerSecond)
     }
@@ -938,16 +1023,50 @@ private final class PacketTunnelMetricsSnapshotStore {
   }
 }
 
+private struct GoMemoryStats {
+  let heapInUseBytes: Int64
+  let heapIdleBytes: Int64
+  let heapReleasedBytes: Int64
+  let sysBytes: Int64
+  let numGC: Int64
+  let goroutines: Int64
+  let memoryLimitBytes: Int64?
+  let gcPercent: Int64?
+}
+
+private struct ProcessFootprint {
+  let bytes: Int64
+  let peakBytes: Int64
+}
+
+/// Go runtime tuning from the persisted profile. -1 selects the default.
+private struct GoGovernorSettings {
+  static let unset: Int64 = -1
+  let memoryLimitMB: Int64
+  let gcPercent: Int32
+
+  init(options: [String: NSObject]) {
+    memoryLimitMB = (options["goMemoryLimitMB"] as? NSNumber)?.int64Value ?? Self.unset
+    gcPercent = (options["goGCPercent"] as? NSNumber)?.int32Value ?? Int32(Self.unset)
+  }
+}
+
 private protocol SecureTunnelEngine {
-  func start(config: Data, fd: Int32, fdDetail: String, egressInterface: String) throws
+  func start(
+    config: Data, fd: Int32, fdDetail: String, egressInterface: String,
+    governor: GoGovernorSettings) throws
   func stop()
+  func memoryStatsJSON() -> String?
 }
 
 private final class XrayTunnelEngine: SecureTunnelEngine {
   private let bridge = XrayTunnelBridge()
   private var tunnelHandle: Int64?
 
-  func start(config: Data, fd: Int32, fdDetail: String, egressInterface: String) throws {
+  func start(
+    config: Data, fd: Int32, fdDetail: String, egressInterface: String,
+    governor: GoGovernorSettings
+  ) throws {
     stop()
     guard !config.isEmpty else {
       throw NSError(
@@ -957,8 +1076,13 @@ private final class XrayTunnelEngine: SecureTunnelEngine {
       )
     }
     let handle = try bridge.start(
-      configData: config, fd: fd, fdDetail: fdDetail, egressInterface: egressInterface)
+      configData: config, fd: fd, fdDetail: fdDetail, egressInterface: egressInterface,
+      governor: governor)
     tunnelHandle = handle
+  }
+
+  func memoryStatsJSON() -> String? {
+    bridge.memoryStatsJSON()
   }
 
   func stop() {
@@ -973,12 +1097,17 @@ private final class XrayTunnelEngine: SecureTunnelEngine {
 private final class XrayTunnelBridge {
   private typealias StartXrayTunnelWithFdFn =
     @convention(c) (UnsafePointer<CChar>?, Int32, UnsafePointer<CChar>?) -> Int64
+  private typealias StartXrayTunnelWithFdTunedFn =
+    @convention(c) (UnsafePointer<CChar>?, Int32, UnsafePointer<CChar>?, Int64, Int32) -> Int64
+  private typealias XrayTunnelMemoryStatsFn = @convention(c) () -> UnsafeMutablePointer<CChar>?
   private typealias StopXrayTunnelFn = @convention(c) (Int64) -> UnsafeMutablePointer<CChar>?
   private typealias FreeXrayTunnelFn = @convention(c) (Int64) -> UnsafeMutablePointer<CChar>?
   private typealias FreeCStringFn = @convention(c) (UnsafeMutablePointer<CChar>?) -> Void
   private typealias GetLastXrayTunnelErrorFn = @convention(c) () -> UnsafeMutablePointer<CChar>?
 
   private let startFn: StartXrayTunnelWithFdFn?
+  private let startTunedFn: StartXrayTunnelWithFdTunedFn?
+  private let memoryStatsFn: XrayTunnelMemoryStatsFn?
   private let stopFn: StopXrayTunnelFn?
   private let freeTunnelFn: FreeXrayTunnelFn?
   private let freeCStringFn: FreeCStringFn?
@@ -991,6 +1120,8 @@ private final class XrayTunnelBridge {
     dlHandle = loaded.handle
     loadError = loaded.error
     startFn = XrayTunnelBridge.loadSymbol("StartXrayTunnelWithFd", from: dlHandle)
+    startTunedFn = XrayTunnelBridge.loadSymbol("StartXrayTunnelWithFdTuned", from: dlHandle)
+    memoryStatsFn = XrayTunnelBridge.loadSymbol("XrayTunnelMemoryStats", from: dlHandle)
     stopFn = XrayTunnelBridge.loadSymbol("StopXrayTunnel", from: dlHandle)
     freeTunnelFn = XrayTunnelBridge.loadSymbol("FreeXrayTunnel", from: dlHandle)
     freeCStringFn = XrayTunnelBridge.loadSymbol("FreeCString", from: dlHandle)
@@ -1003,8 +1134,18 @@ private final class XrayTunnelBridge {
     }
   }
 
-  func start(configData: Data, fd: Int32, fdDetail: String, egressInterface: String) throws -> Int64
-  {
+  func memoryStatsJSON() -> String? {
+    guard let memoryStatsFn, let ptr = memoryStatsFn() else {
+      return nil
+    }
+    defer { releaseCString(ptr) }
+    return String(cString: ptr)
+  }
+
+  func start(
+    configData: Data, fd: Int32, fdDetail: String, egressInterface: String,
+    governor: GoGovernorSettings
+  ) throws -> Int64 {
     guard let startFn else {
       let message = loadError ?? "failed to load bridge symbols"
       throw NSError(
@@ -1029,7 +1170,11 @@ private final class XrayTunnelBridge {
     let json = String(data: configData, encoding: .utf8) ?? "{}"
     return try json.withCString { cstr in
       return try egressInterface.withCString { ifaceCstr in
-        let handle = startFn(cstr, fd, ifaceCstr)
+        // An older bridge without the tuned entry keeps the defaults.
+        let handle =
+          startTunedFn.map {
+            $0(cstr, fd, ifaceCstr, governor.memoryLimitMB, governor.gcPercent)
+          } ?? startFn(cstr, fd, ifaceCstr)
         if handle <= 0 {
           let bridgeError = readBridgeError()
           let summary = summarizeConfig(configData)

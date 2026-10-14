@@ -389,8 +389,104 @@ class DarwinHostApiImpl: DarwinHostApi {
       uploadBytesPerSecond: integerValue(raw["uploadBytesPerSecond"]),
       memoryBytes: integerValue(raw["memoryBytes"]),
       cpuPercent: doubleValue(raw["cpuPercent"]),
-      updatedAt: integerValue(raw["updatedAt"])
+      updatedAt: integerValue(raw["updatedAt"]),
+      footprintBytes: integerValue(raw["footprintBytes"]),
+      peakFootprintBytes: integerValue(raw["peakFootprintBytes"]),
+      goHeapInUseBytes: integerValue(raw["goHeapInUseBytes"]),
+      goHeapIdleBytes: integerValue(raw["goHeapIdleBytes"]),
+      goHeapReleasedBytes: integerValue(raw["goHeapReleasedBytes"]),
+      goSysBytes: integerValue(raw["goSysBytes"]),
+      goNumGC: integerValue(raw["goNumGC"]),
+      goGoroutines: integerValue(raw["goGoroutines"]),
+      goMemoryLimitBytes: integerValue(raw["goMemoryLimitBytes"]),
+      goGCPercent: integerValue(raw["goGCPercent"])
     )
+  }
+
+  func savedPacketTunnelProfile(
+    completion: @escaping (Result<SavedTunnelProfile?, Error>) -> Void
+  ) {
+    guard let options = storedPacketTunnelOptions(),
+      let configPath = options["configPath"] as? String,
+      !configPath.isEmpty
+    else {
+      completion(.success(nil))
+      return
+    }
+    completion(
+      .success(SavedTunnelProfile(configPath: configPath, nodeId: options["nodeId"] as? String)))
+  }
+
+  func refreshPacketTunnelProfile(
+    tuning: TunnelRuntimeTuning,
+    completion: @escaping (Result<String, Error>) -> Void
+  ) {
+    guard var options = storedPacketTunnelOptions() else {
+      completion(.success("profile_missing"))
+      return
+    }
+    // The system relaunches from the embedded copy, so reload it from the
+    // config file Flutter has just rewritten.
+    if let configPath = options["configPath"] as? String,
+      let data = try? Data(contentsOf: URL(fileURLWithPath: configPath)),
+      !data.isEmpty
+    {
+      options["config"] = data as NSData
+    }
+    setRuntimeTuning(&options, goMemoryLimitMB: tuning.goMemoryLimitMB, goGCPercent: tuning.goGCPercent)
+    sharedDefaults().set(options, forKey: profileOptionsKey)
+
+    #if os(iOS) || os(macOS)
+      // Load only: refreshing must never create a VPN configuration.
+      loadTunnelManager { manager, error in
+        if let error {
+          completion(
+            .failure(
+              PigeonError(
+                code: "profile-refresh-failed", message: self.describeError(error), details: nil)))
+          return
+        }
+        guard let manager, let providerId = self.packetTunnelProviderBundleId() else {
+          completion(.success("profile_stored"))
+          return
+        }
+        if self.managerHasLatestOptions(manager, providerId: providerId, options: options) {
+          completion(.success("profile_unchanged"))
+          return
+        }
+        self.prepareManagerWithLatestOptions(manager: manager, options: options) {
+          _, prepareError in
+          if let prepareError {
+            completion(
+              .failure(
+                PigeonError(
+                  code: "profile-refresh-failed", message: self.describeError(prepareError),
+                  details: nil)))
+            return
+          }
+          completion(.success("profile_saved"))
+        }
+      }
+    #else
+      completion(.success("profile_stored"))
+    #endif
+  }
+
+  private func setRuntimeTuning(
+    _ options: inout [String: NSObject],
+    goMemoryLimitMB: Int64?,
+    goGCPercent: Int64?
+  ) {
+    if let goMemoryLimitMB {
+      options["goMemoryLimitMB"] = NSNumber(value: goMemoryLimitMB)
+    } else {
+      options.removeValue(forKey: "goMemoryLimitMB")
+    }
+    if let goGCPercent {
+      options["goGCPercent"] = NSNumber(value: goGCPercent)
+    } else {
+      options.removeValue(forKey: "goGCPercent")
+    }
   }
 
   private func integerValue(_ raw: Any?) -> Int64? {
@@ -489,6 +585,11 @@ class DarwinHostApiImpl: DarwinHostApi {
       options["config"] = data as NSData
     }
     options["configPath"] = profile.configPath as NSString
+    if let nodeId = profile.nodeId, !nodeId.isEmpty {
+      options["nodeId"] = nodeId as NSString
+    }
+    setRuntimeTuning(
+      &options, goMemoryLimitMB: profile.goMemoryLimitMB, goGCPercent: profile.goGCPercent)
 
     return options
   }

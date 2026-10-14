@@ -20,6 +20,8 @@ class ClientTuningValues {
     this.scMinPostsIntervalMs,
     this.dohTimeoutMs,
     this.dnsParallelQuery,
+    this.goMemoryLimitMB,
+    this.goGCPercent,
   });
 
   static const allowedXhttpModes = <String>['auto', 'stream-up'];
@@ -34,10 +36,20 @@ class ClientTuningValues {
   final int? dohTimeoutMs;
   final bool? dnsParallelQuery;
 
+  /// Go runtime soft memory limit for the Apple Packet Tunnel, in MiB; 0
+  /// removes it. It caps only the Go heap, not the extension's footprint,
+  /// which iOS limits far below the upper bound.
+  final int? goMemoryLimitMB;
+
+  /// Go GC target percentage for the Apple Packet Tunnel.
+  final int? goGCPercent;
+
   factory ClientTuningValues.fromJson(Object? raw) {
     if (raw is! Map) return const ClientTuningValues();
     final xhttp = raw['xhttp'] is Map ? raw['xhttp'] as Map : const {};
     final dns = raw['dns'] is Map ? raw['dns'] as Map : const {};
+    final tunnel = raw['tunnel'] is Map ? raw['tunnel'] as Map : const {};
+    final memoryLimit = tunnel['goMemoryLimitMB'];
     final mode = xhttp['mode'];
     final normalizedMode = mode is String ? mode.trim().toLowerCase() : null;
     final parallel = dns['parallelQuery'];
@@ -52,6 +64,8 @@ class ClientTuningValues {
       scMinPostsIntervalMs: _range(xhttp['scMinPostsIntervalMs'], 1, 1000),
       dohTimeoutMs: _integer(dns['dohTimeoutMs'], 500, 8000),
       dnsParallelQuery: parallel is bool ? parallel : null,
+      goMemoryLimitMB: memoryLimit == 0 ? 0 : _integer(memoryLimit, 32, 256),
+      goGCPercent: _integer(tunnel['goGCPercent'], 20, 200),
     );
   }
 
@@ -71,9 +85,14 @@ class ClientTuningValues {
       if (dohTimeoutMs != null) 'dohTimeoutMs': dohTimeoutMs,
       if (dnsParallelQuery != null) 'parallelQuery': dnsParallelQuery,
     };
+    final tunnel = <String, dynamic>{
+      if (goMemoryLimitMB != null) 'goMemoryLimitMB': goMemoryLimitMB,
+      if (goGCPercent != null) 'goGCPercent': goGCPercent,
+    };
     return <String, dynamic>{
       if (xhttp.isNotEmpty) 'xhttp': xhttp,
       if (dns.isNotEmpty) 'dns': dns,
+      if (tunnel.isNotEmpty) 'tunnel': tunnel,
     };
   }
 
@@ -89,6 +108,8 @@ class ClientTuningValues {
       scMinPostsIntervalMs: other.scMinPostsIntervalMs ?? scMinPostsIntervalMs,
       dohTimeoutMs: other.dohTimeoutMs ?? dohTimeoutMs,
       dnsParallelQuery: other.dnsParallelQuery ?? dnsParallelQuery,
+      goMemoryLimitMB: other.goMemoryLimitMB ?? goMemoryLimitMB,
+      goGCPercent: other.goGCPercent ?? goGCPercent,
     );
   }
 
