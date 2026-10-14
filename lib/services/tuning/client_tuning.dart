@@ -169,6 +169,14 @@ class ClientTuningProfile {
           .overlay(nodeId == null ? null : nodes[nodeId]);
 }
 
+/// The response belongs to a session that has since ended or been cleared.
+class ClientTuningStaleException implements Exception {
+  const ClientTuningStaleException();
+
+  @override
+  String toString() => 'Client tuning response belongs to a stale session';
+}
+
 /// Last known good tuning from the control plane. It is fetched after each
 /// successful node sync and applied when a profile is prepared for connect.
 class ClientTuning {
@@ -195,19 +203,35 @@ class ClientTuning {
       _profile?.resolve(platform: Platform.operatingSystem, nodeId: nodeId) ??
       const ClientTuningValues();
 
+  /// Bumped by [clear] so that a request started before it can never write.
+  static int _generation = 0;
+
   /// Returns the applied revision, or null when the server has no tuning. A
   /// 404 drops the cached profile so the built-in defaults apply again; any
   /// other failure throws and keeps the last known good profile.
+  ///
+  /// [isCurrent] reports whether the session that started the request is
+  /// still active. It is checked, together with [clear], before the memory
+  /// cache and again before the persisted copy is written; a response from a
+  /// stale session throws [ClientTuningStaleException] and changes nothing.
   static Future<String?> refresh(
     http.Client client,
     Uri endpoint,
-    Map<String, String> headers,
-  ) async {
+    Map<String, String> headers, {
+    bool Function()? isCurrent,
+  }) async {
+    final generation = _generation;
+    bool stale() =>
+        generation != _generation || (isCurrent != null && !isCurrent());
+
     final response = await client
         .get(endpoint, headers: headers)
         .timeout(const Duration(seconds: 15));
+    if (stale()) throw const ClientTuningStaleException();
     if (response.statusCode == 404) {
-      await _store(null);
+      if (!await _store(null, stale)) {
+        throw const ClientTuningStaleException();
+      }
       return null;
     }
     if (response.statusCode != 200) {
@@ -220,20 +244,35 @@ class ClientTuning {
     if (profile == null) {
       throw const FormatException('Unsupported client tuning document');
     }
-    await _store(profile);
+    if (!await _store(profile, stale)) {
+      throw const ClientTuningStaleException();
+    }
     return profile.revision;
   }
 
-  static Future<void> clear() => _store(null);
+  /// Drops the profile and invalidates every request still in flight.
+  static Future<void> clear() async {
+    final generation = ++_generation;
+    await _store(null, () => generation != _generation);
+  }
 
-  static Future<void> _store(ClientTuningProfile? profile) async {
-    _profile = profile;
+  /// Writes both copies unless [stale]. The last check and the memory write
+  /// share one synchronous step, so a clear or sign-out can only land before
+  /// it (nothing is written) or after it (the clear wins both copies).
+  static Future<bool> _store(
+    ClientTuningProfile? profile,
+    bool Function() stale,
+  ) async {
+    if (stale()) return false;
     final prefs = await SharedPreferences.getInstance();
+    if (stale()) return false;
+    _profile = profile;
     if (profile == null) {
       await prefs.remove(_prefsKey);
     } else {
       await prefs.setString(_prefsKey, jsonEncode(profile.toJson()));
     }
+    return true;
   }
 
   @visibleForTesting

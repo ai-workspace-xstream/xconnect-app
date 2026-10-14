@@ -17,9 +17,11 @@ same session headers as `GET /api/agent-server/v1/nodes`.
 | `404` | No tuning: the stored profile is dropped and built-in defaults apply |
 | Anything else, or an unknown `version` | Logged; the last known good profile stays |
 
-A tuning failure never fails the node sync. Signing out clears the profile.
-Values apply the next time a profile is prepared for connect, so a change
-reaches a connected client on its next reconnect.
+A tuning failure never fails the node sync. Signing out or switching accounts
+clears the profile and discards any response still in flight for the old
+session; that older sync is not recorded as a success. Values apply the next
+time a profile is prepared for connect, so a change reaches a connected client
+on its next reconnect.
 
 ## Document
 
@@ -63,10 +65,15 @@ can change addresses, outbounds, routing or TLS settings.
 
 ## Rules
 
-- A mode or xmux concurrency the user changed in settings wins over tuning.
+- A mode or xmux concurrency the user saved in settings wins over tuning,
+  including when the saved value is the local default. Saving one field (for
+  example ALPN) does not pin the others.
 - Tuned values are written inside XHTTP `extra`, because Xray replaces every
   field except host, path and mode with `extra` when it is present.
-- A tuned value stays in the saved profile until the server sends another
-  one. To roll a field back, send its default value rather than omitting it.
+- Each tuned XHTTP value is recorded in the saved profile, under the
+  top-level `xconnectTuning` key, with the value the profile held before.
+  When tuning stops sending a field — a `404`, a sign-out, or a `200`
+  document that omits it — the next connect restores that original value.
+  A value changed outside tuning after it was applied is kept.
 - `scMaxEachPostBytes` must not exceed the node's `xhttpScMaxEachPostBytes`
   (Xray's default is 1000000 on both sides).

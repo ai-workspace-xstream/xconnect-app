@@ -234,8 +234,16 @@ class DesktopSyncService {
           unawaited(clearManagedConnections());
         });
       }
-      if (generation == session.generation) {
-        await _refreshClientTuning(session, headers);
+      await _refreshClientTuning(
+        session,
+        headers,
+        isCurrent: () => generation == session.generation && session.isLoggedIn,
+      );
+      // Signing out or switching accounts during the tuning request must not
+      // let this older sync report success.
+      if (generation != session.generation) {
+        return const DesktopSyncResult(
+            success: false, message: 'Session changed');
       }
       GlobalState.nodeListRevision.value++;
       await SyncStateStore.instance.recordSuccess(
@@ -277,10 +285,12 @@ class DesktopSyncService {
 
   Future<void> clearManagedConnections() async {
     _expiryTimer?.cancel();
+    // Invalidate in-flight tuning requests before any await below.
+    final tuningCleared = ClientTuning.clear();
     await _stopUnauthorizedActiveNode();
     await XrayConfigWriter.pruneSyncedNodes({});
     await SyncStateStore.instance.clearNodes();
-    await ClientTuning.clear();
+    await tuningCleared;
     GlobalState.nodeListRevision.value++;
   }
 
@@ -288,17 +298,21 @@ class DesktopSyncService {
   /// the last known good tuning. It applies on the next connect.
   Future<void> _refreshClientTuning(
     SessionManager session,
-    Map<String, String> headers,
-  ) async {
+    Map<String, String> headers, {
+    required bool Function() isCurrent,
+  }) async {
     try {
       final revision = await ClientTuning.refresh(
         client,
         session.buildEndpoint(ClientTuning.endpointPath),
         headers,
+        isCurrent: isCurrent,
       );
       addAppLog(revision == null
           ? '服务端未下发连接调优参数，使用内置默认值'
           : '连接调优参数已更新 (revision $revision)，下次连接生效');
+    } on ClientTuningStaleException {
+      addAppLog('会话已变化，丢弃旧会话的连接调优参数');
     } catch (error) {
       addAppLog(
         '连接调优参数获取失败，继续使用上次的参数: $error',

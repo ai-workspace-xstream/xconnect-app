@@ -59,6 +59,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Set<String> _draftXhttpAlpn = <String>{...XhttpAdvancedConfig.alpn.value};
   String _draftXhttpXmuxMaxConcurrency =
       XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+  // Values shown when the draft was loaded. Only fields the user changed
+  // from these are saved, and so marked as their own choice.
+  String _loadedXhttpMode = XhttpAdvancedConfig.mode.value;
+  String _loadedXhttpXmuxMaxConcurrency =
+      XhttpAdvancedConfig.xmuxMaxConcurrency.value;
   bool _xhttpAdvancedDirty = false;
 
   DesktopPlatformCapabilities get _desktopCapabilities =>
@@ -474,11 +479,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  /// Shows the values in effect, including control-plane tuning, so the user
+  /// can explicitly pick a local default over a tuned value.
   void _loadXhttpAdvancedDraft() {
-    _draftXhttpMode = XhttpAdvancedConfig.mode.value;
+    _loadedXhttpMode = VpnConfig.effectiveXhttpMode();
+    _loadedXhttpXmuxMaxConcurrency = VpnConfig.effectiveXmuxMaxConcurrency();
+    _draftXhttpMode = _loadedXhttpMode;
     _draftXhttpAlpn = <String>{...XhttpAdvancedConfig.alpn.value};
-    _draftXhttpXmuxMaxConcurrency =
-        XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+    _draftXhttpXmuxMaxConcurrency = _loadedXhttpXmuxMaxConcurrency;
     _xhttpXmuxMaxConcurrencyController.text = _draftXhttpXmuxMaxConcurrency;
     _xhttpAdvancedDirty = false;
   }
@@ -526,13 +534,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       for (final candidate in XhttpAdvancedConfig.allowedAlpn)
         if (_draftXhttpAlpn.contains(candidate)) candidate,
     ];
-    XhttpAdvancedConfig.setMode(_draftXhttpMode);
+    if (_draftXhttpMode != _loadedXhttpMode) {
+      XhttpAdvancedConfig.setMode(_draftXhttpMode);
+    }
     XhttpAdvancedConfig.setAlpn(orderedAlpn);
-    XhttpAdvancedConfig.setXmuxMaxConcurrency(
-      _draftXhttpXmuxMaxConcurrency,
-    );
-    _draftXhttpXmuxMaxConcurrency =
-        XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+    if (_draftXhttpXmuxMaxConcurrency != _loadedXhttpXmuxMaxConcurrency) {
+      XhttpAdvancedConfig.setXmuxMaxConcurrency(
+        _draftXhttpXmuxMaxConcurrency,
+      );
+    }
+    _loadedXhttpMode = VpnConfig.effectiveXhttpMode();
+    _loadedXhttpXmuxMaxConcurrency = VpnConfig.effectiveXmuxMaxConcurrency();
+    _draftXhttpMode = _loadedXhttpMode;
+    _draftXhttpXmuxMaxConcurrency = _loadedXhttpXmuxMaxConcurrency;
     _xhttpXmuxMaxConcurrencyController.text = _draftXhttpXmuxMaxConcurrency;
 
     final activeNodeName = GlobalState.activeNodeName.value.trim();

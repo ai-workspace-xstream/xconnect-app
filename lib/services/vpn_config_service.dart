@@ -971,22 +971,47 @@ class VpnConfig {
     return '/$normalized';
   }
 
+  /// Top-level profile key recording each XHTTP value that came from
+  /// control-plane tuning together with what the profile held before it, so
+  /// withdrawing an override restores the original value. Xray ignores
+  /// unknown top-level keys.
+  static const tuningOverridesKey = 'xconnectTuning';
+
+  /// XHTTP mode for [nodeId]: the user's saved choice, otherwise tuning,
+  /// otherwise the local default.
+  static String effectiveXhttpMode({String? nodeId}) =>
+      XhttpAdvancedConfig.modeCustomized
+          ? XhttpAdvancedConfig.mode.value
+          : ClientTuning.effective(nodeId: nodeId).xhttpMode ??
+              XhttpAdvancedConfig.mode.value;
+
+  /// xmux maxConcurrency for [nodeId], resolved like [effectiveXhttpMode].
+  static String effectiveXmuxMaxConcurrency({String? nodeId}) =>
+      XhttpAdvancedConfig.xmuxMaxConcurrencyCustomized
+          ? XhttpAdvancedConfig.xmuxMaxConcurrency.value
+          : ClientTuning.effective(nodeId: nodeId).xmuxMaxConcurrency ??
+              XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+
   /// Control-plane tuning for [nodeId] fills in what the user has not set in
-  /// settings. Tuned upload limits are written inside `extra`, because Xray
-  /// replaces every XHTTP field except host, path and mode with it. A tuned
-  /// value stays in the saved profile until the server sends another one.
+  /// settings. Tuned upload and reuse limits are written inside `extra`,
+  /// because Xray replaces every XHTTP field except host, path and mode with
+  /// it, and are recorded under [tuningOverridesKey]. When tuning stops
+  /// sending a field (a 404, a sign-out or a document without it), the
+  /// recorded original comes back; a value changed outside tuning since it
+  /// was applied is kept as the new original.
   static XhttpAdvancedConfigApplyResult applyXhttpAdvancedSettings(
     Map<String, dynamic> config, {
     String? nodeId,
   }) {
     final tuning = ClientTuning.effective(nodeId: nodeId);
-    final mode = XhttpAdvancedConfig.modeCustomized
-        ? XhttpAdvancedConfig.mode.value
-        : tuning.xhttpMode ?? XhttpAdvancedConfig.mode.value;
-    final maxConcurrency = XhttpAdvancedConfig.xmuxMaxConcurrencyCustomized
-        ? XhttpAdvancedConfig.xmuxMaxConcurrency.value
-        : tuning.xmuxMaxConcurrency ??
-            XhttpAdvancedConfig.xmuxMaxConcurrency.value;
+    final mode = effectiveXhttpMode(nodeId: nodeId);
+    final maxConcurrency = effectiveXmuxMaxConcurrency(nodeId: nodeId);
+    final tunedFields = <String, String?>{
+      'scMaxEachPostBytes': tuning.scMaxEachPostBytes,
+      'scMinPostsIntervalMs': tuning.scMinPostsIntervalMs,
+      'xmux.hMaxRequestTimes': tuning.xmuxHMaxRequestTimes,
+      'xmux.hMaxReusableSecs': tuning.xmuxHMaxReusableSecs,
+    };
     final rawOutbounds = config['outbounds'];
     if (rawOutbounds is! List) {
       return const XhttpAdvancedConfigApplyResult(
@@ -995,6 +1020,13 @@ class VpnConfig {
       );
     }
 
+    final overridesBefore = jsonEncode(config[tuningOverridesKey]);
+    final rawOverrides = config[tuningOverridesKey];
+    final previousOverrides =
+        rawOverrides is Map && rawOverrides['xhttp'] is Map
+            ? Map<String, dynamic>.from(rawOverrides['xhttp'] as Map)
+            : const <String, dynamic>{};
+    final overrides = <String, dynamic>{};
     var foundXhttp = false;
     var changed = false;
     final outbounds = List<dynamic>.from(rawOutbounds);
@@ -1025,29 +1057,43 @@ class VpnConfig {
         extra['xmux'] as Map? ?? const {},
       );
       xmux['maxConcurrency'] = maxConcurrency;
+      for (final field in tunedFields.entries) {
+        final inXmux = field.key.startsWith('xmux.');
+        final target = inXmux ? xmux : extra;
+        final key = inXmux ? field.key.substring(5) : field.key;
+        final current = target[key];
+        final record = previousOverrides[field.key];
+        // Unwind our own earlier override; anything else is the original.
+        final original =
+            record is Map && jsonEncode(record['value']) == jsonEncode(current)
+                ? record['original']
+                : current;
+        final tuned = field.value;
+        if (tuned != null) {
+          target[key] = tuned;
+          overrides[field.key] = <String, dynamic>{
+            'value': tuned,
+            'original': original,
+          };
+        } else if (original == null) {
+          target.remove(key);
+        } else {
+          target[key] = original;
+        }
+      }
       final hMaxRequestTimes = xmux['hMaxRequestTimes'];
-      if (tuning.xmuxHMaxRequestTimes != null) {
-        xmux['hMaxRequestTimes'] = tuning.xmuxHMaxRequestTimes;
-      } else if (hMaxRequestTimes == null ||
+      if (hMaxRequestTimes == null ||
           (hMaxRequestTimes is String && hMaxRequestTimes.trim().isEmpty)) {
         xmux['hMaxRequestTimes'] =
             XhttpAdvancedConfig.defaultXmuxHMaxRequestTimes;
       }
       final hMaxReusableSecs = xmux['hMaxReusableSecs'];
-      if (tuning.xmuxHMaxReusableSecs != null) {
-        xmux['hMaxReusableSecs'] = tuning.xmuxHMaxReusableSecs;
-      } else if (hMaxReusableSecs == null ||
+      if (hMaxReusableSecs == null ||
           (hMaxReusableSecs is String && hMaxReusableSecs.trim().isEmpty)) {
         xmux['hMaxReusableSecs'] =
             XhttpAdvancedConfig.defaultXmuxHMaxReusableSecs;
       }
       extra['xmux'] = xmux;
-      if (tuning.scMaxEachPostBytes != null) {
-        extra['scMaxEachPostBytes'] = tuning.scMaxEachPostBytes;
-      }
-      if (tuning.scMinPostsIntervalMs != null) {
-        extra['scMinPostsIntervalMs'] = tuning.scMinPostsIntervalMs;
-      }
       xhttpSettings['extra'] = extra;
       streamSettings['xhttpSettings'] = xhttpSettings;
 
@@ -1070,6 +1116,14 @@ class VpnConfig {
       if (jsonEncode(outbound) != before) changed = true;
     }
     config['outbounds'] = outbounds;
+    if (overrides.isEmpty) {
+      config.remove(tuningOverridesKey);
+    } else {
+      config[tuningOverridesKey] = <String, dynamic>{'xhttp': overrides};
+    }
+    if (jsonEncode(config[tuningOverridesKey]) != overridesBefore) {
+      changed = true;
+    }
     return XhttpAdvancedConfigApplyResult(
       foundXhttp: foundXhttp,
       changed: changed,
@@ -1077,7 +1131,10 @@ class VpnConfig {
   }
 
   static Future<XhttpAdvancedConfigApplyResult>
-      applyXhttpAdvancedSettingsToFile(String configPath) async {
+      applyXhttpAdvancedSettingsToFile(
+    String configPath, {
+    String? nodeId,
+  }) async {
     checkNotEmpty(configPath, 'configPath');
     final file = File(configPath);
     if (!await file.exists()) {
@@ -1086,7 +1143,10 @@ class VpnConfig {
 
     final raw = await file.readAsString();
     final config = jsonDecode(raw) as Map<String, dynamic>;
-    final result = applyXhttpAdvancedSettings(config);
+    final result = applyXhttpAdvancedSettings(
+      config,
+      nodeId: nodeId,
+    );
     if (result.changed) {
       await file.writeAsString(
         const JsonEncoder.withIndent('  ').convert(config),
@@ -1102,7 +1162,10 @@ class VpnConfig {
     if (node == null) {
       throw StateError('Unknown node: $nodeName');
     }
-    return applyXhttpAdvancedSettingsToFile(node.configPath);
+    return applyXhttpAdvancedSettingsToFile(
+      node.configPath,
+      nodeId: node.managedNodeId,
+    );
   }
 
   /// Production runs never log per-connection detail: it costs CPU and memory
@@ -1143,16 +1206,6 @@ class VpnConfig {
       config['enableParallelQuery'] = true;
     }
     return config;
-  }
-
-  /// Server node ID of the synced node whose profile lives at [configPath],
-  /// used to pick node-specific tuning.
-  static String? managedNodeIdForConfigPath(String configPath) {
-    final path = configPath.trim();
-    for (final node in _nodes) {
-      if (node.configPath.trim() == path) return node.managedNodeId;
-    }
-    return null;
   }
 
   /// Used both for new profiles and when an existing profile is prepared for

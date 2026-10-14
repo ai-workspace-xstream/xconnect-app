@@ -378,6 +378,7 @@ class NativeBridge {
     final runtimeConfigPath = await _prepareCanonicalTunnelConfigPath(
       sourceConfigPath,
       isTunMode: true,
+      nodeId: node.managedNodeId,
     );
 
     // ── Android: MethodChannel → savePacketTunnelProfile + startPacketTunnel
@@ -598,6 +599,7 @@ class NativeBridge {
     final runtimeConfigPath = await _prepareCanonicalTunnelConfigPath(
       sourceConfigPath,
       isTunMode: false,
+      nodeId: node.managedNodeId,
     );
 
     if (_isMobile || Platform.isMacOS) {
@@ -1019,7 +1021,10 @@ class NativeBridge {
     };
   }
 
-  static Future<String?> _resolveTunnelConfigPath() async {
+  /// Resolves the node to connect together with its canonical config path,
+  /// so its identity is known before pinning writes a runtime copy.
+  static Future<({VpnNode node, String configPath})?>
+      _resolveTunnelNodeConfig() async {
     try {
       await VpnConfig.load();
     } catch (_) {}
@@ -1035,7 +1040,7 @@ class NativeBridge {
             VpnConfig.updateNode(node);
             await VpnConfig.saveToFile();
           }
-          return resolved;
+          return (node: node, configPath: resolved);
         }
       }
     }
@@ -1049,7 +1054,7 @@ class NativeBridge {
           VpnConfig.updateNode(node);
           await VpnConfig.saveToFile();
         }
-        return resolved;
+        return (node: node, configPath: resolved);
       }
     }
 
@@ -1061,16 +1066,20 @@ class NativeBridge {
           VpnConfig.updateNode(node);
           await VpnConfig.saveToFile();
         }
-        return resolved;
+        return (node: node, configPath: resolved);
       }
     }
     return null;
   }
 
   static Future<String> _resolveOrBootstrapIosTunnelConfigPath() async {
-    final resolved = await _resolveTunnelConfigPath();
+    final resolved = await _resolveTunnelNodeConfig();
     if (resolved != null) {
-      return _prepareCanonicalTunnelConfigPath(resolved, isTunMode: true);
+      return _prepareCanonicalTunnelConfigPath(
+        resolved.configPath,
+        isTunMode: true,
+        nodeId: resolved.node.managedNodeId,
+      );
     }
     return _bootstrapNodeConfigPath(isTunMode: true);
   }
@@ -1095,9 +1104,12 @@ class NativeBridge {
     }
   }
 
+  /// [nodeId] is the server ID of the node being connected, resolved by the
+  /// caller before pinning; it selects node-specific tuning.
   static Future<String> _prepareCanonicalTunnelConfigPath(
     String sourcePath, {
     required bool isTunMode,
+    String? nodeId,
   }) async {
     final normalized = sourcePath.trim();
     if (normalized.isEmpty) return sourcePath;
@@ -1136,7 +1148,7 @@ class NativeBridge {
       // Packet Tunnel or local engine reads the file.
       VpnConfig.applyXhttpAdvancedSettings(
         sourceJson,
-        nodeId: VpnConfig.managedNodeIdForConfigPath(normalized),
+        nodeId: nodeId,
       );
       VpnConfig.applyRuntimeLogLevel(sourceJson);
 
@@ -1405,6 +1417,7 @@ class NativeBridge {
     final runtimeConfigPath = await _prepareCanonicalTunnelConfigPath(
       sourceConfigPath,
       isTunMode: true,
+      nodeId: node.managedNodeId,
     );
 
     _ensureDarwinFlutterApiReady();
@@ -1463,13 +1476,14 @@ class NativeBridge {
         if (!await _ensurePacketTunnelStoppedBeforeStart()) {
           return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
         }
-        final configPath = await _resolveTunnelConfigPath();
-        if (configPath == null) {
+        final resolved = await _resolveTunnelNodeConfig();
+        if (resolved == null) {
           return '未找到可用的节点配置';
         }
         final canonicalPath = await _prepareCanonicalTunnelConfigPath(
-          configPath,
+          resolved.configPath,
           isTunMode: true,
+          nodeId: resolved.node.managedNodeId,
         );
         stopXray();
         _mobileActiveNodeName = null;
@@ -1500,13 +1514,14 @@ class NativeBridge {
         return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
       }
       await _stopIosLocalEngineIfNeeded();
-      final configPath = await _resolveTunnelConfigPath();
-      if (configPath == null) {
+      final resolved = await _resolveTunnelNodeConfig();
+      if (resolved == null) {
         return '未找到可用的节点配置';
       }
       final canonicalPath = await _prepareCanonicalTunnelConfigPath(
-        configPath,
+        resolved.configPath,
         isTunMode: true,
+        nodeId: resolved.node.managedNodeId,
       );
       final pinned = await _prepareRuntimeTunnelConfig(canonicalPath);
       final profile = await _buildDefaultTunnelProfile(
