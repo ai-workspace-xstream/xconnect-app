@@ -92,7 +92,12 @@ pub-get: check-flutter
 prepare-macos: pub-get check-macos
 	@echo ">>> Installing macOS CocoaPods dependencies..."
 	@command -v pod >/dev/null 2>&1 || { echo "CocoaPods not found. Install with: brew install cocoapods"; exit 1; }
-	@cd macos && LANG=en_US.UTF-8 pod install
+	@cd macos && \
+		if [ ! -f Pods/Manifest.lock ] || ! cmp -s Podfile.lock Pods/Manifest.lock; then \
+			LANG=en_US.UTF-8 pod install; \
+		else \
+			echo "CocoaPods dependencies already synchronized."; \
+		fi
 
 sync-macos-config: check-flutter check-macos
 	@echo ">>> Syncing version $(VERSION)+$(BUILD) to macOS config"
