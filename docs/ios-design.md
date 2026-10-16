@@ -38,10 +38,10 @@ Flutter UI (Dart)
    `git submodule update --init --recursive libXray`
 2. 运行 `./build_scripts/build_ios_xray.sh`
 3. 脚本输出：
-   - `build/ios/libxray.a`
-   - `build/ios/libxray.h`
+   - `build/ios/iphoneos/libxray.a`（模拟器为 `build/ios/iphonesimulator/libxray.a`）
+   - 对应平台目录下的 `libxray.h`
 4. `PacketTunnel` target 在 Xcode 构建阶段自动执行这条脚本
-5. `PacketTunnel.appex` 通过 `-force_load $(SRCROOT)/../build/ios/libxray.a` 静态链接 bridge archive
+5. `PacketTunnel.appex` 通过 `-force_load $(SRCROOT)/../build/ios/$(PLATFORM_NAME)/libxray.a` 静态链接 bridge archive；脚本依据 Xcode 的 `PLATFORM_NAME` 和 `ARCHS` 生成对应 SDK/架构的产物，避免真机与模拟器混用。
 
 ## Swift bridge 与 PacketTunnel target
 
