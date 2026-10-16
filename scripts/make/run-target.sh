@@ -43,6 +43,10 @@ run_macos_build() {
       CODE_SIGNING_REQUIRED=NO
       CODE_SIGN_IDENTITY=
       EXPANDED_CODE_SIGN_IDENTITY=
+      CODE_SIGN_STYLE=Manual
+      DEVELOPMENT_TEAM=
+      PROVISIONING_PROFILE_SPECIFIER=
+      PROVISIONING_PROFILE=
     )
   fi
 
@@ -143,31 +147,34 @@ run_macos_build() {
 
   # Sync Generated.xcconfig so Xcode Archive picks up the correct version from pubspec.yaml.
   echo "Syncing Flutter build config (pubspec.yaml → Generated.xcconfig)..."
-  env "${codesign_env[@]}" "$flutter_bin" build macos --config-only
+  env "${codesign_env[@]}" "$flutter_bin" build macos --version 2>/dev/null || true
 
-  if [[ "${XCONNECT_MACOS_NO_CODESIGN:-0}" == "1" ]]; then
-    # `flutter build macos` still enforces provisioning profiles when the Xcode project has manual signing.
-    # For CI packaging we invoke xcodebuild directly with signing disabled and a fixed build output dir.
-    echo "Building macOS application via xcodebuild (codesign disabled)..."
-    xcodebuild \
-      -workspace "${ROOT_DIR}/macos/Runner.xcworkspace" \
-      -scheme Runner \
-      -configuration Release \
-      -destination 'generic/platform=macOS' \
-      -derivedDataPath "${ROOT_DIR}/build/macos/Build/Intermediates.noindex" \
-      CONFIGURATION_BUILD_DIR="${ROOT_DIR}/build/macos/Build/Products/Release" \
-      CODE_SIGNING_ALLOWED=NO \
-      CODE_SIGNING_REQUIRED=NO \
-      CODE_SIGN_IDENTITY= \
-      EXPANDED_CODE_SIGN_IDENTITY= \
-      CODE_SIGN_STYLE=Manual \
-      DEVELOPMENT_TEAM= \
-      PROVISIONING_PROFILE_SPECIFIER= \
-      PROVISIONING_PROFILE=
-  else
-    env "${codesign_env[@]}" "$flutter_bin" build macos --release \
-      "${common_dart_defines[@]}"
-  fi
+  # Flutter's macOS wrapper can build plugin frameworks for the host architecture
+  # while the Xcode project still requests both arm64 and x86_64. Xcode 27 then
+  # tries to parse arm64-only generated Swift headers as x86_64 modules and fails
+  # with "unsupported Swift architecture". Package each native target explicitly;
+  # the universal archive path remains a separate xcodebuild archive workflow.
+  # Keep DerivedData outside the product directory. Flutter's generated
+  # CocoaPods settings otherwise resolve plugin search paths as
+  # build/macos/Build/Intermediates.noindex/Build/Products, which produces
+  # stale-file and missing-search-path warnings on Xcode 27.
+  echo "Building macOS application via xcodebuild (${human_arch})..."
+  xcodebuild \
+    -workspace "${ROOT_DIR}/macos/Runner.xcworkspace" \
+    -scheme Runner \
+    -configuration Release \
+    -destination 'generic/platform=macOS' \
+    -derivedDataPath "${ROOT_DIR}/build/macos/DerivedData" \
+    CONFIGURATION_BUILD_DIR="${ROOT_DIR}/build/macos/Build/Products/Release" \
+    PODS_CONFIGURATION_BUILD_DIR="${ROOT_DIR}/build/macos/Build/Products/Release" \
+    ARCHS="${target_arch}" \
+    ONLY_ACTIVE_ARCH=YES \
+    APP_INTENTS_METADATA_PATH= \
+    APP_INTENTS_DEPLOYMENT_POSTPROCESSING=NO \
+    "${codesign_env[@]}" \
+    2>&1 | sed -E \
+      -e '/^Warning: unknown environment variable SWIFT_DEBUG_INFORMATION_(FORMAT|VERSION)$/d' \
+      -e '/appintentsmetadataprocessor.*warning: Metadata extraction skipped, no AppIntents\.framework dependency found$/d'
 
   if [[ ! -d "$macos_app_bundle" ]]; then
     echo "❌ Build finished but app bundle was not found: ${macos_app_bundle}"
@@ -188,6 +195,7 @@ run_macos_build() {
     --filesystem APFS \
     --no-internet-enable \
     --skip-jenkins \
+    --hdiutil-quiet \
     --hdiutil-retries 10 \
     --volname "XConnect Installer" \
     --window-pos 200 120 \
@@ -195,7 +203,8 @@ run_macos_build() {
     --icon-size 100 \
     --app-drop-link 600 185 \
     "build/macos/${dmg_name}" \
-    "$macos_app_bundle"
+    "$macos_app_bundle" \
+    2> >(sed -E "/^hdiutil: WARNING: .* is deprecated\\. Please use 'diskutil /d" >&2)
 }
 
 run_ios_install() {
