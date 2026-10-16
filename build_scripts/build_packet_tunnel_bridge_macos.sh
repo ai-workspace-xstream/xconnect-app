@@ -6,21 +6,33 @@ if [[ "${PLATFORM_NAME:-}" != "macosx" ]]; then
   exit 0
 fi
 
-# Add common Go paths for Xcode environment
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-
-# Find go binary
-GO_BIN=$(which go || echo "/opt/homebrew/bin/go")
-if ! command -v "$GO_BIN" &> /dev/null; then
-  if [[ -f "/usr/local/bin/go" ]]; then
-    GO_BIN="/usr/local/bin/go"
-  elif [[ -f "/opt/homebrew/bin/go" ]]; then
-    GO_BIN="/opt/homebrew/bin/go"
-  else
-    echo "error: go command not found. Please install Go." >&2
-    exit 1
-  fi
+# Xcode does not load the user's shell startup files, so the Go installation
+# used by the terminal may not be present in PATH. Keep the inherited PATH,
+# then probe it and the common installation locations explicitly.
+GO_BIN=""
+if command -v go >/dev/null 2>&1; then
+  GO_BIN="$(command -v go)"
 fi
+
+if [[ -z "${GO_BIN}" && -n "${GOROOT:-}" && -x "${GOROOT}/bin/go" ]]; then
+  GO_BIN="${GOROOT}/bin/go"
+fi
+
+for candidate in \
+  "${HOME:-}/.local/devtools/go/bin/go" \
+  "/opt/homebrew/bin/go" \
+  "/usr/local/bin/go"; do
+  if [[ -z "${GO_BIN}" && -x "${candidate}" ]]; then
+    GO_BIN="${candidate}"
+  fi
+done
+
+if [[ -z "${GO_BIN}" ]]; then
+  echo "error: go command not found. Install Go or expose it through PATH/GOROOT." >&2
+  exit 1
+fi
+
+echo "[xray-bridge] using Go: ${GO_BIN}"
 
 ROOT_DIR="${SRCROOT}/.."
 GO_CORE_DIR="${ROOT_DIR}/go_core"
@@ -51,19 +63,40 @@ if [[ "${ARCH}" == "x86_64h" ]]; then
   ARCH="x86_64"
 fi
 
-echo "[xray-bridge] building for darwin/${ARCH} -> ${TMP_LIB}"
+BUILD_ARCHS="${ARCH}"
+if [[ "${ONLY_ACTIVE_ARCH:-NO}" != "YES" && -n "${ARCHS:-}" ]]; then
+  BUILD_ARCHS="${ARCHS}"
+fi
+SLICE_LIBS=()
+for slice_arch in ${BUILD_ARCHS}; do
+case "${slice_arch}" in
+  arm64) go_arch=arm64 ;;
+  x86_64|x86_64h) slice_arch=x86_64; go_arch=amd64 ;;
+  *) echo "error: unsupported bridge architecture: ${slice_arch}" >&2; exit 1 ;;
+esac
+SLICE_LIB="${TMP_OUT_DIR}/libxray_bridge-${slice_arch}.dylib"
+echo "[xray-bridge] building for darwin/${slice_arch} -> ${SLICE_LIB}"
 (
   cd "${GO_CORE_DIR}"
   export CGO_ENABLED=1
   export GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"
   export GOOS=darwin
-  export GOARCH="${ARCH}"
+  export GOARCH="${go_arch}"
   export CC="$(xcrun --sdk macosx --find clang)"
-  export CGO_CFLAGS="-isysroot $(xcrun --sdk macosx --show-sdk-path)"
-  export CGO_LDFLAGS="-isysroot $(xcrun --sdk macosx --show-sdk-path)"
+  export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+  export CGO_CFLAGS="-arch ${slice_arch} -isysroot $(xcrun --sdk macosx --show-sdk-path) -mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
+  export CGO_LDFLAGS="${CGO_CFLAGS}"
   "$GO_BIN" mod download
-  "$GO_BIN" build -trimpath -buildmode=c-shared -o "${TMP_LIB}" .
+  "$GO_BIN" build -trimpath -buildmode=c-shared -o "${SLICE_LIB}" .
 )
+SLICE_LIBS+=("${SLICE_LIB}")
+done
+
+if [[ ${#SLICE_LIBS[@]} -gt 1 ]]; then
+  xcrun lipo -create "${SLICE_LIBS[@]}" -output "${TMP_LIB}"
+else
+  cp -f "${SLICE_LIBS[0]}" "${TMP_LIB}"
+fi
 
 if [[ ! -f "${TMP_LIB}" ]]; then
   echo "error: failed to build ${TMP_LIB}" >&2
@@ -81,7 +114,7 @@ done
 
 cp -f "${TMP_LIB}" "${OUTPUT_LIB}"
 
-if [[ -n "${DWARF_DSYM_FOLDER_PATH:-}" ]]; then
+if [[ -n "${DWARF_DSYM_FOLDER_PATH:-}" ]] && /usr/bin/otool -l "${OUTPUT_LIB}" | /usr/bin/grep '__debug_info' >/dev/null; then
   echo "[xray-bridge] generating dSYM at ${DWARF_DSYM_FOLDER_PATH}/libxray_bridge.dylib.dSYM"
   mkdir -p "${DWARF_DSYM_FOLDER_PATH}"
   dsymutil "${OUTPUT_LIB}" -o "${DWARF_DSYM_FOLDER_PATH}/libxray_bridge.dylib.dSYM"

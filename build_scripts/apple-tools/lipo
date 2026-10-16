@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Xcode 27 rejects Flutter's multi-architecture -verify_arch invocation.
+# Verify each requested slice, preserving failure when any slice is missing.
+real_lipo="$(/usr/bin/xcrun --find lipo)"
+if [[ $# -ge 3 && "$2" == "-verify_arch" ]]; then
+  binary="$1"
+  shift 2
+  for architecture in "$@"; do
+    "$real_lipo" "$binary" -verify_arch "$architecture"
+  done
+else
+  exec "$real_lipo" "$@"
+fi
