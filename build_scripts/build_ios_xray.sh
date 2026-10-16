@@ -29,7 +29,13 @@ fi
 
 echo ">>> Using Go: $GO_BIN"
 
-OUTPUT_DIR="$DIR/build/ios"
+TARGET_PLATFORM="${PLATFORM_NAME:-iphoneos}"
+case "$TARGET_PLATFORM" in
+  iphoneos) DEFAULT_ARCHS=arm64 ;;
+  iphonesimulator) DEFAULT_ARCHS="$(uname -m)" ;;
+  *) echo "Unsupported iOS platform: $TARGET_PLATFORM" >&2; exit 1 ;;
+esac
+OUTPUT_DIR="$DIR/build/ios/$TARGET_PLATFORM"
 LIBXRAY_DIR="$DIR/libXray"
 OUTPUT_ARCHIVE="$OUTPUT_DIR/libxray.a"
 OUTPUT_HEADER="$OUTPUT_DIR/libxray.h"
@@ -49,12 +55,30 @@ echo ">>> Building iOS Packet Tunnel bridge archive..."
 
 export CGO_ENABLED=1
 export GOOS=ios
-export GOARCH=arm64
-export CC="$(xcrun --sdk iphoneos --find clang)"
-export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path)"
+export CC="$(xcrun --sdk "$TARGET_PLATFORM" --find clang)"
+SDK_PATH="$(xcrun --sdk "$TARGET_PLATFORM" --show-sdk-path)"
+MIN_VERSION="${IPHONEOS_DEPLOYMENT_TARGET:-16.0}"
 
 "$GO_BIN" mod download
-"$GO_BIN" build -buildmode=c-archive -o "$OUTPUT_ARCHIVE" .
+SLICE_ARCHIVES=()
+for slice_arch in ${ARCHS:-$DEFAULT_ARCHS}; do
+  case "$slice_arch" in
+    arm64) export GOARCH=arm64 ;;
+    x86_64) export GOARCH=amd64 ;;
+    *) echo "Unsupported iOS architecture: $slice_arch" >&2; exit 1 ;;
+  esac
+  TARGET_TRIPLE="$slice_arch-apple-ios$MIN_VERSION"
+  if [[ "$TARGET_PLATFORM" == iphonesimulator ]]; then
+    TARGET_TRIPLE="$TARGET_TRIPLE-simulator"
+  fi
+  export CGO_CFLAGS="-target $TARGET_TRIPLE -isysroot $SDK_PATH"
+  export CGO_LDFLAGS="$CGO_CFLAGS"
+  SLICE_ARCHIVE="$OUTPUT_DIR/libxray-$slice_arch.a"
+  "$GO_BIN" build -buildmode=c-archive -o "$SLICE_ARCHIVE" .
+  SLICE_ARCHIVES+=("$SLICE_ARCHIVE")
+  cp "$OUTPUT_DIR/libxray-$slice_arch.h" "$OUTPUT_HEADER"
+done
+xcrun lipo -create "${SLICE_ARCHIVES[@]}" -output "$OUTPUT_ARCHIVE"
 
 echo ">>> Output archive: $OUTPUT_ARCHIVE"
 echo ">>> Output header: $OUTPUT_HEADER"
