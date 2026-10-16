@@ -36,6 +36,13 @@ sudo gem install cocoapods
 flutter pub get
 sh scripts/generate_icons.sh  # 生成 iOS App 图标
 flutter build macos
+
+Xcode 构建时打开 `macos/Runner.xcworkspace`，选择 `Runner` Scheme。
+项目通过 `build_scripts/macos_flutter_assemble.sh` 调用 Flutter 的 prepare、build、embed，
+使用项目内的 `lipo` 适配器逐个验证架构，以兼容 Xcode 27 对多架构 `-verify_arch` 参数的处理。
+适配器保留架构缺失时的失败行为，不修改 Flutter SDK。`Any Mac` 归档的 Xray bridge
+按 `ARCHS` 分别构建 arm64 和 x86_64 后合并，`ONLY_ACTIVE_ARCH=YES` 时仅构建当前架构。
+
 开发调试
 使用 VS Code 或 Android Studio 打开项目根目录，可执行如下命令调试：
 flutter run -d macos

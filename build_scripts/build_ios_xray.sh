@@ -1,21 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-# Add common Go paths for Xcode environment
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-
-# Find go binary
-GO_BIN=$(which go || echo "/opt/homebrew/bin/go")
-if ! command -v "$GO_BIN" &> /dev/null; then
-  if [[ -f "/usr/local/bin/go" ]]; then
-    GO_BIN="/usr/local/bin/go"
-  elif [[ -f "/opt/homebrew/bin/go" ]]; then
-    GO_BIN="/opt/homebrew/bin/go"
-  else
-    echo "go command not found. Please install Go."
-    exit 1
-  fi
+# Xcode does not load the user's shell startup files, so the Go installation
+# used by the terminal may not be present in PATH. Probe it and common
+# installation locations explicitly.
+GO_BIN=""
+if command -v go >/dev/null 2>&1; then
+  GO_BIN="$(command -v go)"
 fi
+
+if [[ -z "${GO_BIN}" && -n "${GOROOT:-}" && -x "${GOROOT}/bin/go" ]]; then
+  GO_BIN="${GOROOT}/bin/go"
+fi
+
+for candidate in \
+  "${HOME:-}/.local/devtools/go/bin/go" \
+  "/opt/homebrew/bin/go" \
+  "/usr/local/bin/go"; do
+  if [[ -z "${GO_BIN}" && -x "${candidate}" ]]; then
+    GO_BIN="${candidate}"
+  fi
+done
+
+if [[ -z "${GO_BIN}" ]]; then
+  echo "go command not found. Install Go or expose it through PATH/GOROOT."
+  exit 1
+fi
+
+echo ">>> Using Go: $GO_BIN"
 
 OUTPUT_DIR="$DIR/build/ios"
 LIBXRAY_DIR="$DIR/libXray"

@@ -1,5 +1,9 @@
 # Unreleased
 
+- Apple builds locate Go in Xcode environments, and macOS archives use a
+  project-local lipo compatibility adapter for Xcode 27. Universal archives
+  include both arm64 and x86_64 Xray bridge slices targeting macOS 12.0.
+
 - The control plane can now tune XHTTP upload and connection-reuse settings
   and the DoH upstream timeout through
   `GET /api/agent-server/v1/client-tuning`, fetched after each node sync and

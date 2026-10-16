@@ -464,7 +464,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "mkdir -p \"$PROJECT_DIR\"/Flutter/generated \"$PROJECT_DIR\"/Flutter/ephemeral && echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/generated/.app_filename && echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && FLUTTER_SOURCE_ROOT=\"${FLUTTER_SOURCE_ROOT_OVERRIDE:-$SOURCE_ROOT}\" && SOURCE_ROOT=\"$FLUTTER_SOURCE_ROOT\" \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed\n";
+			shellScript = "mkdir -p \"$PROJECT_DIR\"/Flutter/generated \"$PROJECT_DIR\"/Flutter/ephemeral && echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/generated/.app_filename && echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && FLUTTER_SOURCE_ROOT=\"${FLUTTER_SOURCE_ROOT_OVERRIDE:-$SOURCE_ROOT}\" && SOURCE_ROOT=\"$FLUTTER_SOURCE_ROOT\" /bin/bash \"${SRCROOT}/../build_scripts/macos_flutter_assemble.sh\" embed\n";
 		};
 		33CC111E2044C6BF0003C045 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -484,7 +484,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "mkdir -p \"$PROJECT_DIR\"/Flutter/generated \"$PROJECT_DIR\"/Flutter/ephemeral && FLUTTER_SOURCE_ROOT=\"${FLUTTER_SOURCE_ROOT_OVERRIDE:-$SOURCE_ROOT}\" && SOURCE_ROOT=\"$FLUTTER_SOURCE_ROOT\" \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh && touch Flutter/generated/.tripwire";
+			shellScript = "mkdir -p \"$PROJECT_DIR\"/Flutter/generated \"$PROJECT_DIR\"/Flutter/ephemeral && FLUTTER_SOURCE_ROOT=\"${FLUTTER_SOURCE_ROOT_OVERRIDE:-$SOURCE_ROOT}\" && SOURCE_ROOT=\"$FLUTTER_SOURCE_ROOT\" /bin/bash \"${SRCROOT}/../build_scripts/macos_flutter_assemble.sh\" && touch Flutter/generated/.tripwire";
 		};
 		351A038DA4426CC9ABD45DF9 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
