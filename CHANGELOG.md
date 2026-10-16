@@ -1,5 +1,9 @@
 # Unreleased
 
+- Prioritize custom imported connections for Free, Plus and Team accounts.
+  Managed account sync preserves custom configuration and active selections;
+  team authorization continues to isolate all account-managed connections.
+
 - Fix custom connection imports remaining disabled after saving and personal
   connections disappearing while account sync is pending. Failed saves no
   longer publish an imported connection to the home screen.

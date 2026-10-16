@@ -67,7 +67,7 @@ void main() {
     expect(await File(node.configPath).readAsString(), contains('/secure'));
     expect(policy.canUse(serviceName: 'xconnect.sync.managed'), isFalse);
     policy.dedicated = true;
-    expect(VpnConfig.nodes, isEmpty);
+    expect(VpnConfig.nodes.single.name, 'custom-connection');
   });
 
   testWidgets('successful save returns home and publishes the imported node',
