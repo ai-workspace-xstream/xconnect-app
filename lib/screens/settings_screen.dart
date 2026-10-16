@@ -225,13 +225,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (normalizedInput.startsWith('vless://')) {
         final bundleId = await GlobalApplicationConfig.getBundleId();
         final profile = VpnConfig.parseVlessUri(normalizedInput);
-        await VpnConfig.generateFromVlessUri(
+        final saved = await VpnConfig.generateFromVlessUri(
           vlessUri: normalizedInput,
           password: '',
           bundleId: bundleId,
           setMessage: (msg) => addAppLog(msg),
           logMessage: (msg) => addAppLog(msg),
         );
+        if (!saved) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(context.l10n.get('configSaveFailed'))),
+            );
+          }
+          return;
+        }
         await VpnConfig.load();
         GlobalState.activeNodeName.value = '';
         GlobalState.lastImportedNodeName.value = profile.name;

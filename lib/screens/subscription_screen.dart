@@ -40,10 +40,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     _vlessUriController.addListener(_scheduleAutoParse);
     // Directly load bundleId when the state is initialized
     GlobalApplicationConfig.getBundleId().then((bundleId) {
+      if (!mounted) return;
       setState(() {
         _bundleId = bundleId;
       });
     }).catchError((_) {
+      if (!mounted) return;
       setState(() {
         _bundleId = 'plus.svc.xconnect'; // Fallback value if error occurs
       });
@@ -129,6 +131,25 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Future<void> _onCreateConfig() async {
+    if (_autoFlowRunning) return;
+    setState(() => _autoFlowRunning = true);
+    try {
+      await _saveConfig();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _message = context.l10n.get('configSaveFailed'));
+      }
+      addAppLog('配置保存失败: ${e.runtimeType}', level: LogLevel.error);
+    } finally {
+      if (mounted) setState(() => _autoFlowRunning = false);
+    }
+  }
+
+  void _setSaveMessage(String message) {
+    if (mounted) setState(() => _message = message);
+  }
+
+  Future<void> _saveConfig() async {
     final rawUri = _vlessUriController.text.trim();
 
     if (_bundleId == null || _bundleId!.isEmpty) {
@@ -157,59 +178,45 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return;
     }
 
-    await VpnConfig.generateContent(
+    final saved = await VpnConfig.generateContent(
       nodeName: _nodeNameController.text.trim(),
       domain: _domainController.text.trim(),
       port: _portController.text.trim(),
       uuid: _uuidController.text.trim(),
       password: '',
       bundleId: _bundleId!,
-      setMessage: (msg) {
-        setState(() {
-          _message = msg;
-        });
-      },
+      setMessage: _setSaveMessage,
       logMessage: (msg) {
         addAppLog(msg);
       },
     );
-    await _syncHomeAfterImport(_nodeNameController.text.trim());
+    if (saved) await _syncHomeAfterImport(_nodeNameController.text.trim());
   }
 
   Future<void> _generateAndSyncFromVless({
     required String rawUri,
     required String fallbackNodeName,
   }) async {
-    if (_autoFlowRunning) return;
-
     try {
-      _autoFlowRunning = true;
       final parsed = VpnConfig.parseVlessUri(
         rawUri,
         fallbackNodeName: fallbackNodeName,
       );
-      await VpnConfig.generateFromVlessUri(
+      final saved = await VpnConfig.generateFromVlessUri(
         vlessUri: rawUri,
         fallbackNodeName: fallbackNodeName,
         password: '',
         bundleId: _bundleId!,
-        setMessage: (msg) {
-          setState(() {
-            _message = msg;
-          });
-        },
+        setMessage: _setSaveMessage,
         logMessage: (msg) {
           addAppLog(msg);
         },
       );
-      await _syncHomeAfterImport(parsed.name);
+      if (saved) await _syncHomeAfterImport(parsed.name);
     } catch (e) {
-      setState(() {
-        _message = '${context.l10n.get('vlessUriInvalid')}: $e';
-      });
+      if (!mounted) return;
+      _setSaveMessage(context.l10n.get('vlessUriInvalid'));
       addAppLog('VLESS 链接创建失败: $e', level: LogLevel.error);
-    } finally {
-      _autoFlowRunning = false;
     }
   }
 
@@ -226,6 +233,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     if (Platform.isIOS) {
       addAppLog(await NativeBridge.prepareNodeForTunnel(targetName));
     }
+    if (!mounted) return;
+    final message = context.l10n.get('configSaved');
+    setState(() => _message = message);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+    Navigator.of(context).pop();
   }
 
   Future<void> _loadUsageSummary() async {

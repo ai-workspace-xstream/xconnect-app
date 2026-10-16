@@ -1,5 +1,9 @@
 # Unreleased
 
+- Fix custom connection imports remaining disabled after saving and personal
+  connections disappearing while account sync is pending. Failed saves no
+  longer publish an imported connection to the home screen.
+
 - Apple builds locate Go in Xcode environments, and macOS archives use a
   project-local lipo compatibility adapter for Xcode 27. Universal archives
   include both arm64 and x86_64 Xray bridge slices targeting macOS 12.0.
