@@ -62,6 +62,13 @@ class XhttpAdvancedConfigApplyResult {
 }
 
 class VpnNode {
+  bool get isManaged =>
+      serviceName == 'xconnect.desktop.sync' ||
+      serviceName.startsWith('xconnect.sync.') ||
+      managedOwner != null ||
+      managedTeamId != null ||
+      managedNodeId != null;
+
   String name;
   String countryCode;
   String configPath;
@@ -279,11 +286,20 @@ class VpnConfig {
 
   static List<VpnNode> get allNodes => List.unmodifiable(_nodes);
   static bool canUseNode(VpnNode node) => NetworkAccessPolicy.instance.canUse(
-      serviceName: node.serviceName,
-      nodeOwner: node.managedOwner,
-      nodeTeamId: node.managedTeamId,
-      nodeId: node.managedNodeId);
-  static List<VpnNode> get nodes => _nodes.where(canUseNode).toList();
+        serviceName: node.serviceName,
+        nodeOwner: node.managedOwner,
+        nodeTeamId: node.managedTeamId,
+        nodeId: node.managedNodeId,
+      );
+  static List<VpnNode> get nodes {
+    final visible = _nodes.where(canUseNode).toList();
+    // Preserve user import order within each source; automatic account sync
+    // must not displace custom connections as the default selection.
+    return [
+      ...visible.where((node) => !node.isManaged),
+      ...visible.where((node) => node.isManaged),
+    ];
+  }
 
   static VpnNode? getNodeByName(String name) {
     checkNotEmpty(name, 'name');
@@ -599,10 +615,7 @@ class VpnConfig {
     bool enableHttpProxy = true,
     bool enableTunnelMode = true,
   }) async {
-    final profile = parseVlessUri(
-      vlessUri,
-      fallbackNodeName: fallbackNodeName,
-    );
+    final profile = parseVlessUri(vlessUri, fallbackNodeName: fallbackNodeName);
     return await generateContent(
       nodeName: profile.name,
       domain: profile.domain,
@@ -629,7 +642,8 @@ class VpnConfig {
   }
 
   static Future<String?> tryGenerateXrayJsonFromVlessUri(
-      String vlessUri) async {
+    String vlessUri,
+  ) async {
     try {
       final profile = parseVlessUri(vlessUri);
       final logs = <String>[];
@@ -938,8 +952,11 @@ class VpnConfig {
     return vpnNodesJsonContent;
   }
 
-  static String _firstNonEmpty(String? first,
-      [String? second, String fallback = '']) {
+  static String _firstNonEmpty(
+    String? first, [
+    String? second,
+    String fallback = '',
+  ]) {
     if (first != null && first.trim().isNotEmpty) {
       return first.trim();
     }
@@ -1048,9 +1065,7 @@ class VpnConfig {
       final extra = Map<String, dynamic>.from(
         xhttpSettings['extra'] as Map? ?? const {},
       );
-      final xmux = Map<String, dynamic>.from(
-        extra['xmux'] as Map? ?? const {},
-      );
+      final xmux = Map<String, dynamic>.from(extra['xmux'] as Map? ?? const {});
       xmux['maxConcurrency'] = maxConcurrency;
       for (final field in tunedFields.entries) {
         final inXmux = field.key.startsWith('xmux.');
@@ -1126,10 +1141,8 @@ class VpnConfig {
   }
 
   static Future<XhttpAdvancedConfigApplyResult>
-      applyXhttpAdvancedSettingsToFile(
-    String configPath, {
-    String? nodeId,
-  }) async {
+      applyXhttpAdvancedSettingsToFile(String configPath,
+          {String? nodeId}) async {
     checkNotEmpty(configPath, 'configPath');
     final file = File(configPath);
     if (!await file.exists()) {
@@ -1138,10 +1151,7 @@ class VpnConfig {
 
     final raw = await file.readAsString();
     final config = jsonDecode(raw) as Map<String, dynamic>;
-    final result = applyXhttpAdvancedSettings(
-      config,
-      nodeId: nodeId,
-    );
+    final result = applyXhttpAdvancedSettings(config, nodeId: nodeId);
     if (result.changed) {
       await file.writeAsString(
         const JsonEncoder.withIndent('  ').convert(config),
@@ -1228,11 +1238,13 @@ class VpnConfig {
       return rules.isNotEmpty &&
           rules.last is Map &&
           (rules.last as Map)['action'] == 'direct' &&
-          rules.any((rule) =>
-              rule is Map &&
-              rule['action'] == 'hijack' &&
-              rule['qType'] == 1 &&
-              rule['domain'] == null);
+          rules.any(
+            (rule) =>
+                rule is Map &&
+                rule['action'] == 'hijack' &&
+                rule['qType'] == 1 &&
+                rule['domain'] == null,
+          );
     }
 
     // A conflicting user outbound must never be overwritten.
@@ -1260,8 +1272,9 @@ class VpnConfig {
     }
     for (final outbound in outbounds) {
       if (outbound is! Map ||
-          !TunnelEndpointResolver.dialingProtocols
-              .contains(outbound['protocol'])) {
+          !TunnelEndpointResolver.dialingProtocols.contains(
+            outbound['protocol'],
+          )) {
         continue;
       }
       final settings = outbound['settings'];
@@ -1281,10 +1294,12 @@ class VpnConfig {
         }
       }
     }
-    outbounds.removeWhere((value) =>
-        value is Map &&
-        value['tag'] == BusinessDnsPolicy.outboundTag &&
-        isManaged(value));
+    outbounds.removeWhere(
+      (value) =>
+          value is Map &&
+          value['tag'] == BusinessDnsPolicy.outboundTag &&
+          isManaged(value),
+    );
     if (enabled) {
       outbounds.add(BusinessDnsPolicy.buildOutbound(exceptions.toList()));
     }
@@ -1386,10 +1401,7 @@ class VpnConfig {
       tunnelDnsOutboundTag: tunnelDnsOutboundTag,
     );
     routing['domainStrategy'] = 'AsIs';
-    routing['rules'] = <dynamic>[
-      ...secureDnsRules,
-      ...existingRules,
-    ];
+    routing['rules'] = <dynamic>[...secureDnsRules, ...existingRules];
     return routing;
   }
 
@@ -1403,9 +1415,7 @@ class VpnConfig {
         security?.trim().toLowerCase() == 'tls';
   }
 
-  static bool proxyOutboundSupportsUdp443(
-    Map<String, dynamic> proxyOutbound,
-  ) {
+  static bool proxyOutboundSupportsUdp443(Map<String, dynamic> proxyOutbound) {
     if (proxyOutbound['protocol'] != 'vless') return false;
     final streamSettings = proxyOutbound['streamSettings'] as Map?;
     if (streamSettings == null) return false;
@@ -1484,8 +1494,8 @@ class VpnConfig {
         "settings": {"udp": true},
         "sniffing": {
           "enabled": true,
-          "destOverride": ["http", "tls", "quic"]
-        }
+          "destOverride": ["http", "tls", "quic"],
+        },
       });
     }
 
@@ -1498,8 +1508,8 @@ class VpnConfig {
         "protocol": "http",
         "sniffing": {
           "enabled": true,
-          "destOverride": ["http", "tls", "quic"]
-        }
+          "destOverride": ["http", "tls", "quic"],
+        },
       });
     }
 
@@ -1517,7 +1527,7 @@ class VpnConfig {
             Platform.operatingSystem,
           ),
           "destOverride": <String>["http", "tls", "quic"],
-        }
+        },
       });
     }
 

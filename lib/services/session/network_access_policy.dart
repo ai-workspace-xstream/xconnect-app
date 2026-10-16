@@ -61,13 +61,19 @@ class NetworkAccessPolicy {
       allowed &&
       (validUntil == null || DateTime.now().isBefore(validUntil!));
 
-  bool canUse(
-      {required String serviceName,
-      String? nodeOwner,
-      String? nodeTeamId,
-      String? nodeId}) {
+  bool canUse({
+    required String serviceName,
+    String? nodeOwner,
+    String? nodeTeamId,
+    String? nodeId,
+  }) {
     final managed = serviceName == 'xconnect.desktop.sync' ||
         serviceName.startsWith('xconnect.sync.');
+    // Custom imports are independent user-owned connections in every account
+    // mode. Managed metadata cannot be relabeled to escape account isolation.
+    if (!managed) {
+      return nodeOwner == null && nodeTeamId == null && nodeId == null;
+    }
     if (dedicated) {
       return active &&
           teamId.isNotEmpty &&
@@ -76,8 +82,6 @@ class NetworkAccessPolicy {
           nodeTeamId == teamId &&
           authorizedNodeIds.contains(nodeId);
     }
-    // Personal imports do not depend on the account's managed-node snapshot.
-    if (!managed) return true;
     if (pending) return false;
     return active && nodeOwner == owner && authorizedNodeIds.contains(nodeId);
   }
