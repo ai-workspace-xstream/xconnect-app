@@ -406,7 +406,7 @@ class VpnConfig {
     await load();
   }
 
-  static Future<void> generateContent({
+  static Future<bool> generateContent({
     required String nodeName,
     required String domain,
     required String port,
@@ -467,7 +467,7 @@ class VpnConfig {
       enableHttpProxy: enableHttpProxy,
       enableTunnelMode: enableTunnelMode,
     );
-    if (generatedXrayConfigContent.isEmpty) return;
+    if (generatedXrayConfigContent.isEmpty) return false;
     final guarded = guardTunInterfaceFieldsForWrite(generatedXrayConfigContent);
     final xrayConfigContent = guarded.json;
     if (guarded.removedFields > 0) {
@@ -490,7 +490,7 @@ class VpnConfig {
       serviceName,
     );
     if (serviceContent.isEmpty) {
-      if (_requiresServiceDefinition) return;
+      if (_requiresServiceDefinition) return false;
       serviceContent = '# XConnect mobile node marker for $nodeName\n';
     }
 
@@ -522,22 +522,20 @@ class VpnConfig {
         throw StateError(writeResult);
       }
 
-      setMessage('✅ 配置已保存: $xrayConfigPath');
-      setMessage('✅ 服务项已生成: $servicePath');
-      setMessage('✅ 菜单项已更新: $vpnNodesConfigPath');
-      logMessage('配置已成功保存并生成');
-      try {
-        await SqliteNodeStore.replaceAll(
-          _nodes.map((e) => e.toJson()).toList(),
-        );
-      } catch (e) {
-        logMessage('⚠️ SQLite 写入失败: $e');
-      }
+      await SqliteNodeStore.replaceAll(
+        (jsonDecode(vpnNodesConfigContent) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(),
+      );
       // Reload nodes from file so that the in-memory list stays updated
       await load();
+      setMessage('✅ 配置已保存: $xrayConfigPath');
+      logMessage('配置已成功保存并生成');
+      return true;
     } catch (e) {
       setMessage('生成配置失败: $e');
       logMessage('生成配置失败: $e');
+      return false;
     }
   }
 
@@ -590,7 +588,7 @@ class VpnConfig {
     );
   }
 
-  static Future<void> generateFromVlessUri({
+  static Future<bool> generateFromVlessUri({
     required String vlessUri,
     String? fallbackNodeName,
     required String password,
@@ -605,7 +603,7 @@ class VpnConfig {
       vlessUri,
       fallbackNodeName: fallbackNodeName,
     );
-    await generateContent(
+    return await generateContent(
       nodeName: profile.name,
       domain: profile.domain,
       port: profile.port,
@@ -931,9 +929,6 @@ class VpnConfig {
       currentNodes.add(newVpnNode);
       logMessage('添加新节点: $nodeName');
     }
-
-    // 更新内存中的节点列表
-    _nodes = currentNodes;
 
     // 生成完整的 JSON 内容
     final vpnNodesJsonContent = json.encode(

@@ -76,8 +76,9 @@ class NetworkAccessPolicy {
           nodeTeamId == teamId &&
           authorizedNodeIds.contains(nodeId);
     }
-    if (pending) return false;
+    // Personal imports do not depend on the account's managed-node snapshot.
     if (!managed) return true;
+    if (pending) return false;
     return active && nodeOwner == owner && authorizedNodeIds.contains(nodeId);
   }
 }
