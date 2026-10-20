@@ -437,21 +437,22 @@
 		};
 		5AE74E2822954AB0B0F3D1A1 /* Build iOS Xray Bridge */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputPaths = (
 				"$(SRCROOT)/../build_scripts/build_ios_xray.sh",
 				"$(SRCROOT)/../go_core/bridge.go",
-				"$(SRCROOT)/../go_core/bridge_ios.go",
+				"$(SRCROOT)/../go_core/bridge_apple.go",
 				"$(SRCROOT)/../go_core/go.mod",
 				"$(SRCROOT)/../go_core/go.sum",
 				"$(SRCROOT)/../bindings/bridge.h",
 			);
 			name = "Build iOS Xray Bridge";
 			outputPaths = (
-				"$(SRCROOT)/../build/ios/libxray.a",
-				"$(SRCROOT)/../build/ios/libxray.h",
+				"$(SRCROOT)/../build/ios/$(PLATFORM_NAME)/libxray.a",
+				"$(SRCROOT)/../build/ios/$(PLATFORM_NAME)/libxray.h",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -739,7 +740,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-force_load",
-					"$(SRCROOT)/../build/ios/libxray.a",
+					"$(SRCROOT)/../build/ios/$(PLATFORM_NAME)/libxray.a",
 					"-lresolv",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = plus.svc.xconnect.PacketTunnel;
@@ -778,7 +779,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-force_load",
-					"$(SRCROOT)/../build/ios/libxray.a",
+					"$(SRCROOT)/../build/ios/$(PLATFORM_NAME)/libxray.a",
 					"-lresolv",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = plus.svc.xconnect.PacketTunnel;
@@ -994,7 +995,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-force_load",
-					"$(SRCROOT)/../build/ios/libxray.a",
+					"$(SRCROOT)/../build/ios/$(PLATFORM_NAME)/libxray.a",
 					"-lresolv",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = plus.svc.xconnect.PacketTunnel;
