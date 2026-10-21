@@ -96,6 +96,13 @@ CI 发布的 Windows 安装包现在默认是 MSI。在 Windows 环境执行：
 
 ## 配置保存与启动验收
 
+MSI 的 `ProductVersion` 使用 `X.Y.BUILD`，由 `pubspec.yaml` 的 `X.Y.Z+BUILD`
+转换而来；应用自身仍显示完整版本和源码提交。Windows Installer 只比较前三段，
+因此不能把 BUILD 放在第四段。BUILD 在每次正式发布时必须递增，即使只修改 Z；
+X/Y 最大为 255，BUILD 最大为 65535，超限时打包直接失败。同版本重建允许替换安装，
+较低版本仍被拒绝。当前 `1.0.0+2` 对应 MSI `1.0.2`，可升级旧格式 `1.0.0.2`。
+Windows CI 运行 `scripts/ci/check_windows_msi_version.ps1` 验证升级顺序与边界。
+
 连接配置、节点列表和服务描述文件统一保存在 `%LOCALAPPDATA%\XConnect`。
 未提供 `LOCALAPPDATA` 时使用 `%USERPROFILE%\AppData\Local\XConnect`。
 导入连接无需加载原生 DLL，也无需提升整个应用权限；节点列表按完整快照覆盖保存。
@@ -148,5 +155,7 @@ PR CI 的 `Windows core lifecycle` 在 Windows runner 上验证就绪确认、�
 Windows 构建在隔离副本中应用 `xray-core-windows-adapter-reuse.patch`，优先打开现有
 适配器，只有创建报告 GUID 冲突或遗留身份不存在（错误 183 / 2）才尝试系统分配 GUID；不删除其他接口。
 构建使用临时 modfile 和固定版本依赖副本，不改主 `go.mod`、libXray gitlink 或全局缓存。
+仓库通过 `.gitattributes` 将 `*.patch` 固定为 LF，以匹配 Go 模块归档中的源码；
+Windows Git 开启 `core.autocrlf` 时也不得将依赖补丁转换为 CRLF。
 CI 对复用、GUID 冲突回退和权限失败不重试分别验证。首次碰到残留 GUID 时允许驱动
 在有界等待内完成恢复，不能将进程存活直接视为网络就绪。

@@ -16,10 +16,7 @@ function Get-XConnectVersion {
     }
 
     $rawVersion = $versionLine.Matches[0].Groups[1].Value.Trim()
-    $parts = $rawVersion -split '\+'
-    $semanticVersion = $parts[0]
-    $buildNumber = if ($parts.Length -gt 1) { $parts[1] } else { "0" }
-    return "$semanticVersion.$buildNumber"
+    return ConvertTo-XConnectMsiVersion -Version $rawVersion
 }
 
 function Ensure-WixCli {
@@ -243,7 +240,7 @@ $wxsContent = @"
     InstallerVersion="500"
     Compressed="yes">
     <SummaryInformation Description="XConnect Windows Installer" Manufacturer="XConnect Team" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of XConnect is already installed." />
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of XConnect is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="ProgramFiles64Folder">

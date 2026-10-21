@@ -1,5 +1,12 @@
 # Unreleased
 
+- Preserve LF line endings for dependency patches on Windows checkouts, fixing
+  the adapter patch application failure in Windows CI and release builds.
+
+- Windows MSI uses a three-field version including the increasing build number,
+  so build-only releases upgrade correctly. Rebuilt packages at the same product
+  version replace the existing installation instead of installing side by side.
+
 - About displays the packaged source Git short commit ID instead of a moving
   branch label; builds without revision metadata are marked dev.
 

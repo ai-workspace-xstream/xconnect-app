@@ -241,6 +241,11 @@ jobs:
         shell: bash
         run: bash ./scripts/ci/check_windows_msi_script.sh
 
+      - name: Verify Windows MSI upgrade versions
+        if: ${{ matrix.platform == 'windows' }}
+        shell: pwsh
+        run: ./scripts/ci/check_windows_msi_version.ps1
+
       - name: Build platform artifacts
         shell: bash
         run: bash ./scripts/ci/build_matrix_artifacts.sh "$PLATFORM" "$ARCH" "$REQUIRE_ANDROID_SIGNING"

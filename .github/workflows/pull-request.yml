@@ -96,3 +96,6 @@ jobs:
       - name: Verify Windows core lifecycle
         shell: bash
         run: bash scripts/ci/check_windows_core.sh
+      - name: Verify MSI upgrade versions
+        shell: pwsh
+        run: ./scripts/ci/check_windows_msi_version.ps1
