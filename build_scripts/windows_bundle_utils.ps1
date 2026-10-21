@@ -2,6 +2,26 @@ Set-Variable -Name XConnectWintunVersion -Option ReadOnly -Value "0.14.1"
 Set-Variable -Name XConnectWintunSha256 -Option ReadOnly -Value "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51"
 Set-Variable -Name XConnectWintunZipUrl -Option ReadOnly -Value "https://www.wintun.net/builds/wintun-0.14.1.zip"
 
+function ConvertTo-XConnectMsiVersion {
+    param([Parameter(Mandatory = $true)][string]$Version)
+
+    # MSI compares only three fields. BUILD is globally increasing in pubspec;
+    # keep it in the third field so build-only releases upgrade correctly.
+    if ($Version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\+(0|[1-9][0-9]*)$') {
+        throw "Expected pubspec version X.Y.Z+BUILD."
+    }
+    $major = $Matches[1]
+    $minor = $Matches[2]
+    $build = $Matches[4]
+    foreach ($part in @(@($major, 255), @($minor, 255), @($build, 65535))) {
+        $number = 0L
+        if (-not [long]::TryParse($part[0], [ref]$number) -or $number -gt $part[1]) {
+            throw "MSI version fields must fit major/minor 0..255 and BUILD 0..65535."
+        }
+    }
+    return "$major.$minor.$build"
+}
+
 function Get-XConnectWindowsReleaseDir {
     return Join-Path $PSScriptRoot "..\build\windows\x64\runner\Release"
 }
