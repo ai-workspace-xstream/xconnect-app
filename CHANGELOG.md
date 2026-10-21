@@ -1,5 +1,9 @@
 # Unreleased
 
+- CI release builds now inject the source commit ID and build date into the
+  Linux and Windows apps, so About identifies the packaged revision instead of
+  showing the development fallback.
+
 - Preserve LF line endings for dependency patches on Windows checkouts, fixing
   the adapter patch application failure in Windows CI and release builds.
 

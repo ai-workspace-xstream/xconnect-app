@@ -5,6 +5,21 @@ platform="${1:-}"
 arch="${2:-}"
 require_signing="${3:-${REQUIRE_ANDROID_SIGNING:-false}}"
 
+branch_name="${GITHUB_REF_NAME:-${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}}"
+if [[ -z "$branch_name" || "$branch_name" == "HEAD" ]]; then
+  branch_name="unknown"
+fi
+build_id="${GITHUB_SHA:-${BUILD_ID:-$(git rev-parse HEAD)}}"
+build_id="${build_id:0:7}"
+build_date="${BUILD_DATE:-$(date -u '+%Y-%m-%d')}"
+export BRANCH="$branch_name" BUILD_ID="$build_id" BUILD_DATE="$build_date"
+
+flutter_build_metadata=(
+  --dart-define=BRANCH_NAME="$branch_name"
+  --dart-define=BUILD_ID="$build_id"
+  --dart-define=BUILD_DATE="$build_date"
+)
+
 flutter pub get
 
 case "$platform" in
@@ -13,7 +28,7 @@ case "$platform" in
     linux_cxx="${CXX:-$(command -v clang++)}"
     CC="$linux_cc" CXX="$linux_cxx" ./build_scripts/build_linux.sh
     flutter test --reporter expanded
-    CC="$linux_cc" CXX="$linux_cxx" flutter build linux --release -v
+    CC="$linux_cc" CXX="$linux_cxx" flutter build linux --release -v "${flutter_build_metadata[@]}"
     bash ./build_scripts/package_linux_bundle.sh
     if ! command -v nfpm >/dev/null 2>&1; then
       go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.3
@@ -23,7 +38,7 @@ case "$platform" in
     ;;
   windows)
     ./build_scripts/build_windows.sh
-    flutter build windows --release
+    flutter build windows --release "${flutter_build_metadata[@]}"
     pwsh -File ./build_scripts/package_windows_bundle.ps1
     pwsh -File ./build_scripts/package_windows_msi.ps1
     ;;
