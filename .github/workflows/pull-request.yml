@@ -77,3 +77,20 @@ jobs:
         env:
           XCONNECT_BUSINESS_DNS_FIXTURE: ${{ runner.temp }}/business-dns-fixture.json
         run: go test -mod=readonly -v ../test/integration/business_dns_runtime_test.go
+
+  windows-core:
+    name: Windows core lifecycle
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go_core/go.sum
+      - name: Verify Windows core lifecycle
+        shell: bash
+        run: bash scripts/ci/check_windows_core.sh

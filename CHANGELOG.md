@@ -1,5 +1,9 @@
 # Unreleased
 
+- Windows native tunnels now receive explicit interface addresses and selected
+  DNS resolvers. Core startup waits for acknowledgement, keeps the UI responsive
+  during authorization, and verifies recovered process identity before stopping.
+
 - Save imported connections without loading the native runtime, and replace the
   complete node snapshot without duplicates. Windows configuration uses the
   current user application data directory instead of the installation directory.

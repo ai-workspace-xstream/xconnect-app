@@ -14,6 +14,8 @@ import (
 	"time"
 	"unsafe"
 
+	"go_core/internal/corestatus"
+
 	"golang.org/x/sys/windows"
 )
 
@@ -166,7 +168,7 @@ func clearCoreProcessRecord(pid uint32) {
 	_ = os.Remove(path)
 }
 
-func launchCore(corePath, configPath, verbValue string) (windows.Handle, uint32, error) {
+func launchCore(corePath, configPath, statusPath, verbValue string) (windows.Handle, uint32, error) {
 	verb, err := windows.UTF16PtrFromString(verbValue)
 	if err != nil {
 		return 0, 0, err
@@ -175,7 +177,11 @@ func launchCore(corePath, configPath, verbValue string) (windows.Handle, uint32,
 	if err != nil {
 		return 0, 0, err
 	}
-	parameters, err := windows.UTF16PtrFromString("-config " + quoteWindowsArgument(configPath))
+	parameters, err := windows.UTF16PtrFromString("-config " + windows.EscapeArg(configPath) + " -startup-status " + windows.EscapeArg(statusPath))
+	if err != nil {
+		return 0, 0, err
+	}
+	directory, err := windows.UTF16PtrFromString(filepath.Dir(corePath))
 	if err != nil {
 		return 0, 0, err
 	}
@@ -185,6 +191,7 @@ func launchCore(corePath, configPath, verbValue string) (windows.Handle, uint32,
 		lpVerb:       verb,
 		lpFile:       file,
 		lpParameters: parameters,
+		lpDirectory:  directory,
 		nShow:        windowsShowHide,
 	}
 	result, _, callErr := procShellExecuteEx.Call(uintptr(unsafe.Pointer(&info)))
@@ -209,26 +216,19 @@ func launchCore(corePath, configPath, verbValue string) (windows.Handle, uint32,
 	return info.hProcess, pid, nil
 }
 
-func quoteWindowsArgument(value string) string {
-	if value != "" && !strings.ContainsAny(value, " \t\"") {
-		return value
-	}
-	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
-}
-
-func openCoreProcess(pid uint32) windows.Handle {
+func openCoreProcess(pid uint32) (windows.Handle, error) {
 	if pid == 0 {
-		return 0
+		return 0, nil
 	}
 	handle, err := windows.OpenProcess(
 		processQueryLimitedInfo|processSynchronize,
 		false,
 		pid,
 	)
-	if err != nil {
-		return 0
+	if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+		return 0, nil
 	}
-	return handle
+	return handle, err
 }
 
 func processIsRunning(handle windows.Handle) bool {
@@ -300,6 +300,13 @@ func terminateCorePIDElevated(pid uint32) error {
 	if waitResult != waitObject0 {
 		return errors.New("timed out waiting for elevated taskkill")
 	}
+	var exitCode uint32
+	if err := windows.GetExitCodeProcess(info.hProcess, &exitCode); err != nil {
+		return err
+	}
+	if exitCode != 0 {
+		return fmt.Errorf("elevated taskkill exited with code %d", exitCode)
+	}
 	return nil
 }
 
@@ -308,13 +315,29 @@ func stopDesktopCoreLocked() error {
 	pid := coreProcessPID
 	if handle == 0 {
 		record, err := readCoreProcessRecord()
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("read recorded core: %w", err)
+		}
 		if err == nil {
 			pid = record.PID
-			handle = openCoreProcess(pid)
-			if handle != 0 {
-				if image := processImagePath(handle); image != "" && !strings.EqualFold(image, record.Executable) {
+			handle, err = openCoreProcess(pid)
+			if err != nil {
+				return fmt.Errorf("open recorded core: %w", err)
+			}
+			if handle != 0 && processIsRunning(handle) {
+				expected, pathErr := xconnectCorePath()
+				image := processImagePath(handle)
+				if pathErr != nil || image == "" {
+					_ = windows.CloseHandle(handle)
+					return errors.New("cannot verify recorded core process identity")
+				}
+				if !strings.EqualFold(image, record.Executable) {
+					// The PID was reused by another executable.
 					_ = windows.CloseHandle(handle)
 					handle = 0
+				} else if !strings.EqualFold(image, expected) {
+					_ = windows.CloseHandle(handle)
+					return errors.New("recorded core belongs to a different installation; stop that instance first")
 				}
 			}
 		}
@@ -323,6 +346,9 @@ func stopDesktopCoreLocked() error {
 		clearCoreProcessRecord(pid)
 		return nil
 	}
+	// Retain ownership on a failed stop so the same handle can be retried.
+	coreProcessHandle = handle
+	coreProcessPID = pid
 	if err := terminateCoreProcess(handle, pid); err != nil {
 		return err
 	}
@@ -348,7 +374,17 @@ func startDesktopCoreWithVerb(configJSON []byte, verb string) error {
 	if err != nil {
 		return err
 	}
-	handle, pid, err := launchCore(corePath, configPath, verb)
+	statusPath := filepath.Join(filepath.Dir(configPath), "startup.json")
+	if err := os.Remove(statusPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if verb == "runas" {
+		driver := filepath.Join(filepath.Dir(corePath), "wintun.dll")
+		if info, err := os.Stat(driver); err != nil || info.IsDir() {
+			return errors.New("packaged wintun.dll is missing beside the desktop core")
+		}
+	}
+	handle, pid, err := launchCore(corePath, configPath, statusPath, verb)
 	if err != nil {
 		return err
 	}
@@ -362,17 +398,56 @@ func startDesktopCoreWithVerb(configJSON []byte, verb string) error {
 		coreProcessPID = 0
 		return err
 	}
-	// Give an invalid configuration a chance to fail before reporting a
-	// successful start to Dart.
-	time.Sleep(250 * time.Millisecond)
-	if !processIsRunning(handle) {
-		clearCoreProcessRecord(pid)
-		_ = windows.CloseHandle(handle)
-		coreProcessHandle = 0
-		coreProcessPID = 0
-		return errors.New("desktop core exited while starting")
+	// A live process may still be initializing its native network resources.
+	// Only the helper can acknowledge that RunXray completed successfully.
+	// Snapshot polling must remain responsive while the helper initializes.
+	// Exported start/stop operations are already serialized by instMu.
+	// Polling can close the shared handle when a failed helper exits. Keep an
+	// independent reference so startup can still retrieve its exit code.
+	var startupHandle windows.Handle
+	if err := windows.DuplicateHandle(windows.CurrentProcess(), handle,
+		windows.CurrentProcess(), &startupHandle, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
+		if stopErr := stopDesktopCoreLocked(); stopErr != nil {
+			return fmt.Errorf("duplicate core handle: %w; cleanup: %v", err, stopErr)
+		}
+		return err
+	}
+	coreProcessMu.Unlock()
+	startupErr := waitForCoreReady(startupHandle, statusPath, 12*time.Second)
+	_ = windows.CloseHandle(startupHandle)
+	coreProcessMu.Lock()
+	if startupErr != nil {
+		if stopErr := stopDesktopCoreLocked(); stopErr != nil {
+			return fmt.Errorf("%w; cleanup: %v", startupErr, stopErr)
+		}
+		return startupErr
 	}
 	return nil
+}
+
+func waitForCoreReady(handle windows.Handle, statusPath string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		status, err := corestatus.Read(statusPath)
+		running := processIsRunning(handle)
+		if err == nil {
+			if status.Phase == "ready" && running {
+				return nil
+			}
+			if status.Phase == "core_start_failed" {
+				return fmt.Errorf("core_start_failed (Windows error %d)", status.WindowsError)
+			}
+		}
+		if !running {
+			var code uint32
+			if err := windows.GetExitCodeProcess(handle, &code); err != nil {
+				return err
+			}
+			return fmt.Errorf("desktop core exited while starting (exit code %d)", code)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return errors.New("desktop core startup acknowledgement timed out")
 }
 
 func startDesktopCore(configJSON []byte) error {

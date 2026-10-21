@@ -1542,10 +1542,10 @@ class VpnConfig {
     String operatingSystem,
   ) {
     final settings = <String, dynamic>{'mtu': 1500};
-    // Let each desktop OS own interface addressing and DNS. Fixed TUN
-    // addresses can collide with another Wintun/TUN client, while a fixed DNS
-    // server bypasses the user's resolver policy. Xray only needs on-link
-    // routes here; autoOutboundsInterface keeps its uplink outside the TUN.
+    // Windows Wintun creates an adapter, not an address/DNS configuration.
+    // Xray applies gateway prefixes as local interface addresses. Keep DNS
+    // aligned with the selected system tunnel resolvers. Linux retains its
+    // existing configuration contract.
     const systemRoutedTunnelSettings = <String, dynamic>{
       'autoSystemRoutingTable': <String>['0.0.0.0/0', '::/0'],
       'autoOutboundsInterface': 'auto',
@@ -1554,6 +1554,8 @@ class VpnConfig {
       case 'windows':
         settings.addAll(<String, dynamic>{
           'name': 'XConnect',
+          'gateway': <String>['198.18.0.1/30', 'fdfe:dcba:9876::1/126'],
+          'dns': DnsConfig.systemTunnelDnsServers4(),
           ...systemRoutedTunnelSettings,
         });
       case 'linux':

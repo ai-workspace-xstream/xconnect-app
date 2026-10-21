@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ffi' as ffi;
+import 'dart:isolate';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:ffi/ffi.dart';
@@ -405,11 +406,8 @@ class NativeBridge {
         await _stopOtherRunningNodes(nodeName);
         final configJson = await File(runtimeConfigPath).readAsString();
         if (_useFfi) {
-          final configPtr = configJson.toNativeUtf8();
-          final resPtr = _ffi.startXray(configPtr.cast());
-          final result = resPtr.cast<Utf8>().toDartString();
-          _ffi.freeCString(resPtr);
-          malloc.free(configPtr);
+          // UAC and core readiness may take seconds; keep the UI responsive.
+          final result = await Isolate.run(() => startXray(configJson));
           if (!result.toLowerCase().startsWith('success')) {
             return '启动失败: $result';
           }
@@ -1992,11 +1990,16 @@ class NativeBridge {
       throw UnsupportedError('FFI not available');
     }
     final conf = configJson.toNativeUtf8();
-    final resPtr = _ffi.startXray(conf.cast());
-    final result = resPtr.cast<Utf8>().toDartString();
-    _ffi.freeCString(resPtr);
-    malloc.free(conf);
-    return result;
+    try {
+      final resPtr = _ffi.startXray(conf.cast());
+      try {
+        return resPtr.cast<Utf8>().toDartString();
+      } finally {
+        _ffi.freeCString(resPtr);
+      }
+    } finally {
+      malloc.free(conf);
+    }
   }
 
   /// Stop embedded xray-core instance on iOS
