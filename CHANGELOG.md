@@ -1,5 +1,9 @@
 # Unreleased
 
+- Save imported connections without loading the native runtime, and replace the
+  complete node snapshot without duplicates. Windows configuration uses the
+  current user application data directory instead of the installation directory.
+
 - Prioritize custom imported connections for Free, Plus and Team accounts.
   Managed account sync preserves custom configuration and active selections;
   team authorization continues to isolate all account-managed connections.
