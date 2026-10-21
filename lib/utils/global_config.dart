@@ -10,55 +10,23 @@ import 'settings_tab_navigation.dart';
 // LogConsole Global Key
 final GlobalKey<LogConsoleState> logConsoleKey = GlobalKey<LogConsoleState>();
 
-String _displayBranchLabel(String branch) {
-  if (branch == 'main') {
-    return 'latest';
-  }
-  if (branch.startsWith('release/')) {
-    final releaseVersion = branch.replaceFirst('release/', '');
-    if (releaseVersion.isNotEmpty) {
-      return releaseVersion.replaceAll('/', '-');
-    }
-    return 'release';
-  }
-  return branch.replaceAll('/', '-');
+/// Human-readable provenance for the exact source revision being packaged.
+String formatBuildVersion({required String buildId, String buildDate = ''}) {
+  final candidate = buildId.trim().toLowerCase();
+  final isCommit = RegExp(r'^[0-9a-f]{7,40}$').hasMatch(candidate) &&
+      !RegExp(r'^0+$').hasMatch(candidate);
+  final revision = isCommit ? candidate.substring(0, 7) : 'dev';
+  return <String>[
+    revision,
+    if (buildDate.trim().isNotEmpty) buildDate.trim(),
+  ].join('-');
 }
 
-String _firstNonEmpty(List<String> values) {
-  for (final value in values) {
-    if (value.isNotEmpty) {
-      return value;
-    }
-  }
-  return '';
-}
-
-/// 当前展示版本标签。
-final String buildVersion = (() {
-  const defineBranchName = String.fromEnvironment(
-    'BRANCH_NAME',
-    defaultValue: '',
-  );
-  const defineBranch = String.fromEnvironment('BRANCH', defaultValue: '');
-  const defineBuildId = String.fromEnvironment('BUILD_ID', defaultValue: '');
-  const defineBuildDate = String.fromEnvironment(
-    'BUILD_DATE',
-    defaultValue: '',
-  );
-
-  // Prioritize environment defines (passed via --dart-define) for ALL platforms
-  // This ensures mobile builds (iOS/Android) get the same labels as Desktop when built via Makefile.
-  final branch = _firstNonEmpty([defineBranchName, defineBranch, 'main']);
-  const buildId = defineBuildId;
-  const buildDate = defineBuildDate;
-
-  final parts = <String>[
-    _displayBranchLabel(branch),
-    if (buildDate.isNotEmpty) buildDate,
-    if (buildId.isNotEmpty) buildId,
-  ];
-  return parts.join('-');
-})();
+/// BUILD_ID is supplied by the packaging scripts from git rev-parse --short HEAD.
+final String buildVersion = formatBuildVersion(
+  buildId: const String.fromEnvironment('BUILD_ID'),
+  buildDate: const String.fromEnvironment('BUILD_DATE'),
+);
 
 /// 基础系统信息，用于匿名统计等场景
 Map<String, String> collectSystemInfo() => {
@@ -832,22 +800,22 @@ class GlobalApplicationConfig {
     return '$logsPath/$logName';
   }
 
-  /// Windows 平台默认安装目录
-  static String get windowsBasePath {
-    final program = Platform.environment['ProgramFiles'];
-    if (program != null) {
-      final path = '$program\\XConnect';
-      try {
-        Directory(path).createSync(recursive: true);
-        return path;
-      } catch (_) {
-        // ignore and fall back
-      }
+  /// Writable Windows application data, independent of the install location.
+  static String get windowsBasePath => windowsDataPathForEnvironment(
+        Platform.environment,
+      );
+
+  @visibleForTesting
+  static String windowsDataPathForEnvironment(Map<String, String> environment) {
+    final local = environment['LOCALAPPDATA'];
+    if (local != null && local.trim().isNotEmpty) {
+      return '$local\\XConnect';
     }
-    final local = Platform.environment['LOCALAPPDATA'] ?? '.';
-    final alt = '$local\\XConnect';
-    Directory(alt).createSync(recursive: true);
-    return alt;
+    final profile = environment['USERPROFILE'];
+    if (profile != null && profile.trim().isNotEmpty) {
+      return '$profile\\AppData\\Local\\XConnect';
+    }
+    throw StateError('Windows user application data directory is unavailable');
   }
 
   /// Xray 可执行文件路径 - 使用沙盒安全路径
@@ -905,9 +873,7 @@ class GlobalApplicationConfig {
         final configsPath = await getConfigsPath();
         return '$configsPath/';
       case 'windows':
-        final base =
-            Platform.environment['ProgramFiles'] ?? 'C:\\Program Files';
-        return '$base\\XConnect\\';
+        return '$windowsBasePath\\';
       case 'linux':
         final configDir = Directory('$_linuxConfigHome/xconnect');
         await configDir.create(recursive: true);
@@ -928,7 +894,17 @@ class GlobalApplicationConfig {
       case 'windows':
         final xconnectDir = Directory(windowsBasePath);
         await xconnectDir.create(recursive: true);
-        return '${xconnectDir.path}\\vpn_nodes.json';
+        final destination = File('${xconnectDir.path}\\vpn_nodes.json');
+        // Preserve installations that previously saved their node list beside
+        // the installed binaries. Referenced configs remain readable there.
+        final program = Platform.environment['ProgramFiles'];
+        if (!await destination.exists() && program != null) {
+          final legacy = File('$program\\XConnect\\vpn_nodes.json');
+          if (await legacy.exists()) {
+            await legacy.copy(destination.path);
+          }
+        }
+        return destination.path;
 
       case 'linux':
         final xconnectDir = Directory('$_linuxConfigHome/xconnect');

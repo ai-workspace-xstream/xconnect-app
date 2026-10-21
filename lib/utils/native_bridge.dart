@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ffi' as ffi;
+import 'dart:isolate';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:ffi/ffi.dart';
@@ -271,66 +272,18 @@ class NativeBridge {
     required String vpnNodesConfigContent,
     required String password,
   }) async {
-    if (_isMobile || Platform.isMacOS) {
-      try {
-        await File(xrayConfigPath).parent.create(recursive: true);
-        await File(servicePath).parent.create(recursive: true);
-        await File(vpnNodesConfigPath).parent.create(recursive: true);
-        await File(xrayConfigPath).writeAsString(xrayConfigContent);
-        await File(servicePath).writeAsString(serviceContent);
-        await File(vpnNodesConfigPath).writeAsString(vpnNodesConfigContent);
-        return 'success';
-      } catch (e) {
-        return '写入失败: $e';
-      }
-    }
-
-    if (!_isDesktop) return '当前平台暂不支持';
-
-    if (_useFfi) {
-      final p1 = xrayConfigPath.toNativeUtf8();
-      final p2 = xrayConfigContent.toNativeUtf8();
-      final p3 = servicePath.toNativeUtf8();
-      final p4 = serviceContent.toNativeUtf8();
-      final p5 = vpnNodesConfigPath.toNativeUtf8();
-      final p6 = vpnNodesConfigContent.toNativeUtf8();
-      final pwd = password.toNativeUtf8();
-      final resPtr = _ffi.writeConfigFiles(
-        p1.cast(),
-        p2.cast(),
-        p3.cast(),
-        p4.cast(),
-        p5.cast(),
-        p6.cast(),
-        pwd.cast(),
-      );
-      final result = resPtr.cast<Utf8>().toDartString();
-      _ffi.freeCString(resPtr);
-      malloc.free(p1);
-      malloc.free(p2);
-      malloc.free(p3);
-      malloc.free(p4);
-      malloc.free(p5);
-      malloc.free(p6);
-      malloc.free(pwd);
-      return result;
-    } else {
-      try {
-        final result = await _channel.invokeMethod<String>('writeConfigFiles', {
-          'xrayConfigPath': xrayConfigPath,
-          'xrayConfigContent': xrayConfigContent,
-          'servicePath': servicePath,
-          'serviceContent': serviceContent,
-          'vpnNodesConfigPath': vpnNodesConfigPath,
-          'vpnNodesConfigContent': vpnNodesConfigContent,
-          'password': password,
-        });
-        return result ?? 'success';
-      } on MissingPluginException {
-        return '插件未实现';
-      } catch (e) {
-        return '写入失败: $e';
-      }
+    // These are user-owned files, including a complete node-list snapshot.
+    // Saving must work before the native runtime is loaded or started.
+    try {
+      await File(xrayConfigPath).parent.create(recursive: true);
+      await File(servicePath).parent.create(recursive: true);
+      await File(vpnNodesConfigPath).parent.create(recursive: true);
+      await File(xrayConfigPath).writeAsString(xrayConfigContent);
+      await File(servicePath).writeAsString(serviceContent);
+      await File(vpnNodesConfigPath).writeAsString(vpnNodesConfigContent);
+      return 'success';
+    } catch (e) {
+      return '写入失败: $e';
     }
   }
 
@@ -453,11 +406,8 @@ class NativeBridge {
         await _stopOtherRunningNodes(nodeName);
         final configJson = await File(runtimeConfigPath).readAsString();
         if (_useFfi) {
-          final configPtr = configJson.toNativeUtf8();
-          final resPtr = _ffi.startXray(configPtr.cast());
-          final result = resPtr.cast<Utf8>().toDartString();
-          _ffi.freeCString(resPtr);
-          malloc.free(configPtr);
+          // UAC and core readiness may take seconds; keep the UI responsive.
+          final result = await Isolate.run(() => startXray(configJson));
           if (!result.toLowerCase().startsWith('success')) {
             return '启动失败: $result';
           }
@@ -2040,11 +1990,16 @@ class NativeBridge {
       throw UnsupportedError('FFI not available');
     }
     final conf = configJson.toNativeUtf8();
-    final resPtr = _ffi.startXray(conf.cast());
-    final result = resPtr.cast<Utf8>().toDartString();
-    _ffi.freeCString(resPtr);
-    malloc.free(conf);
-    return result;
+    try {
+      final resPtr = _ffi.startXray(conf.cast());
+      try {
+        return resPtr.cast<Utf8>().toDartString();
+      } finally {
+        _ffi.freeCString(resPtr);
+      }
+    } finally {
+      malloc.free(conf);
+    }
   }
 
   /// Stop embedded xray-core instance on iOS

@@ -8,11 +8,14 @@ import (
 	"fmt"
 	"os"
 
+	"go_core/internal/corestatus"
+
 	"github.com/xtls/libxray/xray"
 )
 
 func main() {
 	configPath := flag.String("config", "", "path to the Xray JSON configuration")
+	statusPath := flag.String("startup-status", "", "path to the startup state file")
 	flag.Parse()
 	if *configPath == "" {
 		fmt.Fprintln(os.Stderr, "missing -config")
@@ -20,8 +23,20 @@ func main() {
 	}
 
 	if err := xray.RunXray(*configPath); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if *statusPath != "" {
+			_ = corestatus.Write(*statusPath, corestatus.Failure(err))
+		}
+		// Full engine errors can include configuration values. Return only a
+		// stage and an optional system error code to the parent.
+		fmt.Fprintln(os.Stderr, "core_start_failed")
 		os.Exit(1)
+	}
+
+	if *statusPath != "" {
+		if err := corestatus.Write(*statusPath, corestatus.Status{Phase: "ready"}); err != nil {
+			_ = xray.StopXray()
+			os.Exit(1)
+		}
 	}
 
 	// The parent owns this process and stops it with the Windows process
