@@ -10,55 +10,23 @@ import 'settings_tab_navigation.dart';
 // LogConsole Global Key
 final GlobalKey<LogConsoleState> logConsoleKey = GlobalKey<LogConsoleState>();
 
-String _displayBranchLabel(String branch) {
-  if (branch == 'main') {
-    return 'latest';
-  }
-  if (branch.startsWith('release/')) {
-    final releaseVersion = branch.replaceFirst('release/', '');
-    if (releaseVersion.isNotEmpty) {
-      return releaseVersion.replaceAll('/', '-');
-    }
-    return 'release';
-  }
-  return branch.replaceAll('/', '-');
+/// Human-readable provenance for the exact source revision being packaged.
+String formatBuildVersion({required String buildId, String buildDate = ''}) {
+  final candidate = buildId.trim().toLowerCase();
+  final isCommit = RegExp(r'^[0-9a-f]{7,40}$').hasMatch(candidate) &&
+      !RegExp(r'^0+$').hasMatch(candidate);
+  final revision = isCommit ? candidate.substring(0, 7) : 'dev';
+  return <String>[
+    revision,
+    if (buildDate.trim().isNotEmpty) buildDate.trim(),
+  ].join('-');
 }
 
-String _firstNonEmpty(List<String> values) {
-  for (final value in values) {
-    if (value.isNotEmpty) {
-      return value;
-    }
-  }
-  return '';
-}
-
-/// 当前展示版本标签。
-final String buildVersion = (() {
-  const defineBranchName = String.fromEnvironment(
-    'BRANCH_NAME',
-    defaultValue: '',
-  );
-  const defineBranch = String.fromEnvironment('BRANCH', defaultValue: '');
-  const defineBuildId = String.fromEnvironment('BUILD_ID', defaultValue: '');
-  const defineBuildDate = String.fromEnvironment(
-    'BUILD_DATE',
-    defaultValue: '',
-  );
-
-  // Prioritize environment defines (passed via --dart-define) for ALL platforms
-  // This ensures mobile builds (iOS/Android) get the same labels as Desktop when built via Makefile.
-  final branch = _firstNonEmpty([defineBranchName, defineBranch, 'main']);
-  const buildId = defineBuildId;
-  const buildDate = defineBuildDate;
-
-  final parts = <String>[
-    _displayBranchLabel(branch),
-    if (buildDate.isNotEmpty) buildDate,
-    if (buildId.isNotEmpty) buildId,
-  ];
-  return parts.join('-');
-})();
+/// BUILD_ID is supplied by the packaging scripts from git rev-parse --short HEAD.
+final String buildVersion = formatBuildVersion(
+  buildId: const String.fromEnvironment('BUILD_ID'),
+  buildDate: const String.fromEnvironment('BUILD_DATE'),
+);
 
 /// 基础系统信息，用于匿名统计等场景
 Map<String, String> collectSystemInfo() => {

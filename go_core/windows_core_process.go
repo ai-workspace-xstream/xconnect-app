@@ -413,7 +413,7 @@ func startDesktopCoreWithVerb(configJSON []byte, verb string) error {
 		return err
 	}
 	coreProcessMu.Unlock()
-	startupErr := waitForCoreReady(startupHandle, statusPath, 12*time.Second)
+	startupErr := waitForCoreReady(startupHandle, statusPath, 35*time.Second)
 	_ = windows.CloseHandle(startupHandle)
 	coreProcessMu.Lock()
 	if startupErr != nil {

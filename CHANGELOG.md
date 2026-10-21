@@ -1,5 +1,12 @@
 # Unreleased
 
+- About displays the packaged source Git short commit ID instead of a moving
+  branch label; builds without revision metadata are marked dev.
+
+- Windows adapter startup reuses an existing interface and recovers from a
+  stale GUID collision with a system-assigned identity, retaining the interface
+  name. Isolated dependency builds apply the reviewed adapter patch.
+
 - Windows native tunnels now receive explicit interface addresses and selected
   DNS resolvers. Core startup waits for acknowledgement, keeps the UI responsive
   during authorization, and verifies recovered process identity before stopping.

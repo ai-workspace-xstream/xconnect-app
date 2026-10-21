@@ -1,0 +1,37 @@
+--- a/proxy/tun/tun_windows.go
++++ b/proxy/tun/tun_windows.go
+@@ -74,15 +74,27 @@
+ }
+ 
+ func open(name, desc string) (*wintun.Adapter, error) {
+-	// generate a deterministic GUID from the adapter name
++	return openWithFunctions(name, desc, wintun.OpenAdapter, wintun.CreateAdapter)
++}
++
++// A crashed process can leave a GUID registered without an accessible adapter.
++// Prefer reuse; only a confirmed GUID collision permits a fresh identity.
++func openWithFunctions(name, desc string,
++	openAdapter func(string) (*wintun.Adapter, error),
++	createAdapter func(string, string, *windows.GUID) (*wintun.Adapter, error),
++) (*wintun.Adapter, error) {
++	if adapter, err := openAdapter(name); err == nil {
++		return adapter, nil
++	} else if go_errors.Is(err, windows.ERROR_ACCESS_DENIED) {
++		return nil, err
++	}
+ 	id := md5.Sum([]byte(name))
+ 	guid := (*windows.GUID)(unsafe.Pointer(&id[0]))
+-	// try to create adapter anew
+-	adapter, err := wintun.CreateAdapter(name, desc, guid)
+-	if err == nil {
+-		return adapter, nil
+-	}
+-	return nil, err
++	adapter, err := createAdapter(name, desc, guid)
++	if go_errors.Is(err, windows.ERROR_ALREADY_EXISTS) || go_errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
++		return createAdapter(name, desc, nil)
++	}
++	return adapter, err
+ }
+ 
+ func (t *WindowsTun) Start() error {

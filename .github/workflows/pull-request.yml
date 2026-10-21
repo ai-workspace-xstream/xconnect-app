@@ -9,6 +9,8 @@ on:
       - "assets/**"
       - "pubspec.*"
       - "go_core/**"
+      - "build_scripts/**"
+      - "windows/**"
       - "linux/**"
       - "libXray"
       - ".gitmodules"
