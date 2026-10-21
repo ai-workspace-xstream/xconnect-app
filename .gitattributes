@@ -1,0 +1,3 @@
+# Go module archives use LF even on Windows. Keep dependency patch context
+# unchanged when Windows Git has core.autocrlf enabled.
+*.patch text eol=lf

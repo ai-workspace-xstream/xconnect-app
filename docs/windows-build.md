@@ -155,5 +155,7 @@ PR CI 的 `Windows core lifecycle` 在 Windows runner 上验证就绪确认、�
 Windows 构建在隔离副本中应用 `xray-core-windows-adapter-reuse.patch`，优先打开现有
 适配器，只有创建报告 GUID 冲突或遗留身份不存在（错误 183 / 2）才尝试系统分配 GUID；不删除其他接口。
 构建使用临时 modfile 和固定版本依赖副本，不改主 `go.mod`、libXray gitlink 或全局缓存。
+仓库通过 `.gitattributes` 将 `*.patch` 固定为 LF，以匹配 Go 模块归档中的源码；
+Windows Git 开启 `core.autocrlf` 时也不得将依赖补丁转换为 CRLF。
 CI 对复用、GUID 冲突回退和权限失败不重试分别验证。首次碰到残留 GUID 时允许驱动
 在有界等待内完成恢复，不能将进程存活直接视为网络就绪。
