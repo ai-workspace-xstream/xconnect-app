@@ -178,7 +178,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return;
     }
 
+    var savedName = '';
     final saved = await VpnConfig.generateContent(
+      onSaved: (name) => savedName = name,
       nodeName: _nodeNameController.text.trim(),
       domain: _domainController.text.trim(),
       port: _portController.text.trim(),
@@ -190,7 +192,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         addAppLog(msg);
       },
     );
-    if (saved) await _syncHomeAfterImport(_nodeNameController.text.trim());
+    if (saved) await _syncHomeAfterImport(savedName);
   }
 
   Future<void> _generateAndSyncFromVless({
@@ -198,11 +200,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     required String fallbackNodeName,
   }) async {
     try {
-      final parsed = VpnConfig.parseVlessUri(
-        rawUri,
-        fallbackNodeName: fallbackNodeName,
-      );
+      var savedName = '';
       final saved = await VpnConfig.generateFromVlessUri(
+        onSaved: (name) => savedName = name,
         vlessUri: rawUri,
         fallbackNodeName: fallbackNodeName,
         password: '',
@@ -212,7 +212,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           addAppLog(msg);
         },
       );
-      if (saved) await _syncHomeAfterImport(parsed.name);
+      if (saved) await _syncHomeAfterImport(savedName);
     } catch (e) {
       if (!mounted) return;
       _setSaveMessage(context.l10n.get('vlessUriInvalid'));

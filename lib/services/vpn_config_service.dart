@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../utils/global_config.dart';
 import '../utils/native_bridge.dart';
@@ -444,6 +445,7 @@ class VpnConfig {
     bool enableSocksProxy = true,
     bool enableHttpProxy = true,
     bool enableTunnelMode = true,
+    void Function(String)? onSaved,
   }) async {
     checkNotEmpty(nodeName, 'nodeName');
     checkNotEmpty(domain, 'domain');
@@ -459,7 +461,19 @@ class VpnConfig {
     final normalizedProtocol = protocol.trim().toLowerCase();
     final normalizedNetwork = network.trim().toLowerCase();
     final normalizedSecurity = security.trim().toLowerCase();
-    final code = nodeName.split('-').first.toLowerCase();
+    // Each user import owns its files, even when names share a prefix or
+    // collide with a managed profile. Never overwrite an existing connection.
+    final originalName = nodeName;
+    var suffix = 2;
+    if (isLegacyCompatibilityNodeName(nodeName)) {
+      nodeName = '$originalName (${suffix++})';
+    }
+    while (getNodeByName(nodeName) != null) {
+      nodeName = '$originalName (${suffix++})';
+    }
+    final random = Random.secure();
+    final code =
+        'custom-${List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
     final prefix = await GlobalApplicationConfig.getXrayConfigPath();
     final xrayConfigPath = '${prefix}node-$code-config.json';
 
@@ -514,7 +528,7 @@ class VpnConfig {
         await GlobalApplicationConfig.getLocalConfigPath();
     final vpnNodesConfigContent = await _generateVpnNodesJsonContent(
       nodeName,
-      code,
+      originalName.split('-').first.toUpperCase(),
       serviceName,
       xrayConfigPath,
       setMessage,
@@ -547,6 +561,7 @@ class VpnConfig {
       await load();
       setMessage('✅ 配置已保存: $xrayConfigPath');
       logMessage('配置已成功保存并生成');
+      onSaved?.call(nodeName);
       return true;
     } catch (e) {
       setMessage('生成配置失败: $e');
@@ -614,10 +629,12 @@ class VpnConfig {
     bool enableSocksProxy = true,
     bool enableHttpProxy = true,
     bool enableTunnelMode = true,
+    void Function(String)? onSaved,
   }) async {
     final profile = parseVlessUri(vlessUri, fallbackNodeName: fallbackNodeName);
     return await generateContent(
       nodeName: profile.name,
+      onSaved: onSaved,
       domain: profile.domain,
       port: profile.port,
       uuid: profile.uuid,

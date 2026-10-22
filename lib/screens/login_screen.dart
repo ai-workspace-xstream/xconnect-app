@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final result = await _syncService.syncNow(manual: true);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.message)),
+      SnackBar(content: Text(context.l10n.get(result.message))),
     );
   }
 
@@ -243,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen> {
               if (summary.lastError != null) ...[
                 const SizedBox(height: 8),
                 Text(
-                  summary.lastError!,
+                  context.l10n.get(summary.lastError!),
                   style: Theme.of(
                     context,
                   ).textTheme.labelMedium?.copyWith(color: cs.error),

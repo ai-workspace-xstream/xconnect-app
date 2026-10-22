@@ -9,6 +9,7 @@ import 'package:xconnect/l10n/app_localizations.dart';
 import 'package:xconnect/screens/subscription_screen.dart';
 import 'package:xconnect/services/session/network_access_policy.dart';
 import 'package:xconnect/services/vpn_config_service.dart';
+import 'package:xconnect/services/sync/xray_config_writer.dart';
 import 'package:xconnect/utils/global_config.dart';
 
 const link = 'vless://11111111-1111-4111-8111-111111111111@edge.example:443'
@@ -70,6 +71,50 @@ void main() {
     expect(VpnConfig.nodes.single.name, 'custom-connection');
   });
 
+  test('same-prefix and same-name imports own independent durable files',
+      () async {
+    for (final uri in [
+      link,
+      link.replaceAll('custom-connection', 'custom-second'),
+      link
+    ]) {
+      expect(
+          await VpnConfig.generateFromVlessUri(
+            vlessUri: uri,
+            password: '',
+            bundleId: 'plus.svc.xconnect',
+            setMessage: (_) {},
+            logMessage: (_) {},
+          ),
+          isTrue);
+    }
+    final original = VpnConfig.allNodes.toList();
+    expect(original.map((n) => n.configPath).toSet(), hasLength(3));
+    expect(original.map((n) => n.serviceName).toSet(), hasLength(3));
+    expect(original.map((n) => n.name).toSet(), hasLength(3));
+    final contents = {
+      for (final n in original)
+        n.configPath: await File(n.configPath).readAsString()
+    };
+    final managedPath = await XrayConfigWriter.writeConfigForNode(
+        json: contents.values.first,
+        nodeName: original.first.name,
+        nodeId: 'node-a');
+    await XrayConfigWriter.registerNode(
+        configPath: managedPath,
+        nodeName: original.first.name,
+        nodeId: 'node-a');
+    expect(VpnConfig.allNodes, hasLength(4));
+    await XrayConfigWriter.pruneSyncedNodes({});
+    policy.invalidate(signedIn: false);
+    await VpnConfig.load();
+    expect(VpnConfig.allNodes, hasLength(3));
+    for (final n in original) {
+      expect(await File(n.configPath).readAsString(), contents[n.configPath]);
+      expect(VpnConfig.getNodeByName(n.name)?.isManaged, isFalse);
+    }
+  });
+
   testWidgets('successful save returns home and publishes the imported node',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
@@ -105,8 +150,8 @@ void main() {
       (tester) async {
     // A directory at the destination causes an actual filesystem write error.
     final configPath = await tester.runAsync(() async {
-      final prefix = await GlobalApplicationConfig.getXrayConfigPath();
-      final blocked = Directory('${prefix}node-custom-config.json');
+      final path = await GlobalApplicationConfig.getLocalConfigPath();
+      final blocked = Directory(path);
       if (await File(blocked.path).exists()) {
         await File(blocked.path).delete();
       }

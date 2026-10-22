@@ -6,6 +6,22 @@ class AppLocalizations {
 
   static const _localizedValues = <String, Map<String, String>>{
     'en': {
+      'notifications': 'Notifications',
+      'notificationsUnread': 'Notifications: unread quota alert',
+      'notificationsEmpty':
+          'No quota alerts. Status refreshes while you are signed in and the app is running.',
+      'notificationsRefresh': 'Check quota and retry sync',
+      'quotaLow':
+          'Less than 10% of your included allowance remains. Check your plan to keep your managed connections available.',
+      'quotaEmpty':
+          'Your included allowance is used up. Check your plan or available pay-as-you-go balance. Server access rules still apply.',
+      'quotaPaused':
+          'The server paused managed configuration sync because your quota is exhausted. Check your plan, then retry sync after your allowance is restored.',
+      'quotaReminders': 'Low allowance reminders',
+      'quotaRemindersHelp':
+          'Show low allowance alerts in the app. Sync suspension remains visible even when reminders are off. No background system notifications.',
+      'customConfigsRetained':
+          'Manually imported connections stay on this device until you delete them. Uninstalling the app or clearing its data may remove them.',
       'unlockPrompt': 'Enter password to unlock',
       'cancel': 'Cancel',
       'confirm': 'Confirm',
@@ -437,6 +453,16 @@ curl -I --max-time 15 https://grok.com
 curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
     },
     'zh': {
+      'notifications': '通知',
+      'notificationsUnread': '通知：有未读额度提醒',
+      'notificationsEmpty': '暂无额度提醒。登录并运行应用期间会定期检查。',
+      'notificationsRefresh': '检查额度并重试同步',
+      'quotaLow': '套餐内剩余额度不足 10%。请及时查看套餐，以便继续使用账号同步的连接。',
+      'quotaEmpty': '套餐内额度已用尽。请查看套餐或按量付费余额，可用连接仍以服务端授权为准。',
+      'quotaPaused': '服务端因额度耗尽暂停了账号配置同步。请查看套餐，额度恢复后可重试同步。',
+      'quotaReminders': '低额度提醒',
+      'quotaRemindersHelp': '在应用内提示剩余额度不足。关闭后仍显示同步暂停状态；不会发送后台系统通知。',
+      'customConfigsRetained': '手动导入的连接会保留在本设备，直到您主动删除。卸载应用或清除应用数据可能将其移除。',
       'unlockPrompt': '输入密码解锁',
       'cancel': '取消',
       'confirm': '确认',

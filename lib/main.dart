@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'services/notifications/quota_notifications.dart';
+import 'widgets/quota_notification_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/home_screen.dart';
@@ -70,6 +72,7 @@ void main(List<String> args) async {
   }
   await SessionManager.instance.init();
   await VpnConfig.load(); // ✅ 启动时加载 assets + 本地配置
+  await QuotaNotifications.instance.init();
   await DesktopSyncService.instance.init();
   runApp(const MyApp());
 }
@@ -595,6 +598,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
               compact: isMobile,
             ),
             actions: [
+              const QuotaNotificationButton(),
               ValueListenableBuilder<Locale>(
                 valueListenable: GlobalState.locale,
                 builder: (context, locale, _) {
@@ -695,33 +699,38 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   }).toList(),
                 )
               : null,
-          body: isMobile
-              ? IndexedStack(
-                  index: _clampIndex(isMobile, mobilePages, desktopPages),
-                  children: mobilePages,
-                )
-              : Row(
-                  children: [
-                    NavigationRail(
-                      selectedIndex: _clampIndex(
-                        isMobile,
-                        mobilePages,
-                        desktopPages,
-                      ),
-                      onDestinationSelected: (index) =>
-                          setState(() => _currentIndex = index),
-                      labelType: NavigationRailLabelType.all,
-                      destinations: destinations,
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(
-                      child: IndexedStack(
+          body: Column(children: [
+            const QuotaStatusBanner(),
+            Expanded(
+                child: isMobile
+                    ? IndexedStack(
                         index: _clampIndex(isMobile, mobilePages, desktopPages),
-                        children: desktopPages,
-                      ),
-                    ),
-                  ],
-                ),
+                        children: mobilePages,
+                      )
+                    : Row(
+                        children: [
+                          NavigationRail(
+                            selectedIndex: _clampIndex(
+                              isMobile,
+                              mobilePages,
+                              desktopPages,
+                            ),
+                            onDestinationSelected: (index) =>
+                                setState(() => _currentIndex = index),
+                            labelType: NavigationRailLabelType.all,
+                            destinations: destinations,
+                          ),
+                          const VerticalDivider(width: 1),
+                          Expanded(
+                            child: IndexedStack(
+                              index: _clampIndex(
+                                  isMobile, mobilePages, desktopPages),
+                              children: desktopPages,
+                            ),
+                          ),
+                        ],
+                      )),
+          ]),
         );
       },
     );

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xconnect/services/session/network_access_policy.dart';
+import 'package:xconnect/services/notifications/quota_notifications.dart';
 import 'package:xconnect/services/session/session_manager.dart';
 import 'package:xconnect/services/sync/desktop_sync_service.dart';
 import 'package:xconnect/services/vpn_config_service.dart';
@@ -124,4 +125,67 @@ void main() {
       expect(VpnConfig.nodes, [custom]);
     });
   }
+  test(
+      'quota alerts distinguish low allowance, exhaustion, rejection and recovery',
+      () async {
+    var remaining = 10;
+    var rejected = false;
+    var code = 'quota_exhausted';
+    final store = QuotaNotifications.instance;
+    await store.selectAccount(null);
+    await store.setReminders(true);
+    sync.client = MockClient((request) async {
+      if (request.url.path.endsWith('/network-access')) {
+        return http.Response(
+            '{"mode":"personal","allowed":true,"accountId":"a"}', 200);
+      }
+      if (request.url.path.endsWith('/usage/summary')) {
+        return http.Response(
+            jsonEncode({
+              'remainingIncludedQuota': remaining,
+              'billingProfile': {'IncludedQuotaBytes': 100}
+            }),
+            200);
+      }
+      if (request.url.path.endsWith('/nodes')) {
+        if (rejected) return http.Response(jsonEncode({'error': code}), 403);
+        return http.Response(
+            jsonEncode([
+              {
+                'id': 'edge-a',
+                'name': 'Edge',
+                'region': 'jp',
+                'uri':
+                    'vless://11111111-1111-1111-1111-111111111111@edge.example:443?type=xhttp&security=tls#Edge'
+              }
+            ]),
+            200);
+      }
+      return http.Response('', 404);
+    });
+    expect((await sync.syncNow()).success, isTrue);
+    expect(store.notice, isNull);
+    remaining = 9;
+    await sync.syncNow();
+    expect(store.notice, 'quotaLow');
+    await store.markRead();
+    await sync.syncNow();
+    expect(store.hasUnread, isFalse);
+    remaining = 0;
+    // Included quota zero does not block authorized PAYG connections.
+    expect((await sync.syncNow()).success, isTrue);
+    expect(store.notice, 'quotaEmpty');
+    rejected = true;
+    await sync.syncNow();
+    expect(store.notice, 'quotaPaused');
+    expect(VpnConfig.allNodes.where((n) => n.isManaged), isEmpty);
+    remaining = 100;
+    rejected = false;
+    expect((await sync.syncNow()).success, isTrue);
+    expect(store.notice, isNull);
+    rejected = true;
+    code = 'forbidden';
+    await sync.syncNow();
+    expect(store.notice, isNull);
+  });
 }

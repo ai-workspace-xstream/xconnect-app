@@ -1,5 +1,13 @@
 # Unreleased
 
+- Manually imported connections now use independent files and unique display names,
+  preventing same-prefix imports or managed sync from overwriting user profiles.
+- All platforms share an in-app notification bell, unread badge, quota status banner,
+  and Settings > Notifications. Remaining included allowance below 10% triggers a
+  deduplicated reminder; explicit server quota rejection explains paused sync.
+- Quota reminders and read state persist locally, are isolated by account, honor
+  unlimited plans/temporary overrides, and clear when the condition recovers.
+
 - Windows MSI now opens the standard interactive welcome, install-location, progress, and completion dialogs.
 - CI build naming now follows the shared release policy: production refs use the package version, main uses `latest`, and feature builds include a run ID and short commit.
 

@@ -81,11 +81,21 @@ class XrayConfigWriter {
           (node) => node?.serviceName == serviceName,
           orElse: () => null,
         );
-    if (owner == null) existing ??= existingByName;
-    final targetNodeName = existing?.name ??
+    if (owner == null && existingByName?.isManaged == true) {
+      existing ??= existingByName;
+    }
+    var targetNodeName = existing?.name ??
         (existingByName == null
             ? normalizedName
             : '$normalizedName (${nodeId ?? teamId ?? "managed"})');
+
+    if (existing == null) {
+      final baseName = targetNodeName;
+      var suffix = 2;
+      while (VpnConfig.getNodeByName(targetNodeName) != null) {
+        targetNodeName = '$baseName (${suffix++})';
+      }
+    }
 
     if (identityMatches.length > 1 && existing != null) {
       for (final duplicate in identityMatches) {
@@ -134,12 +144,7 @@ class XrayConfigWriter {
 
   static Future<void> pruneSyncedNodes(Set<String> retainedNames) async {
     final stale = VpnConfig.allNodes
-        .where(
-          (node) =>
-              (node.serviceName == _defaultServiceName ||
-                  node.serviceName.startsWith(_syncServicePrefix)) &&
-              !retainedNames.contains(node.name),
-        )
+        .where((node) => node.isManaged && !retainedNames.contains(node.name))
         .map((node) => node.name)
         .toList();
     for (final name in stale) {
@@ -192,7 +197,7 @@ class XrayConfigWriter {
 
   static Future<List<VpnNode>> _findNodesByIdentity(String identity) async {
     final matches = <VpnNode>[];
-    for (final node in VpnConfig.allNodes) {
+    for (final node in VpnConfig.allNodes.where((node) => node.isManaged)) {
       final nodeIdentity = await _readOutboundIdentity(node.configPath);
       if (nodeIdentity == identity) {
         matches.add(node);
