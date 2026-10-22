@@ -85,6 +85,7 @@ CI 发布的 Windows 安装包现在默认是 MSI。在 Windows 环境执行：
 ```
 
 脚本会基于 `build/windows/x64/runner/Release/` 下的 Flutter Release 产物生成 `xconnect-windows.msi`，并自动补齐 `libgo_native_bridge.dll`、VC Runtime 与 `wintun.dll`。
+MSI 使用 WiX 标准 `WixUI_InstallDir` 向导，提供欢迎、许可、安装位置、安装进度与完成页面；命令行 `/quiet` 安装仍由 Windows Installer 支持。
 
 如果你还需要 Microsoft Store 分发包，项目仍然保留 MSIX 打包脚本：
 
@@ -102,6 +103,7 @@ MSI 的 `ProductVersion` 使用 `X.Y.BUILD`，由 `pubspec.yaml` 的 `X.Y.Z+BUIL
 X/Y 最大为 255，BUILD 最大为 65535，超限时打包直接失败。同版本重建允许替换安装，
 较低版本仍被拒绝。当前 `1.0.0+2` 对应 MSI `1.0.2`，可升级旧格式 `1.0.0.2`。
 Windows CI 运行 `scripts/ci/check_windows_msi_version.ps1` 验证升级顺序与边界。
+发布命名规则：`v*` 标签与 `release/v*` 生产分支使用 MSI 发布版本号（例如 `1.0.2`）；`main` Release 显示 `latest` 并使用唯一构建 tag；其他分支使用 `build-<GitHub run id>-<短 commit>`。CI 会验证生产 ref 的版本与 MSI 版本一致。
 
 连接配置、节点列表和服务描述文件统一保存在 `%LOCALAPPDATA%\XConnect`。
 未提供 `LOCALAPPDATA` 时使用 `%USERPROFILE%\AppData\Local\XConnect`。
