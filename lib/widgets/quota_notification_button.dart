@@ -22,16 +22,15 @@ class QuotaNotificationButton extends StatelessWidget {
         ),
         onPressed: () {
           unawaited(store.markRead());
-          showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            builder: (context) => const SafeArea(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(24),
-                child: QuotaNotificationPanel(),
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(
+                  context.l10n.get(store.notice ?? 'notificationsEmpty'),
+                ),
               ),
-            ),
-          );
+            );
         },
       ),
     );
@@ -90,10 +89,18 @@ class QuotaNotificationPanel extends StatelessWidget {
   }
 }
 
-/// Persistent in-app status; reading the inbox clears the badge, not the
-/// actionable condition. Reminder preferences never hide a server suspension.
-class QuotaStatusBanner extends StatelessWidget {
+/// Uses the same transient notification surface as sync and connection
+/// feedback. The actionable condition remains available from the bell and
+/// Settings; reminder preferences never hide a server suspension.
+class QuotaStatusBanner extends StatefulWidget {
   const QuotaStatusBanner({super.key});
+
+  @override
+  State<QuotaStatusBanner> createState() => _QuotaStatusBannerState();
+}
+
+class _QuotaStatusBannerState extends State<QuotaStatusBanner> {
+  String? _shownNotice;
 
   @override
   Widget build(BuildContext context) {
@@ -102,25 +109,17 @@ class QuotaStatusBanner extends StatelessWidget {
         listenable: store,
         builder: (context, _) {
           if (store.notice == null) return const SizedBox.shrink();
-          return MaterialBanner(
-            content: Text(context.l10n.get(store.notice!)),
-            leading: const Icon(Icons.info_outline),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  unawaited(store.markRead());
-                  showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => const SafeArea(
-                          child: SingleChildScrollView(
-                              padding: EdgeInsets.all(24),
-                              child: QuotaNotificationPanel())));
-                },
-                child: Text(context.l10n.get('notifications')),
-              )
-            ],
-          );
+          if (_shownNotice == store.notice) return const SizedBox.shrink();
+          _shownNotice = store.notice;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                SnackBar(content: Text(context.l10n.get(store.notice!))),
+              );
+          });
+          return const SizedBox.shrink();
         });
   }
 }

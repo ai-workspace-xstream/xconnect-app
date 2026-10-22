@@ -7,7 +7,7 @@ import 'package:xconnect/widgets/quota_notification_button.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('bell opens readable notice, clears badge and fits phone width',
+  testWidgets('bell shows the shared snackbar and clears the badge',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = QuotaNotifications.instance;
@@ -29,12 +29,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.notifications_outlined));
     await tester.pumpAndSettle();
     expect(store.hasUnread, isFalse);
-    expect(find.byType(SwitchListTile), findsOneWidget);
-    expect(find.textContaining('Less than 10%'), findsNWidgets(2));
-    await tester.tap(find.byType(SwitchListTile));
-    await tester.pumpAndSettle();
-    expect(store.remindersEnabled, isFalse);
-    expect(store.notice, isNull);
+    expect(find.textContaining('Less than 10%'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

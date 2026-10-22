@@ -825,17 +825,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         blocks: [_buildXhttpAdvancedConfig(context)],
       ),
       (
-        id: SettingsTabId.config,
-        tab: SettingsTab(
-          icon: Icons.folder_outlined,
-          label: context.l10n.get('settingsTabConfig'),
-        ),
-        blocks: [
-          _configGroup(context, isMobile: isMobile),
-          _dangerZoneGroup(context),
-        ],
-      ),
-      (
         id: SettingsTabId.notifications,
         tab: SettingsTab(
           icon: Icons.notifications_outlined,
@@ -850,31 +839,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           label: context.l10n.get('settingsTabSystem'),
         ),
         blocks: [
+          _configGroup(context, isMobile: isMobile),
+          _dangerZoneGroup(context),
           _systemGroup(context),
           _developerGroup(context, isMobile: isMobile),
           _navigationGroup(context, isMobile: isMobile),
-        ],
-      ),
-      (
-        id: SettingsTabId.diagnostics,
-        tab: SettingsTab(
-          icon: Icons.network_check,
-          label: context.l10n.get('settingsTabDiagnostics'),
-        ),
-        blocks: [
           LiveDiagnosisSection(
             onHowToFix: () => GlobalState.settingsTabRequest.value =
-                const SettingsTabRequest(id: SettingsTabId.repair),
+                const SettingsTabRequest(id: SettingsTabId.system),
           ),
+          const RepairSection(),
         ],
-      ),
-      (
-        id: SettingsTabId.repair,
-        tab: SettingsTab(
-          icon: Icons.build_outlined,
-          label: context.l10n.get('settingsTabRepair'),
-        ),
-        blocks: const [RepairSection()],
       ),
     ];
 
