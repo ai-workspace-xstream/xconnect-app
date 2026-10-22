@@ -148,8 +148,9 @@ class DesktopSyncService {
             '${session.baseUrl.value}|${access["accountId"] ?? session.currentUser.value}';
         await policy.apply(access, owner);
       } else {
-        policy.invalidate(signedIn: true);
-        await clearManagedConnections();
+        // A transient service/network failure must not erase the last local
+        // managed snapshot. Only explicit authorization/quota responses above
+        // are allowed to withdraw managed nodes.
         throw FormatException(
           'Network access returned ${accessResponse.statusCode}',
         );
@@ -207,10 +208,8 @@ class DesktopSyncService {
         return const DesktopSyncResult(success: false, message: message);
       }
       if (response.statusCode != 200) {
-        if (policy.dedicated || policy.pending) {
-          policy.invalidate(signedIn: true);
-          await clearManagedConnections();
-        }
+        // Keep the last successful managed snapshot for offline use. The
+        // server can replace it on the next successful manual/automatic sync.
         final message = '节点同步接口返回 ${response.statusCode}';
         await SyncStateStore.instance.recordError(message);
         return DesktopSyncResult(success: false, message: message);
@@ -315,10 +314,6 @@ class DesktopSyncService {
         message: '同步成功 (${nodes.length} 个区域)',
       );
     } catch (error) {
-      if (policy.dedicated || policy.pending) {
-        policy.invalidate(signedIn: SessionManager.instance.isLoggedIn);
-        await clearManagedConnections();
-      }
       final message = '同步失败: $error';
       await SyncStateStore.instance.recordError(message);
       return DesktopSyncResult(success: false, message: message);
