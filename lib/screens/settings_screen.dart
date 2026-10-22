@@ -1,3 +1,4 @@
+import '../widgets/quota_notification_button.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -833,6 +834,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _configGroup(context, isMobile: isMobile),
           _dangerZoneGroup(context),
         ],
+      ),
+      (
+        id: SettingsTabId.notifications,
+        tab: SettingsTab(
+          icon: Icons.notifications_outlined,
+          label: context.l10n.get('notifications'),
+        ),
+        blocks: [const QuotaNotificationPanel()],
       ),
       (
         id: SettingsTabId.system,

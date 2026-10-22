@@ -12,6 +12,7 @@ enum SettingsTabId {
   transport,
   config,
   system,
+  notifications,
   diagnostics,
   repair,
 }

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../utils/app_logger.dart';
 import '../../utils/global_config.dart' show GlobalState;
 import '../session/session_manager.dart';
+import '../notifications/quota_notifications.dart';
 import '../session/network_access_policy.dart';
 import '../../utils/native_bridge.dart';
 import '../../widgets/log_console.dart' show LogLevel;
@@ -97,6 +98,13 @@ class DesktopSyncService {
         headers['Cookie'] = session.cookie!.trim();
       }
       var owner = '${session.baseUrl.value}|${session.currentUser.value}';
+      await QuotaNotifications.instance.selectAccount(owner);
+      if (generation != session.generation) {
+        return const DesktopSyncResult(
+          success: false,
+          message: 'Session changed',
+        );
+      }
       final accessResponse = await client
           .get(
             session.buildEndpoint('/api/auth/network-access'),
@@ -105,12 +113,29 @@ class DesktopSyncService {
           .timeout(const Duration(seconds: 20));
       if (generation != session.generation) {
         return const DesktopSyncResult(
-            success: false, message: 'Session changed');
+          success: false,
+          message: 'Session changed',
+        );
       }
       if (accessResponse.statusCode == 401) {
         await session.logout();
         return const DesktopSyncResult(
-            success: false, message: 'Session expired');
+          success: false,
+          message: 'Session expired',
+        );
+      }
+      if ((accessResponse.statusCode == 403 ||
+              accessResponse.statusCode == 429) &&
+          QuotaNotifications.isQuotaRejection(accessResponse.body)) {
+        policy.invalidate(signedIn: true);
+        await clearManagedConnections();
+        if (generation != session.generation) {
+          return const DesktopSyncResult(
+              success: false, message: 'Session changed');
+        }
+        await QuotaNotifications.instance.update('quotaPaused');
+        await SyncStateStore.instance.recordError('quotaPaused');
+        return const DesktopSyncResult(success: false, message: 'quotaPaused');
       }
       if (accessResponse.statusCode == 404 && !policy.dedicated) {
         await policy.apply({'mode': 'personal', 'allowed': true}, owner);
@@ -119,13 +144,22 @@ class DesktopSyncService {
         if (access is! Map<String, dynamic>) {
           throw const FormatException('Invalid network access');
         }
-        owner = '${session.baseUrl.value}|${access["accountId"] ?? session.currentUser.value}';
+        owner =
+            '${session.baseUrl.value}|${access["accountId"] ?? session.currentUser.value}';
         await policy.apply(access, owner);
       } else {
         policy.invalidate(signedIn: true);
         await clearManagedConnections();
         throw FormatException(
-            'Network access returned ${accessResponse.statusCode}');
+          'Network access returned ${accessResponse.statusCode}',
+        );
+      }
+      if (accessResponse.statusCode == 200) {
+        await _refreshQuota(session, headers, generation);
+      }
+      if (generation != session.generation) {
+        return const DesktopSyncResult(
+            success: false, message: 'Session changed');
       }
       if (!policy.allowed) {
         await clearManagedConnections();
@@ -133,20 +167,36 @@ class DesktopSyncService {
       }
       if (generation != session.generation) {
         return const DesktopSyncResult(
-            success: false, message: 'Session changed');
+          success: false,
+          message: 'Session changed',
+        );
       }
       final response = await client
           .get(session.buildEndpoint(_nodesPath), headers: headers)
           .timeout(const Duration(seconds: 20));
       if (generation != session.generation) {
         return const DesktopSyncResult(
-            success: false, message: 'Session changed');
+          success: false,
+          message: 'Session changed',
+        );
       }
       if (response.statusCode == 401) {
         const message = '会话已过期，请重新登录';
         await SyncStateStore.instance.recordError(message);
         await session.logout();
         return const DesktopSyncResult(success: false, message: message);
+      }
+      if ((response.statusCode == 403 || response.statusCode == 429) &&
+          QuotaNotifications.isQuotaRejection(response.body)) {
+        policy.invalidate(signedIn: true);
+        await clearManagedConnections();
+        if (generation != session.generation) {
+          return const DesktopSyncResult(
+              success: false, message: 'Session changed');
+        }
+        await QuotaNotifications.instance.update('quotaPaused');
+        await SyncStateStore.instance.recordError('quotaPaused');
+        return const DesktopSyncResult(success: false, message: 'quotaPaused');
       }
       if (response.statusCode == 403 ||
           (response.statusCode == 503 && policy.dedicated)) {
@@ -190,7 +240,9 @@ class DesktopSyncService {
         if (generation != session.generation) {
           await clearManagedConnections();
           return const DesktopSyncResult(
-              success: false, message: 'Session changed');
+            success: false,
+            message: 'Session changed',
+          );
         }
         final config = await VpnConfig.tryGenerateXrayJsonFromVlessUri(
           node.vlessUri,
@@ -222,7 +274,9 @@ class DesktopSyncService {
       if (generation != session.generation) {
         await clearManagedConnections();
         return const DesktopSyncResult(
-            success: false, message: 'Session changed');
+          success: false,
+          message: 'Session changed',
+        );
       }
       await XrayConfigWriter.pruneSyncedNodes(retained);
       policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
@@ -243,9 +297,14 @@ class DesktopSyncService {
       // let this older sync report success.
       if (generation != session.generation) {
         return const DesktopSyncResult(
-            success: false, message: 'Session changed');
+          success: false,
+          message: 'Session changed',
+        );
       }
       GlobalState.nodeListRevision.value++;
+      if (QuotaNotifications.instance.notice == 'quotaPaused') {
+        await QuotaNotifications.instance.update(null);
+      }
       await SyncStateStore.instance.recordSuccess(
         nodeCount: nodes.length,
         nodeIds: nodes.map((n) => n.id).join(','),
@@ -270,6 +329,42 @@ class DesktopSyncService {
           SessionManager.instance.isLoggedIn) {
         unawaited(syncNow());
       }
+    }
+  }
+
+  // Quota status is advisory. Older servers and transient failures must not
+  // block node sync or turn an unknown allowance into an exhaustion warning.
+  Future<void> _refreshQuota(
+    SessionManager session,
+    Map<String, String> headers,
+    int generation,
+  ) async {
+    try {
+      final response = await client
+          .get(
+            session.buildEndpoint('/api/account/usage/summary'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (generation != session.generation || response.statusCode != 200) {
+        return;
+      }
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic>) return;
+      final quota = QuotaSnapshot.fromJson(body);
+      final store = QuotaNotifications.instance;
+      // No quota fields is a legacy response, not proof of recovery.
+      if (!quota.unlimited &&
+          !quota.paused &&
+          (quota.remaining == null || quota.total == null)) {
+        return;
+      }
+      if (store.notice != 'quotaPaused' || quota.notice != 'quotaEmpty') {
+        await store.update(
+            quota.paused || store.remindersEnabled ? quota.notice : null);
+      }
+    } catch (_) {
+      // Keep the last known status when the optional endpoint is unavailable.
     }
   }
 
@@ -330,7 +425,10 @@ class DesktopSyncService {
 
   void _onSessionChanged() {
     _timer?.cancel();
-    if (!SessionManager.instance.isLoggedIn) return;
+    if (!SessionManager.instance.isLoggedIn) {
+      unawaited(QuotaNotifications.instance.selectAccount(null));
+      return;
+    }
     unawaited(syncNow());
     _timer = Timer.periodic(_autoInterval, (_) => unawaited(syncNow()));
   }
