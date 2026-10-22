@@ -1262,7 +1262,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               )
             : null,
         label: Text(
-          latency == null ? node.name : '${node.name} · ${latency}ms',
+          latency == null
+              ? '${node.name} · ${context.l10n.get(node.isManaged ? 'nodeSourceManaged' : 'nodeSourceImported')}'
+              : '${node.name} · ${context.l10n.get(node.isManaged ? 'nodeSourceManaged' : 'nodeSourceImported')} · ${latency}ms',
           overflow: TextOverflow.ellipsis,
         ),
         labelStyle: Theme.of(

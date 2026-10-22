@@ -364,7 +364,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           (node) => CheckboxListTile(
                             value: selected.contains(node.name),
                             title: Text(node.name),
-                            subtitle: Text(node.countryCode.toUpperCase()),
+                            subtitle: Text(
+                              '${node.countryCode.toUpperCase()} · ${context.l10n.get(node.isManaged ? 'nodeSourceManaged' : 'nodeSourceImported')}',
+                            ),
                             controlAffinity: ListTileControlAffinity.leading,
                             onChanged: (checked) {
                               setStateDialog(() {
