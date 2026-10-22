@@ -5,11 +5,11 @@ platform="${1:-}"
 arch="${2:-}"
 require_signing="${3:-${REQUIRE_ANDROID_SIGNING:-false}}"
 
-branch_name="${GITHUB_REF_NAME:-${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}}"
+branch_name="${BUILD_REF_OVERRIDE:-${GITHUB_REF_NAME:-${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}}}"
 if [[ -z "$branch_name" || "$branch_name" == "HEAD" ]]; then
   branch_name="unknown"
 fi
-build_id="${GITHUB_SHA:-${BUILD_ID:-$(git rev-parse HEAD)}}"
+build_id="${BUILD_ID:-$(git rev-parse --short HEAD)}"
 build_id="${build_id:0:7}"
 build_date="${BUILD_DATE:-$(date -u '+%Y-%m-%d')}"
 export BRANCH="$branch_name" BUILD_ID="$build_id" BUILD_DATE="$build_date"

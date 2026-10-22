@@ -26,10 +26,13 @@ function Ensure-WixCli {
     }
 
     if (Get-Command wix -ErrorAction SilentlyContinue) {
-        return
+        $wixVersion = (wix --version).Trim()
+        if ($wixVersion -ne "5.0.2") {
+            dotnet tool update --global wix --version 5.0.2
+        }
+    } else {
+        dotnet tool install --global wix --version 5.0.2
     }
-
-    dotnet tool install --global wix --version 5.*
 
     if (-not (Get-Command wix -ErrorAction SilentlyContinue)) {
         throw "Failed to install WiX CLI."
@@ -151,12 +154,19 @@ $version = Get-XConnectVersion
 $projectRoot = Get-XConnectProjectRoot
 $installerDir = Join-Path $projectRoot "build\windows\x64\installer"
 $wxsPath = Join-Path $installerDir "xconnect.wxs"
+$licenseRtfPath = Join-Path $installerDir "license.rtf"
 $msiPath = Join-Path $releaseDir "xconnect-windows.msi"
 
 if (Test-Path $installerDir) {
     Remove-Item -Recurse -Force $installerDir
 }
 New-Item -ItemType Directory -Force -Path $installerDir | Out-Null
+
+$licenseText = Get-Content -Raw -Path (Join-Path $projectRoot "LICENSE")
+$escapedLicenseText = $licenseText.Replace("\", "\\").Replace("{", "\{").Replace("}", "\}")
+$escapedLicenseText = $escapedLicenseText -replace "`r?`n", "\par`n"
+$licenseRtf = "{\rtf1\ansi\deff0{\fonttbl{\f0 Arial;}}\f0\fs18 $escapedLicenseText}"
+[System.IO.File]::WriteAllText($licenseRtfPath, $licenseRtf, [System.Text.Encoding]::ASCII)
 
 $files = Get-ChildItem -Path $releaseDir -File -Recurse | Sort-Object FullName
 if (-not $files) {
@@ -230,7 +240,7 @@ $directoryXml = Emit-DirectoryContents -RelativeDirectory "" -IndentLevel 3 -Fil
 
 $wxsContent = @"
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package
     Name="XConnect"
     Manufacturer="XConnect Team"
@@ -242,6 +252,9 @@ $wxsContent = @"
     <SummaryInformation Description="XConnect Windows Installer" Manufacturer="XConnect Team" />
     <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of XConnect is already installed." />
     <MediaTemplate EmbedCab="yes" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+    <UIRef Id="WixUI_ErrorProgressText" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="XConnect">
@@ -262,7 +275,8 @@ if (Test-Path $msiPath) {
     Remove-Item -Force $msiPath
 }
 
-wix build $wxsPath -arch x64 -out $msiPath
+wix extension add -g WixToolset.UI.wixext/5.0.2
+wix build $wxsPath -arch x64 -ext WixToolset.UI.wixext -bindpath $installerDir -out $msiPath
 
 if (-not (Test-Path $msiPath)) {
     throw "Failed to create MSI package at $msiPath"

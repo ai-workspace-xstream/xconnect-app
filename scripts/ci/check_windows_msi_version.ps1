@@ -19,3 +19,10 @@ foreach ($invalid in @('1.0.0', '1.0.0+65536', '256.0.0+1', '1.256.0+1', '1.0.0+
     if (-not $rejected) { throw "Expected invalid version to be rejected: $invalid" }
 }
 Write-Output 'Windows MSI upgrade version checks passed.'
+
+$packager = Get-Content (Join-Path $PSScriptRoot '../../build_scripts/package_windows_msi.ps1') -Raw
+foreach ($requiredUi in @('WixToolset.UI.wixext/5.0.2', 'WixUI_InstallDir', 'InstallDirectory="INSTALLFOLDER"', 'WixUILicenseRtf', 'WixUI_ErrorProgressText')) {
+    if ($packager -notmatch [regex]::Escape($requiredUi)) {
+        throw "Windows MSI standard installer UI is missing: $requiredUi"
+    }
+}

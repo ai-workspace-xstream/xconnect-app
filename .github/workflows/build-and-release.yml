@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - "release/v*"
     tags:
       - "v*"
   pull_request:
@@ -80,6 +81,10 @@ jobs:
       - name: Run Flutter verification suite
         shell: bash
         run: bash ./scripts/ci/run_flutter_ci_suite.sh
+
+      - name: Verify build and release naming
+        shell: bash
+        run: bash ./scripts/ci/check_release_metadata.sh
 
       - name: Compute release metadata
         if: ${{ github.event_name != 'pull_request' && github.event_name != 'schedule' }}
@@ -244,7 +249,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/v')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

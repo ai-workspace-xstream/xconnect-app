@@ -1,5 +1,8 @@
 # Unreleased
 
+- Windows MSI now opens the standard interactive welcome, install-location, progress, and completion dialogs.
+- CI build naming now follows the shared release policy: production refs use the package version, main uses `latest`, and feature builds include a run ID and short commit.
+
 - CI release builds now inject the source commit ID and build date into the
   Linux and Windows apps, so About identifies the packaged revision instead of
   showing the development fallback.

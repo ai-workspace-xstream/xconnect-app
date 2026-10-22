@@ -2,6 +2,8 @@ name: XConnect Multi-Platform Release
 
 on:
   push:
+    branches:
+      - "release/v*"
     tags:
       - "v*"
   pull_request:
@@ -93,6 +95,10 @@ jobs:
         shell: bash
         run: bash ./scripts/ci/run_flutter_ci_suite.sh
 
+      - name: Verify build and release naming
+        shell: bash
+        run: bash ./scripts/ci/check_release_metadata.sh
+
       - name: Compute release metadata
         if: ${{ github.event_name != 'pull_request' && github.event_name != 'schedule' }}
         id: meta
@@ -100,6 +106,7 @@ jobs:
         run: bash ./scripts/ci/compute_release_metadata.sh
         env:
           RELEASE_TAG_OVERRIDE: ${{ github.event.client_payload.release_tag || inputs.release_tag }}
+          BUILD_REF_OVERRIDE: ${{ github.event.client_payload.release_ref || inputs.release_ref }}
 
   build:
     if: ${{ github.event_name != 'schedule' }}
@@ -249,6 +256,8 @@ jobs:
       - name: Build platform artifacts
         shell: bash
         run: bash ./scripts/ci/build_matrix_artifacts.sh "$PLATFORM" "$ARCH" "$REQUIRE_ANDROID_SIGNING"
+        env:
+          BUILD_REF_OVERRIDE: ${{ github.event.client_payload.release_ref || inputs.release_ref }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
@@ -258,7 +267,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/v')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
