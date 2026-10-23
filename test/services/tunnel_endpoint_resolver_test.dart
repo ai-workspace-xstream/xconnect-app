@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -75,6 +76,72 @@ Uint8List _dnsAResponse(
 
 void main() {
   group('TunnelEndpointResolver', () {
+    testWidgets('stalled resolution returns failure within the total budget',
+        (tester) async {
+      final pending = Completer<List<InternetAddress>>();
+      var attempts = 0;
+      final resolver = TunnelEndpointResolver(
+        resolve: (_, __) => ++attempts == 1
+            ? pending.future
+            : Future.value([InternetAddress('203.0.113.20')]),
+      );
+      TunnelEndpointPinning? result;
+      final config = _config(address: 'edge.example');
+      final operation = resolver.pinOutboundEndpoints(config).then((value) {
+        result = value;
+      });
+
+      await tester.pump(const Duration(seconds: 12));
+      expect(result, isNotNull);
+      expect(result!.failures, ['edge.example']);
+      expect(result!.changedAnything, isFalse);
+
+      // A new attempt gets a fresh budget even while the old lookup is stuck.
+      final retry = await resolver.pinOutboundEndpoints(
+        _config(address: 'edge.example'),
+      );
+      expect(retry.pinned, {'edge.example': '203.0.113.20'});
+
+      // A late answer must not turn a failed attempt into a connected profile.
+      pending.complete([InternetAddress('203.0.113.10')]);
+      await tester.pump();
+      await operation;
+      expect(_pinnedAddress(config), 'edge.example');
+      expect(result!.pinned, isEmpty);
+    });
+
+    testWidgets('different domains share one resolution budget',
+        (tester) async {
+      final requested = <String>[];
+      final resolver = TunnelEndpointResolver(resolve: (host, _) async {
+        requested.add(host);
+        await Future<void>.delayed(const Duration(seconds: 8));
+        return [InternetAddress('203.0.113.10')];
+      });
+      final config = _config(address: 'first.example');
+      final entries = _proxyOutbound(config)['settings']['vnext'] as List;
+      entries.addAll([
+        {'address': 'second.example', 'port': 443},
+        {'address': 'third.example', 'port': 443},
+      ]);
+      TunnelEndpointPinning? result;
+      final operation = resolver.pinOutboundEndpoints(config).then((value) {
+        result = value;
+      });
+
+      await tester.pump(const Duration(seconds: 8));
+      await tester.pump(const Duration(seconds: 4));
+      expect(result, isNotNull);
+      expect(result!.pinned, {'first.example': '203.0.113.10'});
+      expect(result!.failures, ['second.example', 'third.example']);
+      expect(requested, ['first.example', 'second.example']);
+
+      await tester.pump(const Duration(seconds: 8));
+      await operation;
+      expect(entries[1]['address'], 'second.example');
+      expect(entries[2]['address'], 'third.example');
+    });
+
     test('replaces a server domain with the resolved IPv4 literal', () async {
       final resolver = TunnelEndpointResolver(
         resolve: (host, timeout) async => <InternetAddress>[

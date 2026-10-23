@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -300,10 +301,15 @@ class TunnelEndpointResolver {
   TunnelEndpointResolver({
     EndpointResolver? resolve,
     this.timeout = const Duration(seconds: 5),
+    this.totalTimeout = const Duration(seconds: 12),
   }) : _resolve = resolve ?? _defaultResolve;
 
   final EndpointResolver _resolve;
   final Duration timeout;
+
+  /// One budget shared by all domains and DNS fallback attempts in a profile.
+  /// A late resolver may finish, but cannot change the returned configuration.
+  final Duration totalTimeout;
 
   /// Outbound protocols that dial a remote server. `freedom`, `blackhole` and
   /// `dns` carry no server address of their own.
@@ -318,6 +324,19 @@ class TunnelEndpointResolver {
 
   Future<TunnelEndpointPinning> pinOutboundEndpoints(
     Map<String, dynamic> config,
+  ) async {
+    final deadline = Completer<InternetAddress?>();
+    final timer = Timer(totalTimeout, () => deadline.complete(null));
+    try {
+      return await _pinOutboundEndpoints(config, deadline);
+    } finally {
+      timer.cancel();
+    }
+  }
+
+  Future<TunnelEndpointPinning> _pinOutboundEndpoints(
+    Map<String, dynamic> config,
+    Completer<InternetAddress?> deadline,
   ) async {
     final outbounds = config['outbounds'];
     if (outbounds is! List) {
@@ -354,7 +373,12 @@ class TunnelEndpointResolver {
           if (domain.isEmpty || _isLiteralAddress(domain)) continue;
 
           if (!cache.containsKey(domain)) {
-            cache[domain] = await _resolvePreferringIpv4(domain);
+            cache[domain] = deadline.isCompleted
+                ? null
+                : await Future.any<InternetAddress?>([
+                    _resolvePreferringIpv4(domain),
+                    deadline.future,
+                  ]);
           }
           final resolved = cache[domain];
           if (resolved == null) {
