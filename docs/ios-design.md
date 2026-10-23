@@ -45,6 +45,18 @@ Flutter UI (Dart)
 
 ## Swift bridge 与 PacketTunnel target
 
+### 节点解析等待预算
+
+节点启动前的地址解析共享 12 秒整体等待预算，覆盖同一配置中的所有域名、
+系统 DNS 和后续 DNS 重试。单次网络请求仍使用现有超时；整体预算到期后，
+尚未解析的域名记为失败，不再启动其他域名查询。已经发出的请求可能继续结束，
+但迟到结果不会修改已返回的配置。iOS 保持解析失败时取消本次启动的行为，
+用户可在网络恢复后重新连接。
+
+这一预算只约束节点解析阶段，不代表整个 VPN 启停在 12 秒内完成；
+本次不改变 NetworkExtension 生命周期、自动重连策略或停止后解析的安全顺序。
+回归用例见 `test/services/tunnel_endpoint_resolver_test.dart`，需求见 Issue #130。
+
 - `ios/PacketTunnel/PacketTunnel-Bridging-Header.h` 引入 `bindings/bridge.h`
 - `go_core/bridge_apple.go` 导出以下 C 接口：
   - `StartXrayTunnelWithFd`
