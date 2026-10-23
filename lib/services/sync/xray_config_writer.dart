@@ -142,9 +142,13 @@ class XrayConfigWriter {
     return node.name;
   }
 
-  static Future<void> pruneSyncedNodes(Set<String> retainedNames) async {
+  static Future<void> pruneSyncedNodes(Set<String> retainedNames,
+      {String? owner}) async {
     final stale = VpnConfig.allNodes
-        .where((node) => node.isManaged && !retainedNames.contains(node.name))
+        .where((node) =>
+            node.isManaged &&
+            (owner == null || node.managedOwner == owner) &&
+            !retainedNames.contains(node.name))
         .map((node) => node.name)
         .toList();
     for (final name in stale) {

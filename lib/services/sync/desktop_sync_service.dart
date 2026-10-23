@@ -99,6 +99,7 @@ class DesktopSyncService {
         headers['Cookie'] = session.cookie!.trim();
       }
       var owner = '${session.baseUrl.value}|${session.currentUser.value}';
+      var purgeOwner = await policy.snapshotOwner(owner);
       await QuotaNotifications.instance.selectAccount(owner);
       if (generation != session.generation) {
         return const DesktopSyncResult(
@@ -125,18 +126,11 @@ class DesktopSyncService {
           message: 'Session expired',
         );
       }
-      if ((accessResponse.statusCode == 403 ||
-              accessResponse.statusCode == 429) &&
-          QuotaNotifications.isQuotaRejection(accessResponse.body)) {
-        policy.invalidate(signedIn: true);
-        await clearManagedConnections();
-        if (generation != session.generation) {
-          return const DesktopSyncResult(
-              success: false, message: 'Session changed');
-        }
-        await QuotaNotifications.instance.update('quotaPaused');
-        await SyncStateStore.instance.recordError('quotaPaused');
-        return const DesktopSyncResult(success: false, message: 'quotaPaused');
+      final accessStop = accessResponse.statusCode == 200
+          ? null
+          : _explicitStopReason(accessResponse);
+      if (accessStop != null) {
+        return await _stopManagedAccess(accessStop, purgeOwner, generation);
       }
       if (accessResponse.statusCode == 404 && !policy.dedicated) {
         await policy.apply({'mode': 'personal', 'allowed': true}, owner);
@@ -148,14 +142,15 @@ class DesktopSyncService {
         owner =
             '${session.baseUrl.value}|${access["accountId"] ?? session.currentUser.value}';
         await policy.apply(access, owner);
+        purgeOwner = owner;
       } else if (accessResponse.statusCode == 403) {
         policy.invalidate(signedIn: true);
         await clearManagedConnections();
         throw const FormatException('Network access denied');
       } else {
         // A transient service/network failure must not erase the last local
-        // managed snapshot. Only explicit authorization/quota responses above
-        // are allowed to withdraw managed nodes.
+        // managed snapshot. Deletion needs an explicit enforcement code, not
+        // a generic HTTP status, empty list or human-readable error message.
         throw FormatException(
           'Network access returned ${accessResponse.statusCode}',
         );
@@ -168,6 +163,10 @@ class DesktopSyncService {
             success: false, message: 'Session changed');
       }
       if (!policy.allowed) {
+        final reason = _explicitStopReason(accessResponse);
+        if (reason != null) {
+          return await _stopManagedAccess(reason, purgeOwner, generation);
+        }
         await clearManagedConnections();
         throw const FormatException('Team access is inactive');
       }
@@ -192,17 +191,9 @@ class DesktopSyncService {
         await session.logout();
         return const DesktopSyncResult(success: false, message: message);
       }
-      if ((response.statusCode == 403 || response.statusCode == 429) &&
-          QuotaNotifications.isQuotaRejection(response.body)) {
-        policy.invalidate(signedIn: true);
-        await clearManagedConnections();
-        if (generation != session.generation) {
-          return const DesktopSyncResult(
-              success: false, message: 'Session changed');
-        }
-        await QuotaNotifications.instance.update('quotaPaused');
-        await SyncStateStore.instance.recordError('quotaPaused');
-        return const DesktopSyncResult(success: false, message: 'quotaPaused');
+      final nodeStop = _explicitStopReason(response);
+      if (nodeStop != null) {
+        return await _stopManagedAccess(nodeStop, purgeOwner, generation);
       }
       if (response.statusCode == 403) {
         policy.invalidate(signedIn: true);
@@ -238,7 +229,7 @@ class DesktopSyncService {
         return const DesktopSyncResult(success: false, message: message);
       }
 
-      // Prevent a current manual/public tunnel surviving entry into team mode.
+      // Custom imports remain independent of managed authorization.
       policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
       if (policy.dedicated) await _stopUnauthorizedActiveNode();
       final retained = <String>{};
@@ -395,16 +386,63 @@ class DesktopSyncService {
 
   Future<void> clearManagedConnections() async {
     _expiryTimer?.cancel();
-    await NetworkAccessPolicy.instance.clearCachedAccess();
+    final policy = NetworkAccessPolicy.instance;
+    policy.invalidate(signedIn: SessionManager.instance.isLoggedIn);
     // Invalidate in-flight tuning requests before any await below.
     final tuningCleared = ClientTuning.clear();
+    await policy.clearCachedAccess();
     await _stopUnauthorizedActiveNode();
-    await XrayConfigWriter.pruneSyncedNodes({});
-    await SyncStateStore.instance.clearNodes();
     await tuningCleared;
     // Withdraw server overrides from the persisted Packet Tunnel profile too.
     unawaited(NativeBridge.refreshPersistedTunnelProfileTuning());
     GlobalState.nodeListRevision.value++;
+  }
+
+  /// Suspension is the default. Only these authoritative machine codes permit
+  /// deleting the affected account's managed files; custom imports never do.
+  static String? _explicitStopReason(http.Response response) {
+    if (response.statusCode != 403 &&
+        response.statusCode != 429 &&
+        response.statusCode != 200) {
+      return null;
+    }
+    try {
+      final body = jsonDecode(response.body);
+      if (body is! Map) return null;
+      if (response.statusCode == 200 && body['allowed'] != false) return null;
+      if (QuotaNotifications.isQuotaRejection(response.body)) {
+        return 'quotaPaused';
+      }
+      final code = body['code'] ?? body['error'] ?? body['reason'];
+      if (const ['traffic_stopped', 'email_blacklisted'].contains(code)) {
+        return code as String;
+      }
+    } catch (_) {
+      // Malformed responses and free-form text are never deletion authority.
+    }
+    return null;
+  }
+
+  Future<DesktopSyncResult> _stopManagedAccess(
+      String reason, String? owner, int generation) async {
+    await clearManagedConnections();
+    final session = SessionManager.instance;
+    if (generation != session.generation) {
+      return const DesktopSyncResult(
+          success: false, message: 'Session changed');
+    }
+    // An account whose identity has not been established cannot purge another
+    // account's retained snapshot (e.g. switching to a blacklisted account).
+    if (owner != null) {
+      await XrayConfigWriter.pruneSyncedNodes({}, owner: owner);
+      await SyncStateStore.instance.clearNodes();
+    }
+    if (reason == 'quotaPaused') {
+      await QuotaNotifications.instance.update(reason);
+    }
+    GlobalState.nodeListRevision.value++;
+    await SyncStateStore.instance.recordError(reason);
+    return DesktopSyncResult(success: false, message: reason);
   }
 
   /// Best effort: tuning never fails a node sync, and a failed fetch keeps

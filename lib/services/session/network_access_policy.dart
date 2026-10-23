@@ -8,6 +8,7 @@ class NetworkAccessPolicy {
   NetworkAccessPolicy._();
   static final instance = NetworkAccessPolicy._();
   static const _cacheKey = 'network.cachedAccess';
+  static const _snapshotOwnerKey = 'network.snapshotOwner';
   static const _cacheLifetime = Duration(hours: 24);
 
   bool dedicated = false;
@@ -100,7 +101,29 @@ class NetworkAccessPolicy {
           'validUntil': validUntil?.toIso8601String(),
           'nodeIds': authorizedNodeIds.toList(),
         }));
+    // Keep the ownership binding after suspension, without keeping permission.
+    // A denial before a new account syncs must not purge the old account files.
+    if (isCurrent()) {
+      await prefs.setString(_snapshotOwnerKey,
+          jsonEncode({'sessionScope': sessionScope, 'owner': owner}));
+    }
     if (!isCurrent()) await clearCachedAccess();
+  }
+
+  Future<String?> snapshotOwner(String sessionScope) async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final raw = prefs.getString(_snapshotOwnerKey);
+      if (raw == null) return null;
+      final binding = jsonDecode(raw);
+      if (binding is Map && binding['sessionScope'] == sessionScope) {
+        final owner = binding['owner'];
+        if (owner is String && owner.isNotEmpty) return owner;
+      }
+    } catch (_) {
+      // Unknown ownership is not authority to delete another account's files.
+    }
+    return null;
   }
 
   Future<void> clearCachedAccess() async {

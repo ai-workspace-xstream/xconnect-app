@@ -139,7 +139,7 @@ class QuotaNotifications extends ChangeNotifier {
         'quota_exhausted',
         'traffic_quota_exceeded',
         'quota_exceeded',
-      ].contains(json['code'] ?? json['error']);
+      ].contains(json['code'] ?? json['error'] ?? json['reason']);
     } catch (_) {
       return false;
     }
