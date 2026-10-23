@@ -134,7 +134,8 @@ void main() {
     expect(policy.dedicated, isTrue);
   });
 
-  test('team node outage cannot retain usable cached nodes', () async {
+  test('team node outage without a prior snapshot stays unauthorized',
+      () async {
     sync.client = MockClient(
       (request) async => request.url.path.endsWith('/network-access')
           ? http.Response(jsonEncode(teamAccess()), 200)

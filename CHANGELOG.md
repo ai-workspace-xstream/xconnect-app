@@ -1,5 +1,10 @@
 # Unreleased
 
+- Managed connections retain their last successful local snapshot through
+  transient sync failures and same-account restarts. Offline authorization is
+  limited to 24 hours or team expiry, whichever comes first; logout, explicit
+  denial, scope changes, and authoritative empty lists still withdraw access.
+
 - Manually imported connections now use independent files and unique display names,
   preventing same-prefix imports or managed sync from overwriting user profiles.
 - All platforms share an in-app notification bell, unread badge, quota status banner,

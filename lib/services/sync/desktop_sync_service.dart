@@ -65,6 +65,7 @@ class DesktopSyncService {
     // Session is initialized before node restoration in main().
     SessionManager.instance.onSessionReset = clearManagedConnections;
     await SyncStateStore.instance.init();
+    _scheduleAccessExpiry();
     SessionManager.instance.status.addListener(_onSessionChanged);
     _onSessionChanged();
   }
@@ -147,6 +148,10 @@ class DesktopSyncService {
         owner =
             '${session.baseUrl.value}|${access["accountId"] ?? session.currentUser.value}';
         await policy.apply(access, owner);
+      } else if (accessResponse.statusCode == 403) {
+        policy.invalidate(signedIn: true);
+        await clearManagedConnections();
+        throw const FormatException('Network access denied');
       } else {
         // A transient service/network failure must not erase the last local
         // managed snapshot. Only explicit authorization/quota responses above
@@ -199,8 +204,7 @@ class DesktopSyncService {
         await SyncStateStore.instance.recordError('quotaPaused');
         return const DesktopSyncResult(success: false, message: 'quotaPaused');
       }
-      if (response.statusCode == 403 ||
-          (response.statusCode == 503 && policy.dedicated)) {
+      if (response.statusCode == 403) {
         policy.invalidate(signedIn: true);
         await clearManagedConnections();
         const message = '账号没有可用节点';
@@ -223,6 +227,9 @@ class DesktopSyncService {
           .map((item) => _parseNode(item.cast<Object?, Object?>()))
           .whereType<SyncedNodeMetadata>()
           .toList();
+      if (nodes.length != decoded.length) {
+        throw const FormatException('Invalid managed node snapshot');
+      }
       if (nodes.isEmpty) {
         policy.invalidate(signedIn: true);
         await clearManagedConnections();
@@ -280,13 +287,6 @@ class DesktopSyncService {
       await XrayConfigWriter.pruneSyncedNodes(retained);
       policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
       policy.pending = false;
-      _expiryTimer?.cancel();
-      if (policy.dedicated && policy.validUntil != null) {
-        _expiryTimer = Timer(policy.validUntil!.difference(DateTime.now()), () {
-          policy.invalidate(signedIn: SessionManager.instance.isLoggedIn);
-          unawaited(clearManagedConnections());
-        });
-      }
       await _refreshClientTuning(
         session,
         headers,
@@ -300,6 +300,15 @@ class DesktopSyncService {
           message: 'Session changed',
         );
       }
+      await policy.cacheAccess(
+        sessionScope: '${session.baseUrl.value}|${session.currentUser.value}',
+        isCurrent: () => generation == session.generation && session.isLoggedIn,
+      );
+      if (generation != session.generation) {
+        return const DesktopSyncResult(
+            success: false, message: 'Session changed');
+      }
+      _scheduleAccessExpiry();
       GlobalState.nodeListRevision.value++;
       if (QuotaNotifications.instance.notice == 'quotaPaused') {
         await QuotaNotifications.instance.update(null);
@@ -373,8 +382,20 @@ class DesktopSyncService {
     GlobalState.activeNodeName.value = '';
   }
 
+  void _scheduleAccessExpiry() {
+    _expiryTimer?.cancel();
+    final policy = NetworkAccessPolicy.instance;
+    final expiry = policy.expiresAt;
+    if (expiry == null) return;
+    _expiryTimer = Timer(expiry.difference(DateTime.now()), () {
+      policy.invalidate(signedIn: SessionManager.instance.isLoggedIn);
+      unawaited(clearManagedConnections());
+    });
+  }
+
   Future<void> clearManagedConnections() async {
     _expiryTimer?.cancel();
+    await NetworkAccessPolicy.instance.clearCachedAccess();
     // Invalidate in-flight tuning requests before any await below.
     final tuningCleared = ClientTuning.clear();
     await _stopUnauthorizedActiveNode();
