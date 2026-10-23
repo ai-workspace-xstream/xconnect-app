@@ -11,6 +11,7 @@ import 'package:xconnect/services/session/network_access_policy.dart';
 import 'package:xconnect/services/session/session_manager.dart';
 import 'package:xconnect/services/sync/desktop_sync_service.dart';
 import 'package:xconnect/services/vpn_config_service.dart';
+import 'package:xconnect/utils/app_log_file.dart';
 import 'package:xconnect/utils/global_config.dart';
 
 void main() {
@@ -43,6 +44,8 @@ void main() {
   ];
 
   setUpAll(() async {
+    // Logging is not under test; queued writes must not race temp-dir cleanup.
+    AppLogFile.enabled = false;
     support = await Directory.systemTemp.createTemp('xconnect-managed-cache-');
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -294,6 +297,32 @@ void main() {
     await sync.syncNow();
     expect(policy.active, isFalse);
     expect(await File(saved.configPath).exists(), isFalse);
+  });
+
+  test('explicit denial does not require an otherwise usable policy payload',
+      () async {
+    final saved = VpnConfig.allNodes.single;
+    sync.client = MockClient((_) async =>
+        http.Response('{"allowed":false,"reason":"quota_exhausted"}', 200));
+    await sync.syncNow();
+    expect(policy.active, isFalse);
+    expect(await File(saved.configPath).exists(), isFalse);
+  });
+
+  test('a denied policy for a different owner cannot purge the old owner',
+      () async {
+    final saved = VpnConfig.allNodes.single;
+    sync.client = MockClient((_) async => http.Response(
+        jsonEncode({
+          ...access,
+          'accountId': 'account-b',
+          'allowed': false,
+          'reason': 'email_blacklisted',
+        }),
+        200));
+    await sync.syncNow();
+    expect(policy.active, isFalse);
+    expect(await File(saved.configPath).exists(), isTrue);
   });
 
   for (final scenario in ['relogin', 'switch', 'switch-offline']) {

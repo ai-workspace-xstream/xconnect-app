@@ -126,10 +126,17 @@ class DesktopSyncService {
           message: 'Session expired',
         );
       }
-      final accessStop = accessResponse.statusCode == 200
-          ? null
-          : _explicitStopReason(accessResponse);
+      final accessStop = _explicitStopReason(accessResponse);
       if (accessStop != null) {
+        if (accessResponse.statusCode == 200) {
+          // Denials may omit the normal allowed-policy fields. Honor their
+          // explicit owner when present, otherwise use the saved login binding.
+          final denied = jsonDecode(accessResponse.body) as Map;
+          final accountId = denied['accountId'];
+          if (accountId is String && accountId.trim().isNotEmpty) {
+            purgeOwner = '${session.baseUrl.value}|$accountId';
+          }
+        }
         return await _stopManagedAccess(accessStop, purgeOwner, generation);
       }
       if (accessResponse.statusCode == 404 && !policy.dedicated) {
@@ -163,10 +170,6 @@ class DesktopSyncService {
             success: false, message: 'Session changed');
       }
       if (!policy.allowed) {
-        final reason = _explicitStopReason(accessResponse);
-        if (reason != null) {
-          return await _stopManagedAccess(reason, purgeOwner, generation);
-        }
         await clearManagedConnections();
         throw const FormatException('Team access is inactive');
       }
@@ -384,6 +387,8 @@ class DesktopSyncService {
     });
   }
 
+  /// Withdraw access and server tuning, retaining all managed files/records.
+  /// Only explicit enforcement below or a successful replacement can prune.
   Future<void> clearManagedConnections() async {
     _expiryTimer?.cancel();
     final policy = NetworkAccessPolicy.instance;
