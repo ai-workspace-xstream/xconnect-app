@@ -1,10 +1,5 @@
 # Unreleased
 
-- Endpoint DNS preparation now shares a 12-second budget across all profile
-  domains and fallback attempts. On iOS, slow resolution returns a retryable
-  start failure instead of accumulating unbounded waits. Other platforms keep
-  their existing domain fallback. Late results cannot change the returned profile.
-
 - Manually imported connections now use independent files and unique display names,
   preventing same-prefix imports or managed sync from overwriting user profiles.
 - All platforms share an in-app notification bell, unread badge, quota status banner,
