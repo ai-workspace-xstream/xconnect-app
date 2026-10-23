@@ -67,6 +67,9 @@ class SessionManager {
 
     if ((_sessionToken ?? '').isNotEmpty || (_cookie ?? '').isNotEmpty) {
       NetworkAccessPolicy.instance.invalidate(signedIn: true);
+      await NetworkAccessPolicy.instance.restoreCachedAccess(
+        '${baseUrl.value}|${currentUser.value}',
+      );
       status.value = SessionStatus.loggedIn;
     } else {
       NetworkAccessPolicy.instance.invalidate(signedIn: false);
@@ -274,6 +277,7 @@ class SessionManager {
     await prefs.remove(_prefsCookieKey);
     await prefs.remove(_prefsTokenKey);
     await prefs.remove(_prefsUserKey);
+    await NetworkAccessPolicy.instance.clearCachedAccess();
   }
 
   Map<String, dynamic> _parseBody(String body) {
