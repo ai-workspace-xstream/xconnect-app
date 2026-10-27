@@ -1,0 +1,27 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- XConnect APP Icon (Light Mode) · Swift-Ray (Smiling Pulse Ray) -->
+  <!-- Squircle Base -->
+  <rect width="512" height="512" rx="136" fill="#E0F2FE"/>
+  
+  <!-- Swift-Ray Main Character Group (Scaled to 512x512) -->
+  <g transform="translate(64, 40) scale(1.92)">
+    <!-- Aerodynamic Smooth Wings -->
+    <path d="M100 46 C136 46 178 86 172 118 C168 132 152 130 134 122 L108 144 C104 148 96 148 92 144 L66 122 C48 130 32 132 28 118 C22 86 64 46 100 46 Z" fill="#0EA5E9"/>
+    <!-- Smiling Underbelly (Midnight Indigo) -->
+    <path d="M64 116 C78 130 122 130 136 116 L100 150 Z" fill="#1E1B4B"/>
+    <!-- Hanging Signal Pulse Orb -->
+    <circle cx="100" cy="164" r="10" fill="#0EA5E9"/>
+    <!-- Focused Forward Oval Eyes -->
+    <ellipse cx="84" cy="80" rx="7" ry="11" fill="#1E1B4B"/>
+    <ellipse cx="116" cy="80" rx="7" ry="11" fill="#1E1B4B"/>
+  </g>
+
+  <!-- Bottom-Right 2x2 Ecosystem Badge (Light Variant) -->
+  <g transform="translate(396, 396)">
+    <rect width="80" height="80" rx="22" fill="#FFFFFF" fill-opacity="0.96"/>
+    <rect x="14" y="14" width="22" height="22" rx="6" fill="#38BDF8"/>
+    <rect x="44" y="14" width="22" height="22" rx="6" fill="#0F172A"/>
+    <rect x="14" y="44" width="22" height="22" rx="6" fill="#0F172A"/>
+    <rect x="44" y="44" width="22" height="22" rx="6" fill="#38BDF8"/>
+  </g>
+</svg>
