@@ -120,11 +120,7 @@ class DesktopSyncService {
         );
       }
       if (accessResponse.statusCode == 401) {
-        await session.logout();
-        return const DesktopSyncResult(
-          success: false,
-          message: 'Session expired',
-        );
+        return await _handleUnauthorized(session, generation);
       }
       final accessStop = _explicitStopReason(accessResponse);
       if (accessStop != null) {
@@ -167,7 +163,9 @@ class DesktopSyncService {
       }
       if (generation != session.generation) {
         return const DesktopSyncResult(
-            success: false, message: 'Session changed');
+          success: false,
+          message: 'Session changed',
+        );
       }
       if (!policy.allowed) {
         await clearManagedConnections();
@@ -189,10 +187,7 @@ class DesktopSyncService {
         );
       }
       if (response.statusCode == 401) {
-        const message = '会话已过期，请重新登录';
-        await SyncStateStore.instance.recordError(message);
-        await session.logout();
-        return const DesktopSyncResult(success: false, message: message);
+        return await _handleUnauthorized(session, generation);
       }
       final nodeStop = _explicitStopReason(response);
       if (nodeStop != null) {
@@ -300,7 +295,9 @@ class DesktopSyncService {
       );
       if (generation != session.generation) {
         return const DesktopSyncResult(
-            success: false, message: 'Session changed');
+          success: false,
+          message: 'Session changed',
+        );
       }
       _scheduleAccessExpiry();
       GlobalState.nodeListRevision.value++;
@@ -328,6 +325,24 @@ class DesktopSyncService {
         unawaited(syncNow());
       }
     }
+  }
+
+  // Background authentication failures must never perform a user logout.
+  // Keep saved credentials/profiles, but withdraw managed authorization.
+  Future<DesktopSyncResult> _handleUnauthorized(
+    SessionManager session,
+    int generation,
+  ) async {
+    if (generation != session.generation) {
+      return const DesktopSyncResult(
+        success: false,
+        message: 'Session changed',
+      );
+    }
+    await clearManagedConnections();
+    const message = 'connectorAuthenticationRequired';
+    await SyncStateStore.instance.recordError(message);
+    return const DesktopSyncResult(success: false, message: message);
   }
 
   // Quota status is advisory. Older servers and transient failures must not
@@ -359,7 +374,8 @@ class DesktopSyncService {
       }
       if (store.notice != 'quotaPaused' || quota.notice != 'quotaEmpty') {
         await store.update(
-            quota.paused || store.remindersEnabled ? quota.notice : null);
+          quota.paused || store.remindersEnabled ? quota.notice : null,
+        );
       }
     } catch (_) {
       // Keep the last known status when the optional endpoint is unavailable.
@@ -429,12 +445,17 @@ class DesktopSyncService {
   }
 
   Future<DesktopSyncResult> _stopManagedAccess(
-      String reason, String? owner, int generation) async {
+    String reason,
+    String? owner,
+    int generation,
+  ) async {
     await clearManagedConnections();
     final session = SessionManager.instance;
     if (generation != session.generation) {
       return const DesktopSyncResult(
-          success: false, message: 'Session changed');
+        success: false,
+        message: 'Session changed',
+      );
     }
     // An account whose identity has not been established cannot purge another
     // account's retained snapshot (e.g. switching to a blacklisted account).
@@ -466,19 +487,18 @@ class DesktopSyncService {
         headers,
         isCurrent: isCurrent,
       );
-      addAppLog(revision == null
-          ? '服务端未下发连接调优参数，使用内置默认值'
-          : '连接调优参数已更新 (revision $revision)，下次连接生效');
+      addAppLog(
+        revision == null
+            ? '服务端未下发连接调优参数，使用内置默认值'
+            : '连接调优参数已更新 (revision $revision)，下次连接生效',
+      );
       if (jsonEncode(ClientTuning.profile?.toJson()) != before) {
         unawaited(NativeBridge.refreshPersistedTunnelProfileTuning());
       }
     } on ClientTuningStaleException {
       addAppLog('会话已变化，丢弃旧会话的连接调优参数');
     } catch (error) {
-      addAppLog(
-        '连接调优参数获取失败，继续使用上次的参数: $error',
-        level: LogLevel.warning,
-      );
+      addAppLog('连接调优参数获取失败，继续使用上次的参数: $error', level: LogLevel.warning);
     }
   }
 

@@ -1,5 +1,8 @@
 # Unreleased
 
+- Background synchronization authentication failures no longer sign users out.
+  Saved credentials and profiles persist until explicit logout or connector
+  change; unauthorized managed access remains suspended until reauthorized.
 - Managed connections retain their last successful local snapshot through
   transient sync failures and same-account restarts. Offline authorization is
   limited to 24 hours or team expiry, whichever comes first; logout, explicit
