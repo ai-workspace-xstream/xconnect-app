@@ -18,6 +18,7 @@ mkdir -p "$DIST_DIR" "$PACKAGE_ROOT/opt/xconnect" \
   "$PACKAGE_ROOT/usr/share/icons/hicolor/256x256/apps" \
   "$PACKAGE_ROOT/usr/libexec/xconnect" \
   "$PACKAGE_ROOT/usr/share/polkit-1/actions" \
+  "$PACKAGE_ROOT/etc/ld.so.conf.d" \
   "$PROJECT_ROOT/.tools"
 
 if [[ ! -x "$NFPM_BIN" ]]; then
@@ -38,6 +39,7 @@ cp scripts/linux/xconnect-net-helper "$PACKAGE_ROOT/usr/libexec/xconnect/xconnec
 cp packaging/linux/org.xconnect.policy "$PACKAGE_ROOT/usr/share/polkit-1/actions/org.xconnect.policy"
 chmod 0755 "$PACKAGE_ROOT/usr/libexec/xconnect/xconnect-net-helper"
 chmod 0755 packaging/nfpm/postinstall.sh
+printf '%s\n' '/opt/xconnect/lib' > "$PACKAGE_ROOT/etc/ld.so.conf.d/xconnect.conf"
 
 VERSION="$VERSION" "$NFPM_BIN" package \
   --packager deb \

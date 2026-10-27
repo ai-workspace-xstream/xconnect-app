@@ -100,10 +100,10 @@ prepare-macos: pub-get check-macos
 		fi
 
 sync-macos-config: check-flutter check-macos
-	@echo ">>> Syncing version $(VERSION)+$(BUILD) to macOS config"
+	@echo ">>> Syncing version $(VERSION) to macOS config"
 	$(FLUTTER) pub get
 	@cd macos && \
-		$(FLUTTER) build macos --version 2>/dev/null || true
+		$(FLUTTER) build macos --config-only
 
 clean-macos: check-flutter check-macos
 	@echo ">>> Cleaning Flutter caches..."
