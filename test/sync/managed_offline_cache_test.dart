@@ -47,6 +47,8 @@ void main() {
     // Logging is not under test; queued writes must not race temp-dir cleanup.
     AppLogFile.enabled = false;
     support = await Directory.systemTemp.createTemp('xconnect-managed-cache-');
+    GlobalApplicationConfig.localConfigPathOverride =
+        '${support.path}/vpn_nodes.json';
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
@@ -89,7 +91,10 @@ void main() {
     expect((await sync.syncNow()).success, isTrue);
   });
 
-  tearDownAll(() async => support.delete(recursive: true));
+  tearDownAll(() async {
+    GlobalApplicationConfig.localConfigPathOverride = null;
+    await support.delete(recursive: true);
+  });
   tearDown(sync.dispose);
 
   test(

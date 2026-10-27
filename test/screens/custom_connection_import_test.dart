@@ -22,6 +22,8 @@ void main() {
 
   setUpAll(() async {
     support = await Directory.systemTemp.createTemp('xconnect-import-test-');
+    GlobalApplicationConfig.localConfigPathOverride =
+        '${support.path}/vpn_nodes.json';
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('plugins.flutter.io/path_provider'),
@@ -49,6 +51,7 @@ void main() {
   });
 
   tearDownAll(() async {
+    GlobalApplicationConfig.localConfigPathOverride = null;
     await support.delete(recursive: true);
   });
 
