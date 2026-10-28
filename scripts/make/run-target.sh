@@ -19,7 +19,16 @@ build_date="${BUILD_DATE:-$(date '+%Y-%m-%d')}"
 macos_app_bundle="${MACOS_APP_BUNDLE:-build/macos/Build/Products/Release/xconnect.app}"
 macos_build_lock_dir="${MACOS_BUILD_LOCK_DIR:-build/.macos-build.lock}"
 macos_build_lock_pid_file="${MACOS_BUILD_LOCK_PID_FILE:-${macos_build_lock_dir}/pid}"
-dmg_name="${DMG_NAME:-xconnect-dev-${build_id}.dmg}"
+dmg_tag="$(git describe --tags --exact-match 2>/dev/null || echo "")"
+if [[ -n "${DMG_NAME:-}" ]]; then
+  dmg_name="$DMG_NAME"
+elif [[ -n "$dmg_tag" ]]; then
+  dmg_name="xconnect-release-${dmg_tag}.dmg"
+elif [[ "$branch" == "main" || "$branch" == "master" ]]; then
+  dmg_name="xconnect-latest-${build_id}.dmg"
+else
+  dmg_name="xconnect-dev-${build_id}.dmg"
+fi
 common_dart_defines=(
   --dart-define=BRANCH_NAME="$branch"
   --dart-define=BUILD_ID="$build_id"
@@ -193,6 +202,13 @@ run_macos_build() {
   if [[ -d "/Volumes/XConnect Installer" ]]; then
     hdiutil detach "/Volumes/XConnect Installer" -force 2>/dev/null || true
   fi
+  for m in /Volumes/dmg.*; do
+    if [[ -d "$m" ]]; then
+      hdiutil detach "$m" -force 2>/dev/null || true
+    fi
+  done
+
+  mkdir -p build/macos
   rm -f "build/macos/${dmg_name}" "build/macos"/rw.*."${dmg_name}" || true
   create-dmg \
     --filesystem APFS \
@@ -208,6 +224,25 @@ run_macos_build() {
     "build/macos/${dmg_name}" \
     "$macos_app_bundle" \
     2> >(sed -E "/^hdiutil: WARNING: .* is deprecated\\. Please use 'diskutil /d" >&2)
+
+  local dmg_path="build/macos/${dmg_name}"
+  if [[ ! -f "$dmg_path" ]]; then
+    echo "❌ DMG build completed but output file not found: ${dmg_path}" >&2
+    return 1
+  fi
+
+  # Create stable convenience symlinks for developers and tooling
+  ln -sf "${dmg_name}" "build/macos/xconnect.dmg"
+  ln -sf "macos/${dmg_name}" "build/xconnect.dmg"
+
+  local dmg_size
+  dmg_size="$(ls -lh "$dmg_path" | awk '{print $5}')"
+  echo "========================================================"
+  echo "✅ macOS DMG package created successfully!"
+  echo "   Artifact:  ${dmg_path} (${dmg_size})"
+  echo "   Symlinks:  build/macos/xconnect.dmg"
+  echo "              build/xconnect.dmg"
+  echo "========================================================"
 }
 
 run_ios_install() {
