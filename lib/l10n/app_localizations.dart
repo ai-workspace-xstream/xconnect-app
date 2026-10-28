@@ -31,6 +31,8 @@ class AppLocalizations {
       'home': 'Home',
       'proxy': 'Connection',
       'connectors': 'Connectors',
+      'connectorAuthenticationRequired':
+          'Connector authentication failed. Saved login and connections are retained. Retry sync or sign in again.',
       'connectorIntro':
           'Workspace sync is optional. XConnect is a client tool that helps you manage and establish secure connections to your own or authorized services.',
       'selfHostedConnector': 'Self-Hosted Connector',
@@ -474,6 +476,7 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'home': '首页',
       'proxy': '连接',
       'connectors': '连接器',
+      'connectorAuthenticationRequired': '连接器认证失败，已保留登录和连接缓存。请重试同步或重新认证。',
       'connectorIntro': '工作区同步为可选功能。本应用为客户端工具，帮助用户管理并建立与自有或授权服务之间的安全连接。',
       'selfHostedConnector': '自托管连接器',
       'teamDedicated': '团队专属连接',

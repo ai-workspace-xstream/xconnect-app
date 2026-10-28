@@ -712,6 +712,10 @@ class XhttpAdvancedConfig {
 
 /// 用于获取应用相关的配置信息
 class GlobalApplicationConfig {
+  /// Isolate filesystem failure fixtures from other suites and host config.
+  @visibleForTesting
+  static String? localConfigPathOverride;
+
   static String get _linuxConfigHome {
     final xdgConfigHome = Platform.environment['XDG_CONFIG_HOME'];
     if (xdgConfigHome != null && xdgConfigHome.trim().isNotEmpty) {
@@ -886,6 +890,8 @@ class GlobalApplicationConfig {
 
   /// 根据平台返回本地配置文件路径
   static Future<String> getLocalConfigPath() async {
+    final override = localConfigPathOverride;
+    if (override != null) return override;
     switch (Platform.operatingSystem) {
       case 'macos':
         // Use getVpnNodesConfigPath for consistent sandbox compliance

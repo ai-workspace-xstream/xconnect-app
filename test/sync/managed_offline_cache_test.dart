@@ -47,6 +47,8 @@ void main() {
     // Logging is not under test; queued writes must not race temp-dir cleanup.
     AppLogFile.enabled = false;
     support = await Directory.systemTemp.createTemp('xconnect-managed-cache-');
+    GlobalApplicationConfig.localConfigPathOverride =
+        '${support.path}/vpn_nodes.json';
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
@@ -58,9 +60,11 @@ void main() {
           'macos/Runner/Configs/AppInfo.xcconfig') {
         return null;
       }
-      return ByteData.sublistView(Uint8List.fromList(
-        utf8.encode('PRODUCT_BUNDLE_IDENTIFIER=plus.svc.xconnect'),
-      ));
+      return ByteData.sublistView(
+        Uint8List.fromList(
+          utf8.encode('PRODUCT_BUNDLE_IDENTIFIER=plus.svc.xconnect'),
+        ),
+      );
     });
   });
 
@@ -87,34 +91,41 @@ void main() {
     expect((await sync.syncNow()).success, isTrue);
   });
 
-  tearDownAll(() async => support.delete(recursive: true));
+  tearDownAll(() async {
+    GlobalApplicationConfig.localConfigPathOverride = null;
+    await support.delete(recursive: true);
+  });
   tearDown(sync.dispose);
 
-  test('same-account restart restores cached nodes despite network timeout',
-      () async {
-    await session.init();
-    await VpnConfig.load();
-    sync.client = MockClient((_) async => throw TimeoutException('offline'));
-    expect((await sync.syncNow()).success, isFalse);
-    expect(policy.active, isTrue);
-    expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
-  });
+  test(
+    'same-account restart restores cached nodes despite network timeout',
+    () async {
+      await session.init();
+      await VpnConfig.load();
+      sync.client = MockClient((_) async => throw TimeoutException('offline'));
+      expect((await sync.syncNow()).success, isFalse);
+      expect(policy.active, isTrue);
+      expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+    },
+  );
 
   test('temporary team-node 503 keeps the last successful snapshot', () async {
-    sync.client = MockClient((request) async =>
-        request.url.path.endsWith('/network-access')
-            ? http.Response(jsonEncode(access), 200)
-            : http.Response('', 503));
+    sync.client = MockClient(
+      (request) async => request.url.path.endsWith('/network-access')
+          ? http.Response(jsonEncode(access), 200)
+          : http.Response('', 503),
+    );
     expect((await sync.syncNow()).success, isFalse);
     expect(policy.active, isTrue);
     expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
   });
 
   test('malformed nonempty snapshot cannot erase valid cached nodes', () async {
-    sync.client = MockClient((request) async =>
-        request.url.path.endsWith('/network-access')
-            ? http.Response(jsonEncode(access), 200)
-            : http.Response('[{"broken":true}]', 200));
+    sync.client = MockClient(
+      (request) async => request.url.path.endsWith('/network-access')
+          ? http.Response(jsonEncode(access), 200)
+          : http.Response('[{"broken":true}]', 200),
+    );
     expect((await sync.syncNow()).success, isFalse);
     expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
   });
@@ -139,23 +150,26 @@ void main() {
     expect(await File(saved.configPath).exists(), isTrue);
   });
 
-  test('logout clears cached authorization even without cleanup callback',
-      () async {
-    await session.logout();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('session.token', 'new-session');
-    await prefs.setString('session.username', 'member@example');
-    await session.init();
-    expect(policy.active, isFalse);
-    expect(VpnConfig.nodes, isEmpty);
-  });
+  test(
+    'logout clears cached authorization even without cleanup callback',
+    () async {
+      await session.logout();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('session.token', 'new-session');
+      await prefs.setString('session.username', 'member@example');
+      await session.init();
+      expect(policy.active, isFalse);
+      expect(VpnConfig.nodes, isEmpty);
+    },
+  );
 
   test('an authoritative empty list withdraws the offline snapshot', () async {
     final saved = VpnConfig.allNodes.single;
-    sync.client = MockClient((request) async =>
-        request.url.path.endsWith('/network-access')
-            ? http.Response(jsonEncode(access), 200)
-            : http.Response('[]', 200));
+    sync.client = MockClient(
+      (request) async => request.url.path.endsWith('/network-access')
+          ? http.Response(jsonEncode(access), 200)
+          : http.Response('[]', 200),
+    );
     expect((await sync.syncNow()).success, isFalse);
     await session.init();
     expect(policy.active, isFalse);
@@ -164,21 +178,86 @@ void main() {
     expect(await File(saved.configPath).exists(), isTrue);
   });
 
-  test('expired login disables without deleting saved managed files', () async {
+  test('expired login retains credentials and saved managed files', () async {
     final saved = VpnConfig.allNodes.single;
     session.onSessionReset = sync.clearManagedConnections;
     sync.client = MockClient((_) async => http.Response('', 401));
     expect((await sync.syncNow()).success, isFalse);
-    expect(session.isLoggedIn, isFalse);
+    expect(session.isLoggedIn, isTrue);
+    expect(session.sessionToken, 'test-session');
     expect(VpnConfig.nodes, isEmpty);
     expect(VpnConfig.allNodes.single.configPath, saved.configPath);
     expect(await File(saved.configPath).exists(), isTrue);
   });
 
+  for (final endpoint in ['access', 'nodes']) {
+    test('$endpoint 401 retains persisted login through restart', () async {
+      sync.client = MockClient((request) async {
+        if (endpoint == 'nodes' &&
+            request.url.path.endsWith('/network-access')) {
+          return http.Response(jsonEncode(access), 200);
+        }
+        return http.Response('', 401);
+      });
+      expect((await sync.syncNow()).success, isFalse);
+      expect(session.isLoggedIn, isTrue);
+      expect(session.sessionToken, 'test-session');
+      expect((await SharedPreferences.getInstance()).getString('session.token'),
+          'test-session');
+      expect(policy.active, isFalse);
+      await session.init();
+      expect(session.isLoggedIn, isTrue);
+      expect(policy.active, isFalse);
+      expect(VpnConfig.allNodes.single.managedNodeId, 'node-a');
+    });
+  }
+
+  test('successful retry restores access without asking for login', () async {
+    sync.client = MockClient((request) async => http.Response(
+        '{}', request.url.path == '/api/auth/session' ? 200 : 401));
+    await sync.syncNow();
+    expect(policy.active, isFalse);
+    sync.client = MockClient((request) async {
+      if (request.url.path.endsWith('/network-access')) {
+        return http.Response(jsonEncode(access), 200);
+      }
+      if (request.url.path.endsWith('/nodes')) {
+        return http.Response(jsonEncode(nodes), 200);
+      }
+      return http.Response('', 404);
+    });
+    expect((await sync.syncNow()).success, isTrue);
+    expect(session.isLoggedIn, isTrue);
+    expect(policy.active, isTrue);
+    expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+  });
+
+  test('old request cannot invalidate a new login', () async {
+    final started = Completer<void>();
+    final response = Completer<http.Response>();
+    sync.client = MockClient((request) async {
+      started.complete();
+      return response.future;
+    });
+    final pending = sync.syncNow();
+    await started.future;
+    await session.logout();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('session.token', 'new-session');
+    await session.init();
+    sync.client = MockClient((_) async => http.Response('', 503));
+    response.complete(http.Response('', 401));
+    expect((await pending).success, isFalse);
+    expect(session.isLoggedIn, isTrue);
+    expect(session.sessionToken, 'new-session');
+  });
+
   test('an unclassified policy denial preserves managed files', () async {
     final saved = VpnConfig.allNodes.single;
-    sync.client = MockClient((_) async =>
-        http.Response(jsonEncode({...access, 'allowed': false}), 200));
+    sync.client = MockClient(
+      (_) async =>
+          http.Response(jsonEncode({...access, 'allowed': false}), 200),
+    );
     expect((await sync.syncNow()).success, isFalse);
     expect(policy.active, isFalse);
     expect(VpnConfig.allNodes.single.configPath, saved.configPath);
@@ -188,263 +267,330 @@ void main() {
   for (final code in [
     'quota_exhausted',
     'traffic_stopped',
-    'email_blacklisted'
+    'email_blacklisted',
   ]) {
     for (final endpoint in ['access', 'nodes']) {
-      test('$endpoint explicit $code purges only managed configuration',
-          () async {
-        final saved = VpnConfig.allNodes.single;
-        final customFile = File('${support.path}/independent.json');
-        await customFile.writeAsString('{"custom":true}');
-        VpnConfig.addNode(VpnNode(
-          name: 'Independent',
-          countryCode: 'CUSTOM',
-          configPath: customFile.path,
-          serviceName: 'custom.import',
-        ));
-        await VpnConfig.saveToFile();
-        sync.client = MockClient((request) async {
-          if (endpoint == 'access' || request.url.path.endsWith('/nodes')) {
-            return http.Response(jsonEncode({'error': code}), 403);
-          }
-          if (request.url.path.endsWith('/network-access')) {
-            return http.Response(jsonEncode(access), 200);
-          }
-          return http.Response('', 404);
-        });
-        expect((await sync.syncNow()).success, isFalse);
-        expect(VpnConfig.allNodes.where((n) => n.isManaged), isEmpty);
-        expect(await File(saved.configPath).exists(), isFalse);
-        expect(await customFile.readAsString(), '{"custom":true}');
-        expect(policy.active, isFalse);
-      });
+      test(
+        '$endpoint explicit $code purges only managed configuration',
+        () async {
+          final saved = VpnConfig.allNodes.single;
+          final customFile = File('${support.path}/independent.json');
+          await customFile.writeAsString('{"custom":true}');
+          VpnConfig.addNode(
+            VpnNode(
+              name: 'Independent',
+              countryCode: 'CUSTOM',
+              configPath: customFile.path,
+              serviceName: 'custom.import',
+            ),
+          );
+          await VpnConfig.saveToFile();
+          sync.client = MockClient((request) async {
+            if (endpoint == 'access' || request.url.path.endsWith('/nodes')) {
+              return http.Response(jsonEncode({'error': code}), 403);
+            }
+            if (request.url.path.endsWith('/network-access')) {
+              return http.Response(jsonEncode(access), 200);
+            }
+            return http.Response('', 404);
+          });
+          expect((await sync.syncNow()).success, isFalse);
+          expect(VpnConfig.allNodes.where((n) => n.isManaged), isEmpty);
+          expect(await File(saved.configPath).exists(), isFalse);
+          expect(await customFile.readAsString(), '{"custom":true}');
+          expect(policy.active, isFalse);
+        },
+      );
     }
   }
 
-  test('quota words in a generic forbidden message do not permit deletion',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    sync.client = MockClient((_) async => http.Response(
-        '{"error":"forbidden","message":"quota_exhausted"}', 403));
-    await sync.syncNow();
-    expect(VpnConfig.allNodes.single.configPath, saved.configPath);
-    expect(await File(saved.configPath).exists(), isTrue);
-  });
+  test(
+    'quota words in a generic forbidden message do not permit deletion',
+    () async {
+      final saved = VpnConfig.allNodes.single;
+      sync.client = MockClient(
+        (_) async => http.Response(
+          '{"error":"forbidden","message":"quota_exhausted"}',
+          403,
+        ),
+      );
+      await sync.syncNow();
+      expect(VpnConfig.allNodes.single.configPath, saved.configPath);
+      expect(await File(saved.configPath).exists(), isTrue);
+    },
+  );
 
-  test('a transient server error cannot authorize purge through its body',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    sync.client = MockClient(
-        (_) async => http.Response('{"error":"email_blacklisted"}', 503));
-    await sync.syncNow();
-    expect(policy.active, isTrue);
-    expect(await File(saved.configPath).exists(), isTrue);
-  });
+  test(
+    'a transient server error cannot authorize purge through its body',
+    () async {
+      final saved = VpnConfig.allNodes.single;
+      sync.client = MockClient(
+        (_) async => http.Response('{"error":"email_blacklisted"}', 503),
+      );
+      await sync.syncNow();
+      expect(policy.active, isTrue);
+      expect(await File(saved.configPath).exists(), isTrue);
+    },
+  );
 
-  test('ordinary node authorization failure suspends without deleting files',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    sync.client = MockClient((request) async =>
-        request.url.path.endsWith('/network-access')
+  test(
+    'ordinary node authorization failure suspends without deleting files',
+    () async {
+      final saved = VpnConfig.allNodes.single;
+      sync.client = MockClient(
+        (request) async => request.url.path.endsWith('/network-access')
             ? http.Response(jsonEncode(access), 200)
-            : http.Response('{"code":"forbidden"}', 403));
-    await sync.syncNow();
-    await session.init();
-    expect(policy.active, isFalse);
-    expect(await File(saved.configPath).exists(), isTrue);
-    expect(VpnConfig.allNodes.single.managedNodeId, 'node-a');
-  });
+            : http.Response('{"code":"forbidden"}', 403),
+      );
+      await sync.syncNow();
+      await session.init();
+      expect(policy.active, isFalse);
+      expect(await File(saved.configPath).exists(), isTrue);
+      expect(VpnConfig.allNodes.single.managedNodeId, 'node-a');
+    },
+  );
 
-  test('suspension retains ownership for a later explicit enforcement',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    session.onSessionReset = sync.clearManagedConnections;
-    await session.logout();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('session.token', 'new-session');
-    await prefs.setString('session.username', 'member@example');
-    await session.init();
-    expect(await File(saved.configPath).exists(), isTrue);
-    sync.client = MockClient(
-        (_) async => http.Response('{"error":"email_blacklisted"}', 403));
-    await sync.syncNow();
-    expect(await File(saved.configPath).exists(), isFalse);
-    expect(VpnConfig.allNodes, isEmpty);
-  });
+  test(
+    'suspension retains ownership for a later explicit enforcement',
+    () async {
+      final saved = VpnConfig.allNodes.single;
+      session.onSessionReset = sync.clearManagedConnections;
+      await session.logout();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('session.token', 'new-session');
+      await prefs.setString('session.username', 'member@example');
+      await session.init();
+      expect(await File(saved.configPath).exists(), isTrue);
+      sync.client = MockClient(
+        (_) async => http.Response('{"error":"email_blacklisted"}', 403),
+      );
+      await sync.syncNow();
+      expect(await File(saved.configPath).exists(), isFalse);
+      expect(VpnConfig.allNodes, isEmpty);
+    },
+  );
 
-  test('a denied new account cannot purge another account retained snapshot',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('session.username', 'other@example');
-    await session.init();
-    sync.client = MockClient(
-        (_) async => http.Response('{"error":"email_blacklisted"}', 403));
-    await sync.syncNow();
-    expect(policy.active, isFalse);
-    expect(VpnConfig.nodes, isEmpty);
-    expect(await File(saved.configPath).exists(), isTrue);
-    expect(VpnConfig.allNodes.single.managedOwner,
-        'https://accounts.example|account-a');
-  });
+  test(
+    'a denied new account cannot purge another account retained snapshot',
+    () async {
+      final saved = VpnConfig.allNodes.single;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('session.username', 'other@example');
+      await session.init();
+      sync.client = MockClient(
+        (_) async => http.Response('{"error":"email_blacklisted"}', 403),
+      );
+      await sync.syncNow();
+      expect(policy.active, isFalse);
+      expect(VpnConfig.nodes, isEmpty);
+      expect(await File(saved.configPath).exists(), isTrue);
+      expect(
+        VpnConfig.allNodes.single.managedOwner,
+        'https://accounts.example|account-a',
+      );
+    },
+  );
 
-  test('explicit policy denial in a successful response purges its owner only',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    sync.client = MockClient((_) async => http.Response(
-        jsonEncode({...access, 'allowed': false, 'reason': 'traffic_stopped'}),
-        200));
-    await sync.syncNow();
-    expect(policy.active, isFalse);
-    expect(await File(saved.configPath).exists(), isFalse);
-  });
+  test(
+    'explicit policy denial in a successful response purges its owner only',
+    () async {
+      final saved = VpnConfig.allNodes.single;
+      sync.client = MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            ...access,
+            'allowed': false,
+            'reason': 'traffic_stopped',
+          }),
+          200,
+        ),
+      );
+      await sync.syncNow();
+      expect(policy.active, isFalse);
+      expect(await File(saved.configPath).exists(), isFalse);
+    },
+  );
 
-  test('explicit denial does not require an otherwise usable policy payload',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    sync.client = MockClient((_) async =>
-        http.Response('{"allowed":false,"reason":"quota_exhausted"}', 200));
-    await sync.syncNow();
-    expect(policy.active, isFalse);
-    expect(await File(saved.configPath).exists(), isFalse);
-  });
+  test(
+    'explicit denial does not require an otherwise usable policy payload',
+    () async {
+      final saved = VpnConfig.allNodes.single;
+      sync.client = MockClient(
+        (_) async =>
+            http.Response('{"allowed":false,"reason":"quota_exhausted"}', 200),
+      );
+      await sync.syncNow();
+      expect(policy.active, isFalse);
+      expect(await File(saved.configPath).exists(), isFalse);
+    },
+  );
 
-  test('a denied policy for a different owner cannot purge the old owner',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    sync.client = MockClient((_) async => http.Response(
-        jsonEncode({
-          ...access,
-          'accountId': 'account-b',
-          'allowed': false,
-          'reason': 'email_blacklisted',
-        }),
-        200));
-    await sync.syncNow();
-    expect(policy.active, isFalse);
-    expect(await File(saved.configPath).exists(), isTrue);
-  });
+  test(
+    'a denied policy for a different owner cannot purge the old owner',
+    () async {
+      final saved = VpnConfig.allNodes.single;
+      sync.client = MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            ...access,
+            'accountId': 'account-b',
+            'allowed': false,
+            'reason': 'email_blacklisted',
+          }),
+          200,
+        ),
+      );
+      await sync.syncNow();
+      expect(policy.active, isFalse);
+      expect(await File(saved.configPath).exists(), isTrue);
+    },
+  );
 
   for (final scenario in ['relogin', 'switch', 'switch-offline']) {
-    test('$scenario automatically syncs after login without mixing accounts',
-        () async {
-      final saved = VpnConfig.allNodes.single;
-      final switched = scenario != 'relogin';
-      var newRequest = false;
-      var retainedBeforeReplacement = false;
-      final finished = Completer<void>();
-      sync.client = MockClient((request) async {
-        final fresh = request.headers['Authorization'] == 'Bearer session-b';
-        if (request.url.path.endsWith('/network-access')) {
-          return http.Response(
-              jsonEncode(fresh && switched
-                  ? {...access, 'accountId': 'account-b', 'teamId': 'team-b'}
-                  : access),
-              200);
-        }
-        if (request.url.path.endsWith('/nodes')) {
-          if (fresh) {
-            newRequest = true;
-            retainedBeforeReplacement = await File(saved.configPath).exists();
-            if (scenario == 'switch-offline') return http.Response('', 503);
+    test(
+      '$scenario automatically syncs after login without mixing accounts',
+      () async {
+        final saved = VpnConfig.allNodes.single;
+        final switched = scenario != 'relogin';
+        var newRequest = false;
+        var retainedBeforeReplacement = false;
+        final finished = Completer<void>();
+        sync.client = MockClient((request) async {
+          final fresh = request.headers['Authorization'] == 'Bearer session-b';
+          if (request.url.path.endsWith('/network-access')) {
+            return http.Response(
+              jsonEncode(
+                fresh && switched
+                    ? {...access, 'accountId': 'account-b', 'teamId': 'team-b'}
+                    : access,
+              ),
+              200,
+            );
           }
-          return http.Response(
-              jsonEncode(fresh && switched
-                  ? [
-                      {
-                        ...nodes.single,
-                        'id': 'node-b',
-                        'name': 'New account connection',
-                      }
-                    ]
-                  : nodes),
-              200);
+          if (request.url.path.endsWith('/nodes')) {
+            if (fresh) {
+              newRequest = true;
+              retainedBeforeReplacement = await File(saved.configPath).exists();
+              if (scenario == 'switch-offline') return http.Response('', 503);
+            }
+            return http.Response(
+              jsonEncode(
+                fresh && switched
+                    ? [
+                        {
+                          ...nodes.single,
+                          'id': 'node-b',
+                          'name': 'New account connection',
+                        },
+                      ]
+                    : nodes,
+              ),
+              200,
+            );
+          }
+          return http.Response('', 404);
+        });
+        void onSync() {
+          if (!sync.syncing.value && newRequest && !finished.isCompleted) {
+            finished.complete();
+          }
         }
-        return http.Response('', 404);
-      });
-      void onSync() {
-        if (!sync.syncing.value && newRequest && !finished.isCompleted) {
-          finished.complete();
-        }
-      }
 
-      sync.syncing.addListener(onSync);
-      try {
-        await sync.init();
-        final login = await http.runWithClient(
-          () => session.login(
+        sync.syncing.addListener(onSync);
+        try {
+          await sync.init();
+          final login = await http.runWithClient(
+            () => session.login(
               identifier: switched ? 'other@example' : 'member@example',
-              password: 'fixture-only'),
-          () => MockClient((_) async => http.Response(
-              jsonEncode({
-                'token': 'session-b',
-                'user': {
-                  'email': switched ? 'other@example' : 'member@example'
-                },
-              }),
-              200)),
-        );
-        expect(login.success, isTrue);
-        await finished.future.timeout(const Duration(seconds: 5));
-        expect(retainedBeforeReplacement, isTrue);
-        if (scenario == 'switch-offline') {
-          expect(VpnConfig.nodes, isEmpty);
-          expect(await File(saved.configPath).exists(), isTrue);
-        } else {
-          expect(VpnConfig.nodes.single.managedNodeId,
-              switched ? 'node-b' : 'node-a');
-          if (switched) expect(await File(saved.configPath).exists(), isFalse);
+              password: 'fixture-only',
+            ),
+            () => MockClient(
+              (_) async => http.Response(
+                jsonEncode({
+                  'token': 'session-b',
+                  'user': {
+                    'email': switched ? 'other@example' : 'member@example',
+                  },
+                }),
+                200,
+              ),
+            ),
+          );
+          expect(login.success, isTrue);
+          await finished.future.timeout(const Duration(seconds: 5));
+          expect(retainedBeforeReplacement, isTrue);
+          if (scenario == 'switch-offline') {
+            expect(VpnConfig.nodes, isEmpty);
+            expect(await File(saved.configPath).exists(), isTrue);
+          } else {
+            expect(
+              VpnConfig.nodes.single.managedNodeId,
+              switched ? 'node-b' : 'node-a',
+            );
+            if (switched) {
+              expect(await File(saved.configPath).exists(), isFalse);
+            }
+          }
+        } finally {
+          sync.syncing.removeListener(onSync);
         }
-      } finally {
-        sync.syncing.removeListener(onSync);
-      }
-    });
+      },
+    );
   }
 
-  test('a changed team cannot restore the previous snapshot after a 503',
-      () async {
-    sync.client = MockClient((request) async =>
-        request.url.path.endsWith('/network-access')
+  test(
+    'a changed team cannot restore the previous snapshot after a 503',
+    () async {
+      sync.client = MockClient(
+        (request) async => request.url.path.endsWith('/network-access')
             ? http.Response(jsonEncode({...access, 'teamId': 'team-b'}), 200)
-            : http.Response('', 503));
-    expect((await sync.syncNow()).success, isFalse);
-    await session.init();
-    expect(policy.active, isFalse);
-    expect(VpnConfig.nodes, isEmpty);
-  });
+            : http.Response('', 503),
+      );
+      expect((await sync.syncNow()).success, isFalse);
+      await session.init();
+      expect(policy.active, isFalse);
+      expect(VpnConfig.nodes, isEmpty);
+    },
+  );
 
-  test('cache lifetime is bounded even when the login token remains stored',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    final cache = jsonDecode(prefs.getString('network.cachedAccess')!) as Map;
-    cache['savedAt'] = DateTime.now()
-        .subtract(const Duration(hours: 25))
-        .millisecondsSinceEpoch;
-    await prefs.setString('network.cachedAccess', jsonEncode(cache));
-    await session.init();
-    expect(session.isLoggedIn, isTrue);
-    expect(policy.active, isFalse);
-    expect(VpnConfig.nodes, isEmpty);
-  });
+  test(
+    'cache lifetime is bounded even when the login token remains stored',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final cache = jsonDecode(prefs.getString('network.cachedAccess')!) as Map;
+      cache['savedAt'] = DateTime.now()
+          .subtract(const Duration(hours: 25))
+          .millisecondsSinceEpoch;
+      await prefs.setString('network.cachedAccess', jsonEncode(cache));
+      await session.init();
+      expect(session.isLoggedIn, isTrue);
+      expect(policy.active, isFalse);
+      expect(VpnConfig.nodes, isEmpty);
+    },
+  );
 
-  test('expired team validity rejects an otherwise fresh offline cache',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    final cache = jsonDecode(prefs.getString('network.cachedAccess')!) as Map;
-    cache['validUntil'] =
-        DateTime.now().subtract(const Duration(seconds: 1)).toIso8601String();
-    await prefs.setString('network.cachedAccess', jsonEncode(cache));
-    await session.init();
-    expect(policy.active, isFalse);
-    expect(VpnConfig.nodes, isEmpty);
-  });
+  test(
+    'expired team validity rejects an otherwise fresh offline cache',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final cache = jsonDecode(prefs.getString('network.cachedAccess')!) as Map;
+      cache['validUntil'] =
+          DateTime.now().subtract(const Duration(seconds: 1)).toIso8601String();
+      await prefs.setString('network.cachedAccess', jsonEncode(cache));
+      await session.init();
+      expect(policy.active, isFalse);
+      expect(VpnConfig.nodes, isEmpty);
+    },
+  );
 
-  test('policy cache contains neither credentials nor connection URIs',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('network.cachedAccess')!;
-    expect(raw, isNot(contains('test-session')));
-    expect(raw, isNot(contains('vless://')));
-    expect(raw, isNot(contains('11111111-1111-4111-8111-111111111111')));
-  });
+  test(
+    'policy cache contains neither credentials nor connection URIs',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('network.cachedAccess')!;
+      expect(raw, isNot(contains('test-session')));
+      expect(raw, isNot(contains('vless://')));
+      expect(raw, isNot(contains('11111111-1111-4111-8111-111111111111')));
+    },
+  );
 }
