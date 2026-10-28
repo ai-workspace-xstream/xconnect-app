@@ -1,6 +1,6 @@
 .PHONY: help check-flutter check-go check-macos check-git-submodules \
 	pub-get prepare-macos sync-macos-config clean-macos \
-	build-macos-arm64 build-macos-x64 package-mac
+	build-macos-arm64 build-macos-x64 package-mac package-macos
 help: ## Show this help message
 	@echo "XConnect Build System"
 	@echo ""
@@ -47,9 +47,12 @@ MAKE_SCRIPT_DIR := scripts/make
 RUN_TARGET_SCRIPT := $(MAKE_SCRIPT_DIR)/run-target.sh
 
 DMG_TAG := $(shell git describe --tags --exact-match 2>/dev/null || echo "")
+IS_MAIN := $(shell [ "$(BRANCH)" = "main" ] || [ "$(BRANCH)" = "master" ] && echo "yes" || echo "no")
 DMG_NAME := $(shell \
 	if [ "$(DMG_TAG)" != "" ]; then \
 		echo "xconnect-release-$(DMG_TAG).dmg"; \
+	elif [ "$(IS_MAIN)" = "yes" ]; then \
+		echo "xconnect-latest-$(BUILD_ID).dmg"; \
 	else \
 		echo "xconnect-dev-$(BUILD_ID).dmg"; \
 	fi)
@@ -128,7 +131,7 @@ build-macos-x64: check-flutter check-macos check-git-submodules prepare-macos
 		DMG_NAME="$(DMG_NAME)" \
 		"$(RUN_TARGET_SCRIPT)" macos-intel
 
-package-mac: check-flutter check-macos check-git-submodules prepare-macos ## Build macOS release + DMG (native arch)
+package-mac: check-flutter check-macos check-git-submodules ## Build macOS release + DMG (native arch)
 	@if [ "$(UNAME_M)" = "arm64" ]; then \
 		$(MAKE) build-macos-arm64; \
 	elif [ "$(UNAME_M)" = "x86_64" ]; then \
@@ -137,6 +140,8 @@ package-mac: check-flutter check-macos check-git-submodules prepare-macos ## Bui
 		echo "Unsupported macOS architecture: $(UNAME_M)"; \
 		exit 1; \
 	fi
+
+package-macos: package-mac ## Alias for package-mac
 
 build-windows-x64: check-flutter check-go
 	@echo ">>> Building Windows x64 release"
