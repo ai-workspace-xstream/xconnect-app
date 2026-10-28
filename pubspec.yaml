@@ -1,6 +1,6 @@
 name: xconnect
 description: A cross-platform VPN client for secure network connections and configuration management.
-version: 1.0.0+4
+version: 1.1.1+6
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
