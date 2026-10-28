@@ -50,15 +50,15 @@ make build-macos-arm64
 <!-- SUPPORT_MATRIX:START -->
 | 平台 | 架构 | 测试状态 | 下载 |
 |------|------|----------|------|
-| macOS | arm64 | ✅ 已测试 | [DMG](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/xconnect-latest-773af7c.dmg) |
+| macOS | arm64 | ✅ 已测试 | [DMG](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/xconnect-latest-560fd2b.dmg) |
 | macOS | x64 | ⚠️ 未测试 | — |
-| Linux | x64 | ⚠️ 未测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/xconnect-linux.zip) / [AppImage](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/xconnect-linux.AppImage) / [DEB](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/xconnect-linux-amd64.deb) / [RPM](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/xconnect-linux-x86_64.rpm) |
+| Linux | x64 | ⚠️ 未测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/xconnect-linux.zip) / [AppImage](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/xconnect-linux.AppImage) / [DEB](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/xconnect-linux-amd64.deb) / [RPM](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/xconnect-linux-x86_64.rpm) |
 | Linux | arm64 | ⚠️ 未测试 | — |
-| Windows | x64 | ✅ 已测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/xconnect-windows.zip) / [MSI](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/xconnect-windows.msi) |
-| Android | arm64 | ⚠️ 未测试 | [APK](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/app-release.apk) |
-| iOS | arm64 | ✅ 已测试 | [IPA](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40626433069-773af7c/xconnect.ipa) |
+| Windows | x64 | ✅ 已测试 | [ZIP](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/xconnect-windows.zip) / [MSI](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/xconnect-windows.msi) |
+| Android | arm64 | ⚠️ 未测试 | [APK](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/app-release.apk) |
+| iOS | arm64 | ✅ 已测试 | [IPA](https://github.com/ai-workspace-xstream/xconnect-app/releases/download/latest-40632347793-560fd2b/xconnect.ipa) |
 
-> 自动更新：当前下载链接指向 GitHub Release [`latest-40626433069-773af7c`](https://github.com/ai-workspace-xstream/xconnect-app/releases/tag/latest-40626433069-773af7c).
+> 自动更新：当前下载链接指向 GitHub Release [`latest-40632347793-560fd2b`](https://github.com/ai-workspace-xstream/xconnect-app/releases/tag/latest-40632347793-560fd2b).
 <!-- SUPPORT_MATRIX:END -->
 
 All download buttons currently point to the latest GitHub release page.
