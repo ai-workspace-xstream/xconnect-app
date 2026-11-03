@@ -178,6 +178,30 @@ void main() {
     expect(await File(saved.configPath).exists(), isTrue);
   });
 
+  test('manual sync recovers a transient 401 without withdrawing access',
+      () async {
+    var accessCalls = 0;
+    final generation = session.generation;
+    sync.client = MockClient((request) async {
+      if (request.url.path.endsWith('/network-access')) {
+        return ++accessCalls == 1
+            ? http.Response('{}', 401)
+            : http.Response(jsonEncode(access), 200);
+      }
+      if (request.url.path.endsWith('/nodes')) {
+        return http.Response(jsonEncode(nodes), 200);
+      }
+      return http.Response('', 404);
+    });
+    expect((await sync.syncNow(manual: true)).success, isTrue);
+    expect(accessCalls, 2);
+    expect(session.generation, generation);
+    expect(session.isLoggedIn, isTrue);
+    expect(policy.active, isTrue);
+    expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+    expect(sync.syncing.value, isFalse);
+  });
+
   test('expired login retains credentials and saved managed files', () async {
     final saved = VpnConfig.allNodes.single;
     session.onSessionReset = sync.clearManagedConnections;

@@ -107,12 +107,8 @@ class DesktopSyncService {
           message: 'Session changed',
         );
       }
-      final accessResponse = await client
-          .get(
-            session.buildEndpoint('/api/auth/network-access'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 20));
+      final accessResponse = await session.getWithSessionRecovery(
+          client, session.buildEndpoint('/api/auth/network-access'), headers);
       if (generation != session.generation) {
         return const DesktopSyncResult(
           success: false,
@@ -120,7 +116,8 @@ class DesktopSyncService {
         );
       }
       if (accessResponse.statusCode == 401) {
-        return await _handleUnauthorized(session, generation);
+        return await _handleUnauthorized(
+            session, generation, '/api/auth/network-access');
       }
       final accessStop = _explicitStopReason(accessResponse);
       if (accessStop != null) {
@@ -177,9 +174,8 @@ class DesktopSyncService {
           message: 'Session changed',
         );
       }
-      final response = await client
-          .get(session.buildEndpoint(_nodesPath), headers: headers)
-          .timeout(const Duration(seconds: 20));
+      final response = await session.getWithSessionRecovery(
+          client, session.buildEndpoint(_nodesPath), headers);
       if (generation != session.generation) {
         return const DesktopSyncResult(
           success: false,
@@ -187,7 +183,7 @@ class DesktopSyncService {
         );
       }
       if (response.statusCode == 401) {
-        return await _handleUnauthorized(session, generation);
+        return await _handleUnauthorized(session, generation, _nodesPath);
       }
       final nodeStop = _explicitStopReason(response);
       if (nodeStop != null) {
@@ -332,6 +328,7 @@ class DesktopSyncService {
   Future<DesktopSyncResult> _handleUnauthorized(
     SessionManager session,
     int generation,
+    String endpoint,
   ) async {
     if (generation != session.generation) {
       return const DesktopSyncResult(
@@ -339,9 +336,10 @@ class DesktopSyncService {
         message: 'Session changed',
       );
     }
-    await clearManagedConnections();
     const message = 'connectorAuthenticationRequired';
+    addAppLog('连接器同步认证失败: HTTP 401 $endpoint', level: LogLevel.warning);
     await SyncStateStore.instance.recordError(message);
+    await clearManagedConnections();
     return const DesktopSyncResult(success: false, message: message);
   }
 

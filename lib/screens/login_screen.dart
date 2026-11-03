@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/account_usage_service.dart';
 import 'package:flutter/services.dart';
 import '../services/session/session_manager.dart';
 import '../services/session/network_access_policy.dart';
@@ -15,6 +17,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _usageService = AccountUsageService();
+  Future<(AccountUsageSummary, int)>? _usage;
+  Timer? _usageTimer;
+
   final SessionManager _sessionManager = SessionManager.instance;
   final DesktopSyncService _syncService = DesktopSyncService.instance;
   final TextEditingController _baseUrlController = TextEditingController();
@@ -27,15 +33,99 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _baseUrlController.text = _sessionManager.baseUrl.value;
     _usernameController.text = _sessionManager.currentUser.value ?? '';
+    _sessionManager.status.addListener(_refreshUsage);
+    _syncService.syncing.addListener(_onSyncChanged);
+    _refreshUsage();
+    _usageTimer =
+        Timer.periodic(const Duration(minutes: 1), (_) => _refreshUsage());
   }
 
   @override
   void dispose() {
+    _usageTimer?.cancel();
+    _sessionManager.status.removeListener(_refreshUsage);
+    _syncService.syncing.removeListener(_onSyncChanged);
     _baseUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _mfaCodeController.dispose();
     super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (!_syncService.syncing.value) _refreshUsage();
+  }
+
+  Future<(AccountUsageSummary, int)> _loadUsage() async {
+    final baseUrl = _sessionManager.baseUrl.value;
+    final token = _sessionManager.sessionToken ?? '';
+    final cookie = _sessionManager.cookie;
+    final values = await Future.wait<Object>([
+      _usageService.fetchUsageSummary(
+          baseUrl: baseUrl, sessionToken: token, cookie: cookie),
+      _usageService.fetchMonthUsage(
+          baseUrl: baseUrl, sessionToken: token, cookie: cookie),
+    ]);
+    return (values[0] as AccountUsageSummary, values[1] as int);
+  }
+
+  void _refreshUsage() {
+    if (!mounted) return;
+    setState(() {
+      _usage = _sessionManager.isLoggedIn ? _loadUsage() : null;
+    });
+  }
+
+  String _formatBytes(int value) {
+    var amount = value.toDouble();
+    const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+    var unit = 0;
+    while (amount >= 1024 && unit < units.length - 1) {
+      amount /= 1024;
+      unit++;
+    }
+    return '${amount.toStringAsFixed(unit == 0 ? 0 : 2)} ${units[unit]}';
+  }
+
+  Widget _buildUsageCard(BuildContext context) {
+    final xc = context.xColors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: xc.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: xc.cardBorder),
+      ),
+      child: FutureBuilder<(AccountUsageSummary, int)>(
+        future: _usage,
+        builder: (context, snapshot) {
+          final usage = snapshot.data;
+          final String value;
+          if (snapshot.connectionState != ConnectionState.done) {
+            value = context.l10n.get('usageLoading');
+          } else if (snapshot.hasError || usage == null) {
+            value = context.l10n.get('usageUnavailable');
+          } else {
+            final used = usage.$2;
+            final quota = usage.$1.includedQuotaBytes;
+            value = '${_formatBytes(used)} / '
+                '${quota == null ? '—' : _formatBytes(quota)}';
+          }
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.l10n.get('usageMonthly'),
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Text(value, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(context.l10n.get('usageServerSource'),
+                    style: Theme.of(context).textTheme.bodySmall),
+              ]);
+        },
+      ),
+    );
   }
 
   Future<void> _handleLogin() async {
@@ -131,6 +221,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Sync status card
               _buildSyncStatusCard(context),
+              const SizedBox(height: 16),
+              _buildUsageCard(context),
 
               const SizedBox(height: 24),
 
