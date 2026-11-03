@@ -29,6 +29,7 @@ class SessionManager {
   static const _prefsBaseUrlKey = 'session.baseUrl';
   static const _prefsCookieKey = 'session.cookie';
   static const _prefsTokenKey = 'session.token';
+  static const _prefsRefreshKey = 'session.refreshToken';
   static const _prefsUserKey = 'session.username';
 
   final ValueNotifier<SessionStatus> status =
@@ -45,6 +46,7 @@ class SessionManager {
 
   String? _cookie;
   String? _sessionToken;
+  String? _refreshToken;
   String? _mfaTicket;
 
   bool get isLoggedIn => status.value == SessionStatus.loggedIn;
@@ -63,6 +65,7 @@ class SessionManager {
 
     _cookie = prefs.getString(_prefsCookieKey);
     _sessionToken = prefs.getString(_prefsTokenKey);
+    _refreshToken = prefs.getString(_prefsRefreshKey);
     currentUser.value = prefs.getString(_prefsUserKey);
 
     if ((_sessionToken ?? '').isNotEmpty || (_cookie ?? '').isNotEmpty) {
@@ -101,6 +104,69 @@ class SessionManager {
     return Uri.parse('$root$path');
   }
 
+  /// Retry only with credentials issued by the same connector. Never log out,
+  /// prompt for credentials, or treat an HTTP failure as successful recovery.
+  Future<http.Response> getWithSessionRecovery(
+    http.Client client,
+    Uri endpoint,
+    Map<String, String> headers,
+  ) async {
+    final requestGeneration = generation;
+    Future<http.Response> get(Map<String, String> requestHeaders) => client
+        .get(endpoint, headers: requestHeaders)
+        .timeout(const Duration(seconds: 20));
+    var response = await get(headers);
+    if (response.statusCode != 401 || requestGeneration != generation) {
+      return response;
+    }
+    final cookieToken =
+        RegExp(r'xc_session=([^;\s,]+)').firstMatch(_cookie ?? '')?.group(1);
+    if (cookieToken != null && cookieToken != _sessionToken) {
+      final cookieHeaders = Map<String, String>.from(headers)
+        ..remove('Authorization');
+      response = await get(cookieHeaders);
+      if (requestGeneration != generation) return response;
+      if (response.statusCode == 200) {
+        await _saveRecoveredToken(cookieToken, requestGeneration);
+        headers['Authorization'] = 'Bearer $cookieToken';
+        return response;
+      }
+      if (response.statusCode != 401) return response;
+    }
+    final refreshToken = _refreshToken;
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      final refreshed = await client
+          .post(
+            buildEndpoint('/api/auth/token/refresh'),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({'refresh_token': refreshToken}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (requestGeneration != generation) return response;
+      if (refreshed.statusCode == 200) {
+        final token = _extractSessionToken(_parseBody(refreshed.body));
+        if (token != null) {
+          await _saveRecoveredToken(token, requestGeneration);
+          if (requestGeneration != generation) return response;
+          headers['Authorization'] = 'Bearer $token';
+          return get(headers);
+        }
+      } else if (refreshed.statusCode >= 500) {
+        return refreshed;
+      }
+    }
+    // One bounded retry also permits recovery from a transient rejected read.
+    if (requestGeneration != generation) return response;
+    return get(headers);
+  }
+
+  Future<void> _saveRecoveredToken(String token, int expectedGeneration) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (expectedGeneration != generation) return;
+    _sessionToken = token;
+    await prefs.setString(_prefsTokenKey, token);
+  }
+
   Future<LoginResult> login({
     required String identifier,
     required String password,
@@ -108,16 +174,18 @@ class SessionManager {
     loading.value = true;
     lastError.value = null;
     try {
-      final response = await http.post(
-        buildEndpoint('/api/auth/login'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'identifier': identifier,
-          'username': identifier,
-          'email': identifier,
-          'password': password,
-        }),
-      );
+      final response = await http
+          .post(
+            buildEndpoint('/api/auth/login'),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'identifier': identifier,
+              'username': identifier,
+              'email': identifier,
+              'password': password,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode >= 500) {
         lastError.value = '服务器错误 (${response.statusCode})';
@@ -187,15 +255,17 @@ class SessionManager {
     loading.value = true;
     lastError.value = null;
     try {
-      final response = await http.post(
-        buildEndpoint('/api/auth/mfa/verify'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'mfa_ticket': ticket,
-          'code': normalizedCode,
-          'method': 'totp',
-        }),
-      );
+      final response = await http
+          .post(
+            buildEndpoint('/api/auth/mfa/verify'),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'mfa_ticket': ticket,
+              'code': normalizedCode,
+              'method': 'totp',
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
 
       final payload = _parseBody(response.body);
       if (response.statusCode != 200) {
@@ -232,6 +302,9 @@ class SessionManager {
 
     await logout();
     _sessionToken = token;
+    _refreshToken = payload['refresh_token'] is String
+        ? payload['refresh_token'] as String
+        : null;
     _cookie = cookie;
     _mfaTicket = null;
     final savedUser = _extractLoginIdentity(payload, fallbackUsername);
@@ -251,6 +324,9 @@ class SessionManager {
     } else {
       await prefs.remove(_prefsTokenKey);
     }
+    if ((_refreshToken ?? '').isNotEmpty) {
+      await prefs.setString(_prefsRefreshKey, _refreshToken!);
+    }
     await prefs.setString(_prefsUserKey, savedUser);
 
     return const LoginResult(success: true, message: '登录成功');
@@ -261,6 +337,7 @@ class SessionManager {
     NetworkAccessPolicy.instance.invalidate(signedIn: false);
     _cookie = null;
     _sessionToken = null;
+    _refreshToken = null;
     _mfaTicket = null;
     currentUser.value = null;
     status.value = SessionStatus.loggedOut;
@@ -276,6 +353,7 @@ class SessionManager {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_prefsCookieKey);
     await prefs.remove(_prefsTokenKey);
+    await prefs.remove(_prefsRefreshKey);
     await prefs.remove(_prefsUserKey);
     await NetworkAccessPolicy.instance.clearCachedAccess();
   }

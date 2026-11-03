@@ -1,5 +1,11 @@
 # Unreleased
 
+- Show server-reported month-to-date usage and allowance on the connector page.
+
+- Connector sync silently retries rejected reads, falls back to a valid saved
+  session cookie, and uses a saved refresh token when the server provides one.
+  Recovery stays on the connector page without a login form. Login/MFA and
+  native tunnel stop requests have bounded timeouts.
 - Background synchronization authentication failures no longer sign users out.
   Saved credentials and profiles persist until explicit logout or connector
   change; unauthorized managed access remains suspended until reauthorized.

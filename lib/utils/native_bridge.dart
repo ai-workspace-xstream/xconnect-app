@@ -1528,7 +1528,9 @@ class NativeBridge {
   static Future<String> _stopPacketTunnelInternal() async {
     if (Platform.isAndroid) {
       try {
-        final result = await _channel.invokeMethod<String>('stopPacketTunnel');
+        final result = await _channel
+            .invokeMethod<String>('stopPacketTunnel')
+            .timeout(const Duration(seconds: 10));
         return result ?? 'Packet Tunnel stop request submitted';
       } on MissingPluginException {
         return '插件未实现';
@@ -1542,7 +1544,9 @@ class NativeBridge {
     if (!_isDarwin) return '当前平台暂不支持';
     _ensureDarwinFlutterApiReady();
     try {
-      await _darwinHostApi.stopPacketTunnel();
+      await _darwinHostApi
+          .stopPacketTunnel()
+          .timeout(const Duration(seconds: 10));
       return 'Packet Tunnel stop request submitted';
     } on MissingPluginException {
       return '插件未实现';
