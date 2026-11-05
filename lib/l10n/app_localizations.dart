@@ -145,6 +145,9 @@ class AppLocalizations {
       'trafficModeSaveFailed': 'Could not save traffic mode. Try again.',
       'trafficModeUnsupportedProfile':
           'This profile does not support Global proxy. Choose Smart routing or use a standard TLS profile.',
+      'trafficModeActive': 'Currently active in tunnel: {0}',
+      'trafficModePendingRestart':
+          'Switched to {0} (takes effect on next connection)',
       'settingsTabTransport': 'Transport',
       'settingsTabConfig': 'Config',
       'settingsTabSystem': 'System Settings',
@@ -596,6 +599,8 @@ curl -I --proxy socks5h://127.0.0.1:1080 --max-time 15 https://grok.com''',
       'trafficModeScope': '适用于标准系统 VPN 配置。IPv6 覆盖取决于设备的 VPN 路由。',
       'trafficModeSaveFailed': '无法保存流量方式，请重试。',
       'trafficModeUnsupportedProfile': '此配置暂不支持全局代理，请选择智能路由或换用标准 TLS 配置。',
+      'trafficModeActive': '当前连接生效：{0}',
+      'trafficModePendingRestart': '已选择 {0}（下次连接时生效）',
       'settingsTabTransport': '传输',
       'settingsTabConfig': '配置',
       'settingsTabSystem': '系统设置',

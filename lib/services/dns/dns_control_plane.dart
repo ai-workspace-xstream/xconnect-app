@@ -170,38 +170,28 @@ class RoutePolicy {
         'inboundTag': proxyResolverInboundTags,
         'outboundTag': 'proxy',
       },
-      if (routeAllTunnelTraffic) ...<Map<String, dynamic>>[
-        <String, dynamic>{
-          'type': 'field',
-          'inboundTag': directResolverInboundTags,
-          'outboundTag': 'direct',
-        },
-        <String, dynamic>{
-          'type': 'field',
-          'inboundTag': <String>[tunInboundTag],
-          'network': 'tcp,udp',
-          'outboundTag': 'proxy',
-          'ruleTag': globalTrafficRuleTag,
-        },
+      <String, dynamic>{
+        'type': 'field',
+        'inboundTag': directResolverInboundTags,
+        'outboundTag': 'direct',
+      },
+      // Business routing: only apply direct domains and direct IP CIDRs in Smart mode.
+      // In Global ("all via VPN") mode, business direct rules are omitted, allowing
+      // all non-system traffic to fall through to the default proxy outbound.
+      if (!routeAllTunnelTraffic) ...<Map<String, dynamic>>[
+        if (domainSets.direct.isNotEmpty)
+          <String, dynamic>{
+            'type': 'field',
+            'domain': domainSets.direct,
+            'outboundTag': 'direct',
+          },
+        if (domainSets.directIpCidrs.isNotEmpty)
+          <String, dynamic>{
+            'type': 'field',
+            'ip': domainSets.directIpCidrs,
+            'outboundTag': 'direct',
+          },
       ],
-      if (domainSets.direct.isNotEmpty)
-        <String, dynamic>{
-          'type': 'field',
-          'domain': domainSets.direct,
-          'outboundTag': 'direct',
-        },
-      if (domainSets.directIpCidrs.isNotEmpty)
-        <String, dynamic>{
-          'type': 'field',
-          'ip': domainSets.directIpCidrs,
-          'outboundTag': 'direct',
-        },
-      if (!routeAllTunnelTraffic)
-        <String, dynamic>{
-          'type': 'field',
-          'inboundTag': directResolverInboundTags,
-          'outboundTag': 'direct',
-        },
     ];
   }
 }

@@ -371,6 +371,9 @@ class NativeBridge {
         );
         if (isTunnelStartAcceptedMessage(result)) {
           _mobileActiveNodeName = nodeName;
+          TrafficRouting.markActiveMode(
+            TrafficRouting.connectionMode ?? TrafficMode.smart,
+          );
         }
         return result ?? 'Packet Tunnel 启动请求已提交';
       } on PlatformException catch (e) {
@@ -407,9 +410,15 @@ class NativeBridge {
             saveResult != 'profile_unchanged') {
           return saveResult;
         }
-        return await _waitForDarwinPacketTunnelConnected(
+        final connectResult = await _waitForDarwinPacketTunnelConnected(
           successMessage: 'TUN 模式启动成功 ($nodeName)',
         );
+        if (isTunnelStartAcceptedMessage(connectResult)) {
+          TrafficRouting.markActiveMode(
+            TrafficRouting.connectionMode ?? TrafficMode.smart,
+          );
+        }
+        return connectResult;
       } on PlatformException catch (e) {
         return '启动失败: ${_platformErrorSummary(e)}';
       } catch (e) {
@@ -502,6 +511,7 @@ class NativeBridge {
   }
 
   static Future<String> _stopNodeForTunnelInternal() async {
+    TrafficRouting.markActiveMode(null);
     // ── Darwin: delegate to official Packet Tunnel control path ────
     if (_isDarwin) {
       final result = await _stopPacketTunnelInternal();
@@ -1099,6 +1109,7 @@ class NativeBridge {
     String sourcePath, {
     required bool isTunMode,
     String? nodeId,
+    bool? routeAllTunnelTraffic,
   }) async {
     final normalized = sourcePath.trim();
     if (normalized.isEmpty) return sourcePath;
@@ -1109,8 +1120,12 @@ class NativeBridge {
       final sourceJsonStr = await sourceFile.readAsString();
       final sourceJson = jsonDecode(sourceJsonStr) as Map<String, dynamic>;
 
-      _applyCurrentTunnelSettings(sourceJson,
-          isTunMode: isTunMode, nodeId: nodeId);
+      _applyCurrentTunnelSettings(
+        sourceJson,
+        isTunMode: isTunMode,
+        nodeId: nodeId,
+        routeAllTunnelTraffic: routeAllTunnelTraffic,
+      );
 
       final updatedJsonStr = const JsonEncoder.withIndent(
         '  ',
@@ -1129,8 +1144,10 @@ class NativeBridge {
     Map<String, dynamic> sourceJson, {
     required bool isTunMode,
     String? nodeId,
-    bool routeAllTunnelTraffic = false,
+    bool? routeAllTunnelTraffic,
   }) {
+    final effectiveRouteAll = routeAllTunnelTraffic ??
+        (TrafficRouting.connectionMode == TrafficMode.allVpn);
     final disableLocalProxyInPacketTunnel = Platform.isIOS && isTunMode;
     final newInboundsStr = VpnConfig.generateInboundsConfig(
       enableSocksProxy: !disableLocalProxyInPacketTunnel,
@@ -1170,7 +1187,7 @@ class NativeBridge {
       sourceJson,
       enableTunnelMode: isTunMode,
       forceBlockQuic: effectiveBlockQuic,
-      routeAllTunnelTraffic: routeAllTunnelTraffic,
+      routeAllTunnelTraffic: effectiveRouteAll,
     );
   }
 
@@ -1209,7 +1226,12 @@ class NativeBridge {
     profile['saveAfterStart'] = true;
     final result =
         await _channel.invokeMethod<String>('startPacketTunnel', profile);
-    if (isTunnelStartAcceptedMessage(result)) _mobileActiveNodeName = nodeName;
+    if (isTunnelStartAcceptedMessage(result)) {
+      _mobileActiveNodeName = nodeName;
+      TrafficRouting.markActiveMode(
+        TrafficRouting.connectionMode ?? TrafficMode.smart,
+      );
+    }
     return result ?? '启动失败: traffic_routing_start_failed';
   }
 
@@ -1246,6 +1268,11 @@ class NativeBridge {
       final saveResult = await _darwinHostApi.savePacketTunnelProfile(profile);
       committed =
           saveResult == 'profile_saved' || saveResult == 'profile_unchanged';
+      if (committed) {
+        TrafficRouting.markActiveMode(
+          TrafficRouting.connectionMode ?? TrafficMode.smart,
+        );
+      }
       return committed ? result : '启动失败: traffic_routing_profile_save_failed';
     } finally {
       if (started && !committed) {
@@ -1867,9 +1894,12 @@ class NativeBridge {
   static String? rewritePersistedTunnelConfig(String raw, {String? nodeId}) {
     final config = jsonDecode(raw) as Map<String, dynamic>;
     VpnConfig.applyXhttpAdvancedSettings(config, nodeId: nodeId);
-    if (config['dns'] is Map) {
-      config['dns'] = VpnConfig.buildSecureDnsConfig();
-    }
+    final routeAll = TrafficRouting.connectionMode == TrafficMode.allVpn;
+    VpnConfig.applySecureDnsConfig(
+      config,
+      enableTunnelMode: true,
+      routeAllTunnelTraffic: routeAll,
+    );
     final updated = const JsonEncoder.withIndent('  ').convert(config);
     return updated == raw ? null : updated;
   }

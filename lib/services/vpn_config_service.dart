@@ -1489,6 +1489,14 @@ class VpnConfig {
           (rule['domain'] as List).contains('full:localhost')) {
         return false;
       }
+      // When Global (all via VPN) mode is requested, strip any existing/template
+      // business direct rules so they do not resurrect on reconnect.
+      if (routeAllTunnelTraffic &&
+          type == 'field' &&
+          outboundTag == 'direct' &&
+          (rule['domain'] != null || rule['ip'] != null)) {
+        return false;
+      }
       return true;
     }).toList();
 

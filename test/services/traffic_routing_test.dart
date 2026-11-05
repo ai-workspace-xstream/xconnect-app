@@ -63,46 +63,96 @@ void main() {
   });
 
   test(
-      'global TUN routing follows DNS and QUIC and precedes business direct rules',
+      'global TUN routing preserves system rules and omits business direct rules',
       () {
     final config = standardConfig();
     VpnConfig.applySecureDnsConfig(config,
         enableTunnelMode: true, forceBlockQuic: true);
     final baseline = jsonEncode(config['routing']);
+
+    // Baseline (Smart mode): contains DNS, QUIC, and direct domain/IP rules
+    final baseRules = (config['routing']['rules'] as List).cast<Map>();
+    expect(baseRules.any((r) => r['port'] == '53'), isTrue);
+    expect(baseRules.any((r) => r['outboundTag'] == 'block'), isTrue);
+    expect(
+      baseRules
+          .any((r) => r['outboundTag'] == 'direct' && r.containsKey('domain')),
+      isTrue,
+    );
+    expect(
+      baseRules.any((r) => r['outboundTag'] == 'direct' && r.containsKey('ip')),
+      isTrue,
+    );
+
+    // Candidate (Global mode, routeAllTunnelTraffic == true)
     final candidate = jsonDecode(jsonEncode(config)) as Map<String, dynamic>;
     VpnConfig.applySecureDnsConfig(candidate,
         enableTunnelMode: true,
         forceBlockQuic: true,
         routeAllTunnelTraffic: true);
     final rules = (candidate['routing']['rules'] as List).cast<Map>();
-    final global = rules.indexWhere((rule) =>
-        rule['outboundTag'] == 'proxy' &&
-        rule['network'] == 'tcp,udp' &&
-        rule['port'] == null);
+
+    // System rules must be preserved
     final dns = rules.indexWhere((rule) => rule['port'] == '53');
     final quic = rules.lastIndexWhere((rule) => rule['outboundTag'] == 'block');
-    final direct = rules.indexWhere(
-        (rule) => rule['outboundTag'] == 'direct' && rule.containsKey('ip'));
     expect(dns, greaterThanOrEqualTo(0));
     expect(quic, greaterThanOrEqualTo(0));
-    expect(global, greaterThan(dns));
-    expect(global, greaterThan(quic));
-    expect(global, lessThan(direct));
-    expect(rules[global]['inboundTag'], ['tun-in']);
+    // Resolver system direct rules (tagged by inbound) must be preserved
     expect(
-        rules.where((rule) =>
-            rule['outboundTag'] == 'direct' && rule.containsKey('ip')),
-        hasLength(1));
-    expect(jsonEncode(config['routing']), baseline);
+      rules.any((r) =>
+          r['outboundTag'] == 'direct' &&
+          (r['inboundTag'] as List?)?.contains('dns-direct-primary') == true),
+      isTrue,
+    );
 
+    // Business direct domain/IP rules must be completely omitted in Global mode
+    expect(
+      rules.any((r) => r['outboundTag'] == 'direct' && r.containsKey('domain')),
+      isFalse,
+    );
+    expect(
+      rules.any((r) => r['outboundTag'] == 'direct' && r.containsKey('ip')),
+      isFalse,
+    );
+
+    // Global routing configuration is idempotent
     final globalRouting = jsonEncode(candidate['routing']);
     VpnConfig.applySecureDnsConfig(candidate,
         enableTunnelMode: true,
         forceBlockQuic: true,
         routeAllTunnelTraffic: true);
     expect(jsonEncode(candidate['routing']), globalRouting);
+
+    // Reverting to Smart mode restores the exact baseline
     VpnConfig.applySecureDnsConfig(candidate,
         enableTunnelMode: true, forceBlockQuic: true);
     expect(jsonEncode(candidate['routing']), baseline);
+  });
+
+  test('active mode tracking and pending restart status', () async {
+    SharedPreferences.setMockInitialValues({});
+    await TrafficRouting.init();
+    expect(TrafficRouting.activeMode.value, isNull);
+    expect(TrafficRouting.isPendingRestart, isFalse);
+
+    // Set active mode when tunnel starts
+    TrafficRouting.markActiveMode(TrafficMode.smart);
+    expect(TrafficRouting.activeMode.value, TrafficMode.smart);
+    expect(TrafficRouting.isPendingRestart, isFalse);
+
+    // User switches mode while tunnel is active -> pending restart is true
+    await TrafficRouting.select(TrafficMode.allVpn);
+    expect(TrafficRouting.selected.value, TrafficMode.allVpn);
+    expect(TrafficRouting.activeMode.value, TrafficMode.smart);
+    expect(TrafficRouting.isPendingRestart, isTrue);
+
+    // Tunnel reconnects with the new mode -> pending restart clears
+    TrafficRouting.markActiveMode(TrafficMode.allVpn);
+    expect(TrafficRouting.isPendingRestart, isFalse);
+
+    // Tunnel disconnects
+    TrafficRouting.markActiveMode(null);
+    expect(TrafficRouting.activeMode.value, isNull);
+    expect(TrafficRouting.isPendingRestart, isFalse);
   });
 }
