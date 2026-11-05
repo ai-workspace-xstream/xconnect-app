@@ -441,15 +441,23 @@ class DarwinHostApiImpl: DarwinHostApi {
   func savedPacketTunnelProfile(
     completion: @escaping (Result<SavedTunnelProfile?, Error>) -> Void
   ) {
-    guard let options = storedPacketTunnelOptions(),
-      let configPath = options["configPath"] as? String,
-      !configPath.isEmpty
-    else {
-      completion(.success(nil))
-      return
+    loadTunnelManager { manager, error in
+      if let error {
+        completion(.failure(error))
+        return
+      }
+      let proto = manager?.protocolConfiguration as? NETunnelProviderProtocol
+      let options = self.packetTunnelOptions(
+        from: proto?.providerConfiguration?["options"] as? [String: Any])
+      guard let options,
+        let configPath = options["configPath"] as? String, !configPath.isEmpty
+      else {
+        completion(.success(nil))
+        return
+      }
+      self.sharedDefaults().set(options, forKey: self.profileOptionsKey)
+      completion(.success(SavedTunnelProfile(configPath: configPath, nodeId: options["nodeId"] as? String)))
     }
-    completion(
-      .success(SavedTunnelProfile(configPath: configPath, nodeId: options["nodeId"] as? String)))
   }
 
   func refreshPacketTunnelProfile(

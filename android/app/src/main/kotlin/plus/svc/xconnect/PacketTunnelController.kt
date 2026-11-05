@@ -137,7 +137,11 @@ internal object PacketTunnelController {
     }
 
     fun status(context: Context): Map<String, Any?> {
+        val savedPath = prefs(context).getString(KEY_PROFILE, null)?.let { raw ->
+            runCatching { JSONObject(raw).optString("configPath") }.getOrNull()
+        }
         return mapOf(
+            "savedConfigPath" to savedPath,
             "status" to readState(context),
             "utun" to emptyList<String>(),
             "lastError" to prefs(context).getString(KEY_ERROR, null),

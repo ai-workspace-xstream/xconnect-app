@@ -1201,8 +1201,11 @@ class NativeBridge {
     Map<String, dynamic> config,
     String nodeName,
   ) async {
-    final profile = await _buildDefaultTunnelProfileMap();
-    profile['configJson'] = jsonEncode(config);
+    final status = await _channel
+        .invokeMapMethod<String, Object?>('getPacketTunnelStatus');
+    final candidate = await _writeRoutingCandidate(config,
+        savedPath: status?['savedConfigPath'] as String?);
+    final profile = await _buildDefaultTunnelProfileMap(configPath: candidate);
     profile['saveAfterStart'] = true;
     final result =
         await _channel.invokeMethod<String>('startPacketTunnel', profile);
@@ -1218,14 +1221,11 @@ class NativeBridge {
     if (pinning.failures.isNotEmpty && Platform.isIOS) {
       throw _TunnelEndpointPinningException(pinning.failures);
     }
-    final root = await _darwinTunnelConfigsPath();
     final saved = await _darwinHostApi.savedPacketTunnelProfile();
-    final first = '$root/traffic-routing-a.json';
-    final second = '$root/traffic-routing-b.json';
-    final candidate = File(saved?.configPath == first ? second : first);
-    await candidate.writeAsString(jsonEncode(pinning.config), flush: true);
+    final candidate = await _writeRoutingCandidate(pinning.config,
+        savedPath: saved?.configPath);
     final profile = await _buildDefaultTunnelProfile(
-      configPath: candidate.path,
+      configPath: candidate,
       excludedIpv4: pinning.pinnedIpv4,
       nodeId: node.managedNodeId,
     );
@@ -1257,6 +1257,18 @@ class NativeBridge {
         }
       }
     }
+  }
+
+  static Future<String> _writeRoutingCandidate(
+    Map<String, dynamic> config, {
+    required String? savedPath,
+  }) async {
+    final root = await _darwinTunnelConfigsPath();
+    final first = '$root/traffic-routing-a.json';
+    final second = '$root/traffic-routing-b.json';
+    final candidate = File(savedPath == first ? second : first);
+    await candidate.writeAsString(jsonEncode(config), flush: true);
+    return candidate.path;
   }
 
   /// Pins the outbound server domains and writes the result to a runtime copy.
