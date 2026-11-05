@@ -1235,6 +1235,12 @@ class VpnConfig {
       }
     }
 
+    final proxy = outbounds.first as Map;
+    final stream = proxy['streamSettings'];
+    if (stream is! Map || stream['security'] != 'tls') return false;
+    final tls = stream['tlsSettings'];
+    if (tls is! Map || tls['allowInsecure'] == true) return false;
+
     final routing = config['routing'];
     if (routing is! Map ||
         routing.keys.any((key) => key != 'rules' && key != 'domainStrategy') ||

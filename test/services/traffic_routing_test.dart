@@ -7,7 +7,14 @@ import 'package:xconnect/services/vpn_config_service.dart';
 
 Map<String, dynamic> standardConfig() => {
       'outbounds': [
-        {'tag': 'proxy', 'protocol': 'vless'},
+        {
+          'tag': 'proxy',
+          'protocol': 'vless',
+          'streamSettings': {
+            'security': 'tls',
+            'tlsSettings': {'allowInsecure': false}
+          },
+        },
         {'tag': 'direct', 'protocol': 'freedom'},
         {'tag': 'block', 'protocol': 'blackhole'},
         {'tag': 'dns', 'protocol': 'dns'},
@@ -42,6 +49,16 @@ void main() {
       'ip': ['203.0.113.1'],
       'outboundTag': 'direct',
     });
+    expect(VpnConfig.supportsTrafficRouting(config), isFalse);
+  });
+
+  test('rejects plaintext and certificate verification bypass', () {
+    final config = standardConfig();
+    final stream = config['outbounds'][0]['streamSettings'] as Map;
+    stream['security'] = 'none';
+    expect(VpnConfig.supportsTrafficRouting(config), isFalse);
+    stream['security'] = 'tls';
+    stream['tlsSettings']['allowInsecure'] = true;
     expect(VpnConfig.supportsTrafficRouting(config), isFalse);
   });
 

@@ -19,7 +19,7 @@
 
 - Apple Packet Tunnel 现有实现通过 `packetFlow` 的内部 selector 和 ivar 探测文件描述符。应用使用 NetworkExtension 并不构成该路径符合公开 API 要求的证据。Apple 送审前须移除对未公开接口的依赖，并用公开 `NEPacketTunnelFlow` 接口或 Apple 明确支持的接口验证数据面。 [Apple 公开 API 要求](https://developer.apple.com/app-store/review/guidelines/#software-requirements) · [NEPacketTunnelFlow](https://developer.apple.com/documentation/networkextension/nepackettunnelflow)
 - 现有权限指引覆盖系统授权步骤。须另行验证签名包的使用前数据披露，核对节点、解析器和本地诊断实际处理的数据与隐私政策的一致性。提交前复查 [隐私政策](https://xworktech.com/privacy/) 和 [支持页](https://xworktech.com/support/) 的内容及可访问性。
-- Android 导入允许传入节点传输的 `security` 值。Play 包要验证所有可用系统 VPN 配置均符合设备到节点加密要求，覆盖显式 `security=none`、旧配置和现有系统入口。若 Play 包仍可通过未加密配置建立 VPN，应先修复再提交。 [Google Play VpnService 政策](https://support.google.com/googleplay/android-developer/answer/12564964?hl=en)
+- 全局代理仅对启用 TLS 证书校验的标准节点生效。Android 既有导入路径允许传入节点传输的 `security` 值。Play 包要验证所有可用系统 VPN 配置均符合设备到节点加密要求，覆盖显式 `security=none`、旧配置和现有系统入口。若 Play 包仍可通过未加密配置建立 VPN，应先修复再提交。 [Google Play VpnService 政策](https://support.google.com/googleplay/android-developer/answer/12564964?hl=en)
 
 ### 审核备注复现路径
 
