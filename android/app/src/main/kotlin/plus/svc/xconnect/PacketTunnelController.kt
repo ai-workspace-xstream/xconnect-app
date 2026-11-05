@@ -14,6 +14,7 @@ internal object PacketTunnelController {
     private const val KEY_ERROR = "last_error"
     private const val KEY_STARTED_AT = "started_at"
     private const val KEY_PERMISSION_PENDING = "permission_pending"
+    private const val KEY_PENDING_PROFILE = "pending_profile_json"
 
     private const val STATE_NOT_CONFIGURED = "not_configured"
     private const val STATE_DISCONNECTED = "disconnected"
@@ -21,14 +22,18 @@ internal object PacketTunnelController {
     private const val STATE_CONNECTED = "connected"
     private const val STATE_INVALID = "invalid"
 
-    fun saveProfile(context: Context, profileMap: Map<*, *>): String {
+    private fun encodeProfile(profileMap: Map<*, *>): String {
         val json = JSONObject()
         profileMap.forEach { (key, value) ->
-            if (key is String) {
+            if (key is String && key != "saveAfterStart") {
                 json.put(key, value)
             }
         }
-        prefs(context).edit().putString(KEY_PROFILE, json.toString()).apply()
+        return json.toString()
+    }
+
+    fun saveProfile(context: Context, profileMap: Map<*, *>): String {
+        prefs(context).edit().putString(KEY_PROFILE, encodeProfile(profileMap)).apply()
         clearError(context)
         clearPendingPermission(context)
         if (readState(context) == STATE_NOT_CONFIGURED) {
@@ -42,10 +47,11 @@ internal object PacketTunnelController {
         profileMap: Map<*, *>?,
         requestPermission: ((Intent) -> Unit)? = null,
     ): String {
-        if (profileMap != null) {
+        val candidate = profileMap?.takeIf { it["saveAfterStart"] == true }?.let(::encodeProfile)
+        if (profileMap != null && candidate == null) {
             saveProfile(context, profileMap)
         }
-        val stored = prefs(context).getString(KEY_PROFILE, null)
+        val stored = candidate ?: prefs(context).getString(KEY_PROFILE, null)
             ?: return "profile_missing"
 
         val prepareIntent = VpnService.prepare(context)
@@ -63,7 +69,7 @@ internal object PacketTunnelController {
             writeState(context, STATE_DISCONNECTED)
             writeError(context, "vpn_permission_required")
             clearStartedAt(context)
-            markPendingPermission(context)
+            markPendingPermission(context, candidate)
             if (requestPermission != null) {
                 requestPermission(prepareIntent)
                 return "vpn_permission_requested"
@@ -80,6 +86,9 @@ internal object PacketTunnelController {
 
     fun onVpnPermissionResult(context: Context, granted: Boolean): String {
         android.util.Log.i(LOG_TAG, "onVpnPermissionResult: granted=$granted")
+        if (!prefs(context).getBoolean(KEY_PERMISSION_PENDING, false)) {
+            return "vpn_permission_request_expired"
+        }
         if (!granted) {
             writeState(context, STATE_INVALID)
             writeError(context, "vpn_permission_denied")
@@ -88,7 +97,8 @@ internal object PacketTunnelController {
             return "vpn_permission_denied"
         }
 
-        val stored = prefs(context).getString(KEY_PROFILE, null)
+        val stored = prefs(context).getString(KEY_PENDING_PROFILE, null)
+            ?: prefs(context).getString(KEY_PROFILE, null)
             ?: return "profile_missing"
         writeState(context, STATE_CONNECTING)
         clearError(context)
@@ -161,11 +171,14 @@ internal object PacketTunnelController {
         )
     }
 
-    fun markConnected(context: Context) {
+    fun markConnected(context: Context, profileJson: String) {
         AndroidPacketTunnelMetrics.reset(context)
-        writeState(context, STATE_CONNECTED)
-        clearError(context)
-        prefs(context).edit().putLong(KEY_STARTED_AT, System.currentTimeMillis() / 1000L).apply()
+        prefs(context).edit()
+            .putString(KEY_PROFILE, profileJson)
+            .putString(KEY_STATE, STATE_CONNECTED)
+            .remove(KEY_ERROR)
+            .putLong(KEY_STARTED_AT, System.currentTimeMillis() / 1000L)
+            .apply()
     }
 
     fun markDisconnected(context: Context) {
@@ -214,11 +227,14 @@ internal object PacketTunnelController {
         prefs(context).edit().remove(KEY_STARTED_AT).apply()
     }
 
-    private fun markPendingPermission(context: Context) {
-        prefs(context).edit().putBoolean(KEY_PERMISSION_PENDING, true).apply()
+    private fun markPendingPermission(context: Context, profile: String?) {
+        prefs(context).edit()
+            .putBoolean(KEY_PERMISSION_PENDING, true)
+            .putString(KEY_PENDING_PROFILE, profile)
+            .apply()
     }
 
     private fun clearPendingPermission(context: Context) {
-        prefs(context).edit().remove(KEY_PERMISSION_PENDING).apply()
+        prefs(context).edit().remove(KEY_PERMISSION_PENDING).remove(KEY_PENDING_PROFILE).apply()
     }
 }

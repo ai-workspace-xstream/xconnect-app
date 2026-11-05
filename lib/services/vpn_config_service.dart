@@ -1210,6 +1210,77 @@ class VpnConfig {
         dnsProxySecondaryTag: _dnsProxySecondaryTag,
       );
 
+  /// Only the generated XConnect layout can safely give TUN traffic priority
+  /// over its existing application rules. Imported routing graphs keep their
+  /// original semantics.
+  static bool supportsTrafficRouting(Map<String, dynamic> config) {
+    final outbounds = config['outbounds'];
+    if (outbounds is! List || outbounds.length < 4 || outbounds.length > 5) {
+      return false;
+    }
+    const expected = {
+      'proxy': 'vless',
+      'direct': 'freedom',
+      'block': 'blackhole',
+      'dns': 'dns',
+      BusinessDnsPolicy.outboundTag: 'dns',
+    };
+    var index = 0;
+    for (final outbound in outbounds) {
+      final entry = expected.entries.elementAt(index++);
+      if (outbound is! Map ||
+          outbound['tag'] != entry.key ||
+          outbound['protocol'] != entry.value) {
+        return false;
+      }
+    }
+
+    final routing = config['routing'];
+    if (routing is! Map ||
+        routing.keys.any((key) => key != 'rules' && key != 'domainStrategy') ||
+        (routing['domainStrategy'] != null &&
+            routing['domainStrategy'] != 'AsIs')) {
+      return false;
+    }
+    final rules = routing['rules'];
+    if (rules is! List) return false;
+    final policy = RoutePolicy(
+      domainSets: _secureDnsControlPlane().routePolicy.domainSets,
+      forceTunnelDnsToProxy: true,
+    );
+    final generated = policy.buildSecureDnsRules(
+      enableTunnelMode: true,
+      blockQuic: true,
+      tunInboundTag: _tunInboundTag,
+      directResolverInboundTags: [_dnsDirectPrimaryTag, _dnsDirectSecondaryTag],
+      proxyResolverInboundTags: [_dnsProxyPrimaryTag, _dnsProxySecondaryTag],
+    );
+    generated.add({
+      ...generated.first,
+      'outboundTag': BusinessDnsPolicy.outboundTag,
+    });
+    generated.add({
+      ...generated.firstWhere((rule) => listEquals(rule['inboundTag'] as List?,
+          [_dnsProxyPrimaryTag, _dnsProxySecondaryTag])),
+      'inboundTag': [
+        _dnsProxyPrimaryTag,
+        _dnsProxySecondaryTag,
+        ResolverServerPolicy.proxyFallbackTag
+      ],
+    });
+    return rules.every((rule) =>
+        rule is Map &&
+        generated.any((candidate) =>
+            candidate.length == rule.length &&
+            candidate.entries.every((entry) {
+              final actual = rule[entry.key];
+              final expected = entry.value;
+              return expected is List
+                  ? actual is List && listEquals(expected, actual)
+                  : expected == actual;
+            })));
+  }
+
   /// Control-plane tuning may replace the DoH upstream timeout
   /// ([ResolverServerPolicy.dohTimeoutMs] by default) and turn on parallel
   /// queries; resolver addresses and routing are never tunable.
@@ -1237,6 +1308,7 @@ class VpnConfig {
     Map<String, dynamic> config, {
     required bool enableTunnelMode,
     bool? forceBlockQuic,
+    bool routeAllTunnelTraffic = false,
   }) {
     final outbounds = List<dynamic>.from(config['outbounds'] as List? ?? []);
     final reserved = outbounds.where(
@@ -1328,6 +1400,7 @@ class VpnConfig {
       forceBlockQuic: forceBlockQuic,
       tunnelDnsOutboundTag: enabled ? BusinessDnsPolicy.outboundTag : 'proxy',
       removeBusinessDnsRule: !hasConflict,
+      routeAllTunnelTraffic: routeAllTunnelTraffic,
     );
   }
 
@@ -1335,6 +1408,7 @@ class VpnConfig {
     Object? existingRouting, {
     required bool enableTunnelMode,
     bool? forceBlockQuic,
+    bool routeAllTunnelTraffic = false,
     String tunnelDnsOutboundTag = 'proxy',
     bool removeBusinessDnsRule = false,
   }) {
@@ -1351,6 +1425,14 @@ class VpnConfig {
       final type = rule['type'];
       final outboundTag = rule['outboundTag'];
       final inboundTag = rule['inboundTag'];
+      if (rule['ruleTag'] == RoutePolicy.globalTrafficRuleTag &&
+          type == 'field' &&
+          outboundTag == 'proxy' &&
+          rule['network'] == 'tcp,udp' &&
+          listEquals(
+              inboundTag is List ? inboundTag : null, [_tunInboundTag])) {
+        return false;
+      }
       if (type == 'field' &&
           outboundTag == 'block' &&
           rule['network'] == 'udp' &&
@@ -1416,6 +1498,7 @@ class VpnConfig {
           .map((resolver) => resolver.tag)
           .toList(),
       tunnelDnsOutboundTag: tunnelDnsOutboundTag,
+      routeAllTunnelTraffic: enableTunnelMode && routeAllTunnelTraffic,
     );
     routing['domainStrategy'] = 'AsIs';
     routing['rules'] = <dynamic>[...secureDnsRules, ...existingRules];

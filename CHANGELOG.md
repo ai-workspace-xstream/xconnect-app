@@ -1,5 +1,8 @@
 # Unreleased
 
+- Add Smart routing and Global proxy for standard System VPN profiles on macOS,
+  iOS, Android, Windows, and Linux. The preference applies on the next app connection.
+
 - Show server-reported month-to-date usage and allowance on the connector page.
 
 - Connector sync silently retries rejected reads, falls back to a valid saved

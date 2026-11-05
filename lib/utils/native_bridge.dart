@@ -10,6 +10,7 @@ import '../../services/tunnel_data_plane_probe.dart';
 import '../../services/tunnel_endpoint_resolver.dart';
 import '../../services/vpn_config_service.dart'; // 引入新的 VpnConfig 类
 import '../services/tuning/client_tuning.dart';
+import '../services/traffic_routing.dart';
 import '../bindings/bridge_bindings.dart';
 import '../app/darwin_host_api.g.dart' as darwin_host;
 import '../widgets/log_console.dart' show LogLevel;
@@ -330,11 +331,21 @@ class NativeBridge {
       VpnConfig.updateNode(node);
       await VpnConfig.saveToFile();
     }
-    final runtimeConfigPath = await _prepareCanonicalTunnelConfigPath(
-      sourceConfigPath,
-      isTunMode: true,
-      nodeId: node.managedNodeId,
-    );
+    final Map<String, dynamic>? routingConfig;
+    final String runtimeConfigPath;
+    try {
+      routingConfig = await _compileTrafficRouting(sourceConfigPath, node);
+      runtimeConfigPath = routingConfig == null
+          ? await _prepareCanonicalTunnelConfigPath(sourceConfigPath,
+              isTunMode: true, nodeId: node.managedNodeId)
+          : sourceConfigPath;
+    } on FormatException catch (e) {
+      return e.message == 'traffic_routing_unsupported_profile'
+          ? '启动失败: traffic_routing_unsupported_profile'
+          : '启动失败: traffic_routing_compile_failed';
+    } catch (_) {
+      return '启动失败: traffic_routing_compile_failed';
+    }
 
     // ── Android: MethodChannel → savePacketTunnelProfile + startPacketTunnel
     if (Platform.isAndroid) {
@@ -345,6 +356,9 @@ class NativeBridge {
         _mobileActiveNodeName = null;
         // Pin while the tunnel is down: once it is up, the system resolver is
         // captured and this same lookup is the one that deadlocks.
+        if (routingConfig != null) {
+          return await _startAndroidRoutingCandidate(routingConfig, nodeName);
+        }
         final pinned = await _prepareRuntimeTunnelConfig(runtimeConfigPath);
         final profile = await _buildDefaultTunnelProfileMap(
           configPath: pinned.configPath,
@@ -374,6 +388,9 @@ class NativeBridge {
           return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
         }
         await _stopIosLocalEngineIfNeeded();
+        if (routingConfig != null) {
+          return await _startDarwinRoutingCandidate(routingConfig, node);
+        }
         // Pin while the tunnel is down: once it is up, the system resolver is
         // captured and this same lookup is the one that deadlocks.
         final pinned = await _prepareRuntimeTunnelConfig(runtimeConfigPath);
@@ -404,7 +421,9 @@ class NativeBridge {
     if (Platform.isWindows) {
       try {
         await _stopOtherRunningNodes(nodeName);
-        final configJson = await File(runtimeConfigPath).readAsString();
+        final configJson = routingConfig == null
+            ? await File(runtimeConfigPath).readAsString()
+            : jsonEncode(routingConfig);
         if (_useFfi) {
           // UAC and core readiness may take seconds; keep the UI responsive.
           final result = await Isolate.run(() => startXray(configJson));
@@ -437,7 +456,9 @@ class NativeBridge {
         if (helperResult['ok'] != true) {
           return '启动失败: ${(helperResult['message'] as String?) ?? 'tunnel helper failed'}';
         }
-        final configJson = await File(runtimeConfigPath).readAsString();
+        final configJson = routingConfig == null
+            ? await File(runtimeConfigPath).readAsString()
+            : jsonEncode(routingConfig);
         if (_useFfi) {
           final configPtr = configJson.toNativeUtf8();
           final resPtr = _ffi.startXray(configPtr.cast());
@@ -1088,48 +1109,8 @@ class NativeBridge {
       final sourceJsonStr = await sourceFile.readAsString();
       final sourceJson = jsonDecode(sourceJsonStr) as Map<String, dynamic>;
 
-      final disableLocalProxyInPacketTunnel = Platform.isIOS && isTunMode;
-      final newInboundsStr = VpnConfig.generateInboundsConfig(
-        enableSocksProxy: !disableLocalProxyInPacketTunnel,
-        enableHttpProxy: !disableLocalProxyInPacketTunnel,
-        enableTunnelMode: isTunMode,
-      );
-      sourceJson['inbounds'] = jsonDecode(newInboundsStr);
-
-      final outbounds = sourceJson['outbounds'] as List<dynamic>?;
-      bool proxySupportsUdp443 = false;
-      if (outbounds != null) {
-        for (int i = 0; i < outbounds.length; i++) {
-          final outbound = outbounds[i];
-          if (outbound is Map<String, dynamic> && outbound['tag'] == 'proxy') {
-            final normalizedOutbound =
-                VpnConfig.normalizeProxyOutboundFlow(outbound);
-            proxySupportsUdp443 =
-                VpnConfig.proxyOutboundSupportsUdp443(normalizedOutbound);
-            outbounds[i] = normalizedOutbound;
-            break;
-          }
-        }
-      }
-
-      // Apply current advanced settings to legacy XHTTP configs before the
-      // Packet Tunnel or local engine reads the file.
-      VpnConfig.applyXhttpAdvancedSettings(
-        sourceJson,
-        nodeId: nodeId,
-      );
-      VpnConfig.applyRuntimeLogLevel(sourceJson);
-
-      final effectiveBlockQuic =
-          !GlobalState.http3Passthrough.value || !proxySupportsUdp443;
-
-      VpnConfig.applySecureDnsConfig(
-        sourceJson,
-        enableTunnelMode: isTunMode,
-        forceBlockQuic: effectiveBlockQuic,
-      );
-
-      // Outbounds were already processed above for proxy flow normalization
+      _applyCurrentTunnelSettings(sourceJson,
+          isTunMode: isTunMode, nodeId: nodeId);
 
       final updatedJsonStr = const JsonEncoder.withIndent(
         '  ',
@@ -1141,6 +1122,140 @@ class NativeBridge {
       return normalized;
     } catch (_) {
       return normalized;
+    }
+  }
+
+  static void _applyCurrentTunnelSettings(
+    Map<String, dynamic> sourceJson, {
+    required bool isTunMode,
+    String? nodeId,
+    bool routeAllTunnelTraffic = false,
+  }) {
+    final disableLocalProxyInPacketTunnel = Platform.isIOS && isTunMode;
+    final newInboundsStr = VpnConfig.generateInboundsConfig(
+      enableSocksProxy: !disableLocalProxyInPacketTunnel,
+      enableHttpProxy: !disableLocalProxyInPacketTunnel,
+      enableTunnelMode: isTunMode,
+    );
+    sourceJson['inbounds'] = jsonDecode(newInboundsStr);
+
+    final outbounds = sourceJson['outbounds'] as List<dynamic>?;
+    bool proxySupportsUdp443 = false;
+    if (outbounds != null) {
+      for (int i = 0; i < outbounds.length; i++) {
+        final outbound = outbounds[i];
+        if (outbound is Map<String, dynamic> && outbound['tag'] == 'proxy') {
+          final normalizedOutbound =
+              VpnConfig.normalizeProxyOutboundFlow(outbound);
+          proxySupportsUdp443 =
+              VpnConfig.proxyOutboundSupportsUdp443(normalizedOutbound);
+          outbounds[i] = normalizedOutbound;
+          break;
+        }
+      }
+    }
+
+    // Apply current advanced settings to legacy XHTTP configs before the
+    // Packet Tunnel or local engine reads the file.
+    VpnConfig.applyXhttpAdvancedSettings(
+      sourceJson,
+      nodeId: nodeId,
+    );
+    VpnConfig.applyRuntimeLogLevel(sourceJson);
+
+    final effectiveBlockQuic =
+        !GlobalState.http3Passthrough.value || !proxySupportsUdp443;
+
+    VpnConfig.applySecureDnsConfig(
+      sourceJson,
+      enableTunnelMode: isTunMode,
+      forceBlockQuic: effectiveBlockQuic,
+      routeAllTunnelTraffic: routeAllTunnelTraffic,
+    );
+  }
+
+  static Future<Map<String, dynamic>?> _compileTrafficRouting(
+    String sourcePath,
+    VpnNode node,
+  ) async {
+    final mode = TrafficRouting.connectionMode;
+    if (mode == null) return null;
+    final raw = jsonDecode(await File(sourcePath).readAsString());
+    if (raw is! Map<String, dynamic> ||
+        !VpnConfig.supportsTrafficRouting(raw)) {
+      if (mode == TrafficMode.allVpn) {
+        throw const FormatException('traffic_routing_unsupported_profile');
+      }
+      return null;
+    }
+    _applyCurrentTunnelSettings(
+      raw,
+      isTunMode: true,
+      nodeId: node.managedNodeId,
+      routeAllTunnelTraffic: mode == TrafficMode.allVpn,
+    );
+    return raw;
+  }
+
+  static Future<String> _startAndroidRoutingCandidate(
+    Map<String, dynamic> config,
+    String nodeName,
+  ) async {
+    final profile = await _buildDefaultTunnelProfileMap();
+    profile['configJson'] = jsonEncode(config);
+    profile['saveAfterStart'] = true;
+    final result =
+        await _channel.invokeMethod<String>('startPacketTunnel', profile);
+    if (isTunnelStartAcceptedMessage(result)) _mobileActiveNodeName = nodeName;
+    return result ?? '启动失败: traffic_routing_start_failed';
+  }
+
+  static Future<String> _startDarwinRoutingCandidate(
+    Map<String, dynamic> config,
+    VpnNode node,
+  ) async {
+    final pinning = await TunnelEndpointResolver().pinOutboundEndpoints(config);
+    if (pinning.failures.isNotEmpty && Platform.isIOS) {
+      throw _TunnelEndpointPinningException(pinning.failures);
+    }
+    final root = await _darwinTunnelConfigsPath();
+    final saved = await _darwinHostApi.savedPacketTunnelProfile();
+    final first = '$root/traffic-routing-a.json';
+    final second = '$root/traffic-routing-b.json';
+    final candidate = File(saved?.configPath == first ? second : first);
+    await candidate.writeAsString(jsonEncode(pinning.config), flush: true);
+    final profile = await _buildDefaultTunnelProfile(
+      configPath: candidate.path,
+      excludedIpv4: pinning.pinnedIpv4,
+      nodeId: node.managedNodeId,
+    );
+    var started = false;
+    var committed = false;
+    try {
+      await _darwinHostApi.startPacketTunnelCandidate(profile);
+      started = true;
+      final result = await _waitForDarwinPacketTunnelConnected(
+        successMessage: 'TUN 模式启动成功 (${node.name})',
+        allowIosProfileRepair: false,
+      );
+      if (!isTunnelStartAcceptedMessage(result)) return result;
+      final current = VpnConfig.getNodeByName(node.name);
+      if (current == null || !VpnConfig.canUseNode(current)) {
+        return 'Connection is not authorized';
+      }
+      final saveResult = await _darwinHostApi.savePacketTunnelProfile(profile);
+      committed =
+          saveResult == 'profile_saved' || saveResult == 'profile_unchanged';
+      return committed ? result : '启动失败: traffic_routing_profile_save_failed';
+    } finally {
+      if (started && !committed) {
+        try {
+          await _darwinHostApi.stopPacketTunnel();
+        } catch (_) {
+          addAppLog('Traffic routing candidate stop failed',
+              level: LogLevel.warning);
+        }
+      }
     }
   }
 
@@ -1360,7 +1475,10 @@ class NativeBridge {
     _darwinFlutterApiReady = true;
   }
 
-  static Future<String> prepareNodeForTunnel(String nodeName) async {
+  static Future<String> prepareNodeForTunnel(String nodeName) =>
+      _runSerializedConnectionOp(() => _prepareNodeForTunnel(nodeName));
+
+  static Future<String> _prepareNodeForTunnel(String nodeName) async {
     if (!Platform.isIOS) {
       return '当前平台无需预注册 Packet Tunnel 配置';
     }
@@ -1380,6 +1498,17 @@ class NativeBridge {
       node.configPath = sourceConfigPath;
       VpnConfig.updateNode(node);
       await VpnConfig.saveToFile();
+    }
+
+    _ensureDarwinFlutterApiReady();
+    try {
+      final saved = await _darwinHostApi.savedPacketTunnelProfile();
+      if (saved != null &&
+          RegExp(r'/traffic-routing-[ab]\.json$').hasMatch(saved.configPath)) {
+        return 'iOS System VPN profile will update on the next app connection';
+      }
+    } on PlatformException catch (e) {
+      return '保存失败: ${_platformErrorSummary(e)}';
     }
 
     final runtimeConfigPath = await _prepareCanonicalTunnelConfigPath(
@@ -1443,81 +1572,11 @@ class NativeBridge {
   }
 
   static Future<String> _startPacketTunnelInternal() async {
-    if (Platform.isAndroid) {
-      try {
-        if (!await _ensurePacketTunnelStoppedBeforeStart()) {
-          return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
-        }
-        final resolved = await _resolveTunnelNodeConfig();
-        if (resolved == null) {
-          return '未找到可用的节点配置';
-        }
-        final canonicalPath = await _prepareCanonicalTunnelConfigPath(
-          resolved.configPath,
-          isTunMode: true,
-          nodeId: resolved.node.managedNodeId,
-        );
-        stopXray();
-        _mobileActiveNodeName = null;
-        final pinned = await _prepareRuntimeTunnelConfig(canonicalPath);
-        final profile = await _buildDefaultTunnelProfileMap(
-          configPath: pinned.configPath,
-          excludedIpv4: pinned.excludedIpv4,
-        );
-        await _channel.invokeMethod<String>('savePacketTunnelProfile', profile);
-        final result = await _channel.invokeMethod<String>(
-          'startPacketTunnel',
-          profile,
-        );
-        return result ?? 'Packet Tunnel start request submitted';
-      } on MissingPluginException {
-        return '插件未实现';
-      } on PlatformException catch (e) {
-        return '启动失败: ${_platformErrorSummary(e)}';
-      } catch (e) {
-        return '启动失败: $e';
-      }
-    }
-
-    if (!_isDarwin) return '当前平台暂不支持';
-    _ensureDarwinFlutterApiReady();
-    try {
-      if (!await _ensurePacketTunnelStoppedBeforeStart()) {
-        return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
-      }
-      await _stopIosLocalEngineIfNeeded();
-      final resolved = await _resolveTunnelNodeConfig();
-      if (resolved == null) {
-        return '未找到可用的节点配置';
-      }
-      final canonicalPath = await _prepareCanonicalTunnelConfigPath(
-        resolved.configPath,
-        isTunMode: true,
-        nodeId: resolved.node.managedNodeId,
-      );
-      final pinned = await _prepareRuntimeTunnelConfig(canonicalPath);
-      final profile = await _buildDefaultTunnelProfile(
-        configPath: pinned.configPath,
-        excludedIpv4: pinned.excludedIpv4,
-        nodeId: resolved.node.managedNodeId,
-      );
-      final saveResult = Platform.isIOS
-          ? await _saveIosPacketTunnelProfileIfNeeded(profile)
-          : await _darwinHostApi.savePacketTunnelProfile(profile);
-      await _darwinHostApi.startPacketTunnel();
-      if (saveResult != 'profile_saved' && saveResult != 'profile_unchanged') {
-        return saveResult;
-      }
-      return await _waitForDarwinPacketTunnelConnected(
-        successMessage: 'Packet Tunnel 已连接',
-      );
-    } on MissingPluginException {
-      return '插件未实现';
-    } on PlatformException catch (e) {
-      return '启动失败: ${_platformErrorSummary(e)}';
-    } catch (e) {
-      return '启动失败: $e';
-    }
+    if (!_isDarwin && !Platform.isAndroid) return '当前平台暂不支持';
+    final resolved = await _resolveTunnelNodeConfig();
+    if (resolved == null) return '未找到可用的节点配置';
+    if (Platform.isAndroid) stopXray();
+    return _startNodeForTunnelInternal(resolved.node.name);
   }
 
   /// Stop Packet Tunnel on Darwin platforms.
@@ -1754,7 +1813,10 @@ class NativeBridge {
   /// values without Flutter. Withdrawn overrides are restored from the record
   /// in the config file; the running session keeps its values until it next
   /// starts. Never creates a VPN configuration.
-  static Future<String> refreshPersistedTunnelProfileTuning() async {
+  static Future<String> refreshPersistedTunnelProfileTuning() =>
+      _runSerializedConnectionOp(_refreshPersistedTunnelProfileTuning);
+
+  static Future<String> _refreshPersistedTunnelProfileTuning() async {
     if (!_isDarwin) return 'unsupported';
     _ensureDarwinFlutterApiReady();
     try {

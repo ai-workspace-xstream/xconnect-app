@@ -164,6 +164,10 @@ abstract class DarwinHostApi {
   @async
   void startPacketTunnel();
 
+  /// Starts with transient options. The saved system profile is left intact.
+  @async
+  void startPacketTunnelCandidate(TunnelProfile profile);
+
   @async
   void stopPacketTunnel();
 

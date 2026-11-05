@@ -117,6 +117,8 @@ class DnsPolicy {
 }
 
 class RoutePolicy {
+  static const globalTrafficRuleTag = 'xconnect-global-tunnel-traffic';
+
   final DomainSets domainSets;
 
   /// Desktop preference. iOS always supplies true because allowing DNS to
@@ -135,6 +137,7 @@ class RoutePolicy {
     required List<String> directResolverInboundTags,
     required List<String> proxyResolverInboundTags,
     String tunnelDnsOutboundTag = 'proxy',
+    bool routeAllTunnelTraffic = false,
   }) {
     return <Map<String, dynamic>>[
       if (enableTunnelMode && forceTunnelDnsToProxy)
@@ -167,6 +170,20 @@ class RoutePolicy {
         'inboundTag': proxyResolverInboundTags,
         'outboundTag': 'proxy',
       },
+      if (routeAllTunnelTraffic) ...<Map<String, dynamic>>[
+        <String, dynamic>{
+          'type': 'field',
+          'inboundTag': directResolverInboundTags,
+          'outboundTag': 'direct',
+        },
+        <String, dynamic>{
+          'type': 'field',
+          'inboundTag': <String>[tunInboundTag],
+          'network': 'tcp,udp',
+          'outboundTag': 'proxy',
+          'ruleTag': globalTrafficRuleTag,
+        },
+      ],
       if (domainSets.direct.isNotEmpty)
         <String, dynamic>{
           'type': 'field',
@@ -179,11 +196,12 @@ class RoutePolicy {
           'ip': domainSets.directIpCidrs,
           'outboundTag': 'direct',
         },
-      <String, dynamic>{
-        'type': 'field',
-        'inboundTag': directResolverInboundTags,
-        'outboundTag': 'direct',
-      },
+      if (!routeAllTunnelTraffic)
+        <String, dynamic>{
+          'type': 'field',
+          'inboundTag': directResolverInboundTags,
+          'outboundTag': 'direct',
+        },
     ];
   }
 }

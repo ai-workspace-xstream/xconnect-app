@@ -150,7 +150,7 @@ class XConnectPacketTunnelService : VpnService() {
             }
 
             android.util.Log.i(LOG_TAG, "packet tunnel engine started fd=$tunFd")
-            PacketTunnelController.markConnected(this)
+            PacketTunnelController.markConnected(this, profileJson)
         } catch (t: Throwable) {
             android.util.Log.e(LOG_TAG, "packet tunnel start failed: ${t.message}")
             PacketTunnelController.markFailed(this, t.message ?: "start_failed")
