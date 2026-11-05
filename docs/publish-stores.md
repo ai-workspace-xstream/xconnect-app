@@ -2,6 +2,32 @@
 
 本文档介绍如何在各大应用商店为 CI/CD 流程生成所需的凭证，并存入 GitHub Secrets 供 publish-stores 工作流使用。
 
+## System VPN 流量方式审核
+
+商店描述和截图使用与应用一致的 **智能路由** 和 **全局代理**。可用的说明为「智能路由按规则决定直连或经 VPN 节点转发。全局代理将系统 VPN 接管的业务流量经节点转发。DNS、系统路由和地址族覆盖取决于当前设备及配置。」设置下次从应用连接时生效。截图使用对应待审包的真实界面。
+
+### 送审前核对
+
+| 渠道 | 核对项 |
+| --- | --- |
+| App Store（iOS／macOS） | 用组织开发者账户和签名正确的 Network Extension。首次使用或购买前在 App 内说明收集的数据及用途，并让隐私政策和 App Privacy 表单与实际行为一致。对需要 VPN 许可的发行地区，在审核备注提供相应许可信息。用签名包验收 IPv6-only／NAT64、系统 VPN 授权和系统重连。 [Apple 审核指南 §2.5、§5.4](https://developer.apple.com/app-store/review/guidelines/) |
+| Google Play | 在商店详情注明 `VpnService`，核对 VPN 声明及 Data safety。若通过 `VpnService` 访问或收集个人及敏感数据，在正常使用流程中单独显著披露数据、用途和分享方式，并在访问前取得用户主动同意。用已签名的 Play 包验证设备到节点加密，以及拒绝授权、重试和断开流程。用途发生变化时重新提交 VPN 声明。 [Google Play VpnService 政策](https://support.google.com/googleplay/android-developer/answer/12564964?hl=en) |
+| Microsoft Store | 核对 Partner Center 隐私 URL 与实际数据处理。用提交的 Windows 包演示普通权限启动、Wintun／UAC 授权、拒绝后可重试和断开恢复。让审核员从普通用户账户复现。 [Microsoft Store 产品政策 §10.5、§10.6](https://learn.microsoft.com/en-us/windows/apps/publish/store-policies) |
+| Linux 安装包 | 按具体分发渠道的包规则验收。测试普通用户运行、权限辅助组件授权和断开后的系统网络恢复。 |
+
+### 当前代码需要补证的项目
+
+- Apple Packet Tunnel 现有实现通过 `packetFlow` 的内部 selector 和 ivar 探测文件描述符。应用使用 NetworkExtension 并不构成该路径符合公开 API 要求的证据。Apple 送审前须移除对未公开接口的依赖，并用公开 `NEPacketTunnelFlow` 接口或 Apple 明确支持的接口验证数据面。 [Apple 公开 API 要求](https://developer.apple.com/app-store/review/guidelines/#software-requirements) · [NEPacketTunnelFlow](https://developer.apple.com/documentation/networkextension/nepackettunnelflow)
+- 现有权限指引覆盖系统授权步骤。须另行验证签名包的使用前数据披露，核对节点、解析器和本地诊断实际处理的数据与隐私政策的一致性。提交前复查 [隐私政策](https://xworktech.com/privacy/) 和 [支持页](https://xworktech.com/support/) 的内容及可访问性。
+- Android 导入允许传入节点传输的 `security` 值。Play 包要验证所有可用系统 VPN 配置均符合设备到节点加密要求，覆盖显式 `security=none`、旧配置和现有系统入口。若 Play 包仍可通过未加密配置建立 VPN，应先修复再提交。 [Google Play VpnService 政策](https://support.google.com/googleplay/android-developer/answer/12564964?hl=en)
+
+### 审核备注复现路径
+
+1. 提供审核可用的标准加密节点。需要登录时，在商店后台的审核访问字段提供限权测试账号及说明。
+2. 在 App 内查看数据与权限说明，选择系统 VPN，按系统提示授权。
+3. 从 **设置 → 路由** 选择智能路由并连接，检查一个直连目标和一个经 VPN 节点的目标。
+4. 切换全局代理，从 App 重连，验证由系统 VPN 接管的业务流量的出口。断开并确认系统网络恢复。Apple 再从系统设置连接，核对使用最近保存的配置。
+
 ## Apple App Store
 
 1. 登录 [App Store Connect](https://appstoreconnect.apple.com/)。
