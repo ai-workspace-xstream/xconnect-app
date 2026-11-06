@@ -1,4 +1,6 @@
 import '../widgets/quota_notification_button.dart';
+import '../widgets/traffic_mode_group.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -816,7 +818,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.alt_route,
           label: context.l10n.get('settingsTabRouting'),
         ),
-        blocks: [_routingGroup(context, isMobile: isMobile)],
+        blocks: [
+          if (Platform.isMacOS ||
+              Platform.isIOS ||
+              Platform.isAndroid ||
+              Platform.isWindows ||
+              Platform.isLinux)
+            const TrafficModeGroup(),
+          _routingGroup(context, isMobile: isMobile),
+        ],
       ),
       (
         id: SettingsTabId.transport,

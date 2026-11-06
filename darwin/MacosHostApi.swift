@@ -127,9 +127,6 @@ class DarwinHostApiImpl: DarwinHostApi {
     let previousOptions = storedPacketTunnelOptions()
     let options = buildPacketTunnelOptions(profile: profile)
     let staleManagerHint = readLastError()
-    defaults.set(options, forKey: profileOptionsKey)
-    defaults.removeObject(forKey: statusErrorKey)
-
     #if os(iOS) || os(macOS)
       loadOrCreateTunnelManager(staleManagerHint: staleManagerHint) { manager, error in
         if let error {
@@ -168,12 +165,15 @@ class DarwinHostApiImpl: DarwinHostApi {
           self.managerHasLatestOptions(manager, providerId: providerId, options: options),
           !self.shouldForceManagerRecreation(staleManagerHint: staleManagerHint)
         {
+          self.clearLastError()
           self.emitPacketTunnelStateChanged()
           completion(.success("profile_unchanged"))
           return
         }
 
-        self.prepareManagerWithLatestOptions(manager: manager, options: options) {
+        self.prepareManagerWithLatestOptions(
+          manager: manager, options: options, reloadAfterSave: false
+        ) {
           prepared, prepareError in
           if let prepareError {
             let errorMessage = self.describeError(prepareError)
@@ -206,11 +206,15 @@ class DarwinHostApiImpl: DarwinHostApi {
             return
           }
 
+          defaults.set(options, forKey: self.profileOptionsKey)
+          self.clearLastError()
           self.emitPacketTunnelStateChanged()
           completion(.success("profile_saved"))
         }
       }
     #else
+      defaults.set(options, forKey: profileOptionsKey)
+      clearLastError()
       emitPacketTunnelStateChanged()
       completion(.success("profile_saved"))
     #endif
@@ -310,6 +314,37 @@ class DarwinHostApiImpl: DarwinHostApi {
     }
   }
 
+  func startPacketTunnelCandidate(
+    profile: TunnelProfile,
+    completion: @escaping (Result<Void, Error>) -> Void
+  ) {
+    let options = buildPacketTunnelOptions(profile: profile)
+    guard let config = options["config"] as? Data, !config.isEmpty else {
+      completion(.failure(PigeonError(
+        code: "candidate-config-unavailable", message: "Candidate configuration is unavailable",
+        details: nil)))
+      return
+    }
+
+    loadOrCreateTunnelManager { manager, error in
+      if let error {
+        completion(.failure(error))
+        return
+      }
+      guard let manager,
+        manager.connection.status == .disconnected || manager.connection.status == .invalid
+      else {
+        completion(.failure(PigeonError(
+          code: "candidate-tunnel-busy", message: "The previous tunnel has not stopped",
+          details: nil)))
+        return
+      }
+      self.clearLastError()
+      self.startPreparedPacketTunnel(
+        manager: manager, options: options, allowRepairOnIOS: false, completion: completion)
+    }
+  }
+
   func stopPacketTunnel(completion: @escaping (Result<Void, Error>) -> Void) {
     loadTunnelManager { manager, error in
       if let error {
@@ -406,15 +441,23 @@ class DarwinHostApiImpl: DarwinHostApi {
   func savedPacketTunnelProfile(
     completion: @escaping (Result<SavedTunnelProfile?, Error>) -> Void
   ) {
-    guard let options = storedPacketTunnelOptions(),
-      let configPath = options["configPath"] as? String,
-      !configPath.isEmpty
-    else {
-      completion(.success(nil))
-      return
+    loadTunnelManager { manager, error in
+      if let error {
+        completion(.failure(error))
+        return
+      }
+      let proto = manager?.protocolConfiguration as? NETunnelProviderProtocol
+      let options = self.packetTunnelOptions(
+        from: proto?.providerConfiguration?["options"] as? [String: Any])
+      guard let options,
+        let configPath = options["configPath"] as? String, !configPath.isEmpty
+      else {
+        completion(.success(nil))
+        return
+      }
+      self.sharedDefaults().set(options, forKey: self.profileOptionsKey)
+      completion(.success(SavedTunnelProfile(configPath: configPath, nodeId: options["nodeId"] as? String)))
     }
-    completion(
-      .success(SavedTunnelProfile(configPath: configPath, nodeId: options["nodeId"] as? String)))
   }
 
   func refreshPacketTunnelProfile(
@@ -895,6 +938,7 @@ class DarwinHostApiImpl: DarwinHostApi {
   private func prepareManagerWithLatestOptions(
     manager: NETunnelProviderManager,
     options: [String: NSObject],
+    reloadAfterSave: Bool = true,
     completion: @escaping (NETunnelProviderManager?, Error?) -> Void
   ) {
     guard let providerId = packetTunnelProviderBundleId() else {
@@ -923,6 +967,10 @@ class DarwinHostApiImpl: DarwinHostApi {
     manager.saveToPreferences { saveError in
       if let saveError {
         completion(nil, saveError)
+        return
+      }
+      guard reloadAfterSave else {
+        completion(manager, nil)
         return
       }
       manager.loadFromPreferences { loadError in

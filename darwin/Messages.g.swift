@@ -442,6 +442,8 @@ protocol DarwinHostApi {
   func setupShutdownNotification() throws
   func savePacketTunnelProfile(profile: TunnelProfile, completion: @escaping (Result<String, Error>) -> Void)
   func startPacketTunnel(completion: @escaping (Result<Void, Error>) -> Void)
+  /// Starts with transient options. The saved system profile is left intact.
+  func startPacketTunnelCandidate(profile: TunnelProfile, completion: @escaping (Result<Void, Error>) -> Void)
   func stopPacketTunnel(completion: @escaping (Result<Void, Error>) -> Void)
   func getPacketTunnelStatus(completion: @escaping (Result<TunnelStatus, Error>) -> Void)
   func getPacketTunnelMetrics(completion: @escaping (Result<TunnelMetricsSnapshot, Error>) -> Void)
@@ -563,6 +565,24 @@ class DarwinHostApiSetup {
       }
     } else {
       startPacketTunnelChannel.setMessageHandler(nil)
+    }
+    /// Starts with transient options. The saved system profile is left intact.
+    let startPacketTunnelCandidateChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.startPacketTunnelCandidate\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      startPacketTunnelCandidateChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let profileArg = args[0] as! TunnelProfile
+        api.startPacketTunnelCandidate(profile: profileArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      startPacketTunnelCandidateChannel.setMessageHandler(nil)
     }
     let stopPacketTunnelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.xconnect.DarwinHostApi.stopPacketTunnel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

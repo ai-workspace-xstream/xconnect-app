@@ -15,6 +15,22 @@ import 'package:xconnect/utils/global_config.dart';
 const link = 'vless://11111111-1111-4111-8111-111111111111@edge.example:443'
     '?type=xhttp&security=tls&path=%2Fsecure#custom-connection';
 
+Future<void> submitImport(WidgetTester tester) async {
+  final button = find.byType(FilledButton);
+  await tester.runAsync(() => tester.tap(button));
+  await tester.pump();
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (button.evaluate().isNotEmpty &&
+      tester.widget<FilledButton>(button).onPressed == null &&
+      DateTime.now().isBefore(deadline)) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final policy = NetworkAccessPolicy.instance;
@@ -137,11 +153,7 @@ void main() {
     await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
     final revision = GlobalState.nodeListRevision.value;
-    await tester.runAsync(() async {
-      await tester.tap(find.byType(FilledButton));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
-    await tester.pumpAndSettle();
+    await submitImport(tester);
     expect(find.byType(SubscriptionScreen), findsNothing);
     expect(find.text('Connection saved'), findsOneWidget);
     expect(GlobalState.nodeListRevision.value, revision + 1);
@@ -167,12 +179,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     final revision = GlobalState.nodeListRevision.value;
-    await tester.runAsync(() async {
-      await tester.tap(find.byType(FilledButton));
-      // Allow real disk I/O, which does not complete under the fake clock.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
-    await tester.pumpAndSettle();
+    await submitImport(tester);
     expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
         isNotNull);
     expect(find.byType(SubscriptionScreen), findsOneWidget);

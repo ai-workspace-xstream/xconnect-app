@@ -69,14 +69,16 @@ promoting to closed or production testing.
 
 - Developer name: **XWork Technologies LLC**.
 - Organization website: <https://xworktech.com>.
-- Privacy policy: <https://xworktech.com/privacy>.
-- Support/contact: <https://xworktech.com/support> and
-  <https://xworktech.com/contact>.
+- Privacy policy: <https://xworktech.com/privacy/>.
+- Support/contact: <https://xworktech.com/support/> and
+  <https://xworktech.com/contact/>.
 - Complete the Play Console Data safety, content rating, target audience, app
   access, screenshots, and support email declarations from the shipped build.
 - XConnect uses Android `VpnService` for a system-level encrypted tunnel.
   Complete Play's VPN declaration and ensure the listing and privacy policy
-  describe the actual data handling and permissions.
+  describe the actual data handling and permissions. See the
+  [System VPN store review checks](publish-stores.md#system-vpn-流量方式审核)
+  for the routing modes, encryption verification and reviewer steps.
 
 After the signed AAB passes internal testing, promote through closed testing
 before requesting production access.

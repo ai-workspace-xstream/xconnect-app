@@ -17,6 +17,15 @@ Windows、macOS、Linux、iOS 和 Android 使用相同的导入与应用内通�
 
 服务端兼容性：客户端读取 `/api/account/usage/summary` 的 `includedQuotaBytes`、`remainingIncludedQuota`、`temporaryUnlimited`、`currentPlan.unlimited` 与 `networkAccessState/networkAccessReason`；兼容旧版 `billingProfile` 的总额度字段。额度接口不可用时继续正常节点同步，并保留上次已知通知；节点接口返回明确 `quota_exhausted` 等额度错误时仍可提示暂停。恢复额度或下个额度周期后可重试，客户端不会绕过服务端额度规则。
 
+## 系统 VPN 流量方式
+
+在 **设置 → 路由** 选择 **智能路由** 或 **全局代理**。这项设置适用于 macOS、iOS、Android、Windows 和 Linux 的标准系统 VPN 配置，下次从 XConnect 连接时生效。
+
+- **智能路由**。局域网和命中中国大陆域名规则（包括 `.cn` 顶级域及国内常见互联网服务域名）的流量直连，其余公网业务流量经 VPN 节点转发。这是默认模式。
+- **全局代理**。公网业务流量统一经 VPN 节点转发，局域网与私有 IP 仍可直连。DNS、HTTP/3 和必要系统连通性探测按现有规则处理。IPv4 和 IPv6 的覆盖范围由平台的 VPN 路由决定。
+
+从 Apple 系统设置连接时，系统使用最近保存的 VPN 配置。全局代理需要使用启用 TLS 证书校验的标准节点。遇到不兼容的节点配置时，可以切回智能路由，或换用标准 TLS 配置。本地 HTTP 和 SOCKS 代理使用原有路由。
+
 ## 初始化与配置
 
 本手册将指导你如何在 macOS 上完成 XConnect 的初始化和默认节点生成操作。

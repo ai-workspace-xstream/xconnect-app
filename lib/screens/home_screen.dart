@@ -632,7 +632,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
         GlobalState.activeNodeName.value = '';
         _syncConnectedMeta();
-        _showMessage(msg);
+        _showMessage(msg.endsWith('traffic_routing_unsupported_profile')
+            ? context.l10n.get('trafficModeUnsupportedProfile')
+            : msg);
         if (useTunMode) {
           await _maybeShowPacketTunnelPermissionGuide(msg);
         }

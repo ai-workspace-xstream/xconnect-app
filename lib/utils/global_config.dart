@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/dns/cn_domain_rules.dart';
 import '../services/dns/dns_control_plane.dart';
 import '../widgets/log_console.dart';
 import 'settings_tab_navigation.dart';
@@ -232,7 +233,19 @@ class DnsConfig {
   static const _defaultPlainDns1 = '1.1.1.1';
   static const _defaultPlainDns2 = '8.8.8.8';
 
-  static const _defaultDirectDomains = <String>[
+  static const _defaultSystemConnectivityDomains = <String>[
+    'full:localhost',
+    r'regexp:^.*\.local$',
+    'dotless:',
+    'full:captive.apple.com',
+    'full:connectivitycheck.gstatic.com',
+    'full:msftconnecttest.com',
+    'full:msftncsi.com',
+  ];
+
+  /// Legacy generated direct domains (from pre-split versions that bundled
+  /// system connectivity and Apple domains together into a single direct rule).
+  static const legacyDirectDomains = <String>[
     'full:localhost',
     r'regexp:^.*\.local$',
     'dotless:',
@@ -244,6 +257,18 @@ class DnsConfig {
     'full:msftconnecttest.com',
     'full:msftncsi.com',
   ];
+
+  /// Backward-compatible combined set of default direct domains for Smart mode.
+  static List<String> get directDomainSet => <String>[
+        ..._defaultSystemConnectivityDomains,
+        ...CnDomainRules.defaultRules,
+      ];
+
+  static List<String> get systemConnectivityDomains =>
+      List<String>.from(_defaultSystemConnectivityDomains);
+
+  static List<String> get cnDomainRules =>
+      List<String>.from(CnDomainRules.defaultRules);
 
   /// Quick-select options for the direct resolvers. CN-domestic providers are
   /// first because those are the ones worth switching to — the direct slot is
@@ -460,9 +485,6 @@ class DnsConfig {
 
   static List<String> systemTunnelDnsServers4() => directResolversForXray();
 
-  static List<String> get directDomainSet =>
-      List<String>.from(_defaultDirectDomains);
-
   static List<String> get directIpCidrs =>
       List<String>.from(_defaultDirectIpCidrs);
 
@@ -526,7 +548,8 @@ class DnsConfig {
       ),
       routePolicy: RoutePolicy(
         domainSets: DomainSets(
-          direct: directDomainSet,
+          systemConnectivity: systemConnectivityDomains,
+          cnDomains: cnDomainRules,
           directIpCidrs: directIpCidrs,
         ),
         forceTunnelDnsToProxy: Platform.isIOS || tunnelDnsViaProxy.value,

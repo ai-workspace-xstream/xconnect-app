@@ -26,6 +26,7 @@ import 'services/desktop/desktop_platform_capabilities.dart';
 import 'services/sync/desktop_sync_service.dart';
 import 'services/session/session_manager.dart';
 import 'services/tun_settings_service.dart';
+import 'services/traffic_routing.dart';
 import 'services/tuning/client_tuning.dart';
 import 'widgets/permission_guide_dialog.dart';
 import 'widgets/log_console.dart' show LogLevel;
@@ -63,6 +64,7 @@ void main(List<String> args) async {
   await PermissionGuideService.init();
   await ExperimentalFeatures.init();
   await TunSettingsService.init();
+  await TrafficRouting.init();
   await NativeBridge.initializeLinuxDesktopIntegration();
   final debug = args.contains('--debug') ||
       Platform.executableArguments.contains('--debug');
