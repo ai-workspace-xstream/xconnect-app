@@ -1261,6 +1261,20 @@ class VpnConfig {
       directResolverInboundTags: [_dnsDirectPrimaryTag, _dnsDirectSecondaryTag],
       proxyResolverInboundTags: [_dnsProxyPrimaryTag, _dnsProxySecondaryTag],
     );
+    // Add all-vpn variant rules (where cnDomains is absent)
+    final allVpnRules = policy.buildSecureDnsRules(
+      enableTunnelMode: true,
+      blockQuic: true,
+      tunInboundTag: _tunInboundTag,
+      directResolverInboundTags: [_dnsDirectPrimaryTag, _dnsDirectSecondaryTag],
+      proxyResolverInboundTags: [_dnsProxyPrimaryTag, _dnsProxySecondaryTag],
+      routeAllTunnelTraffic: true,
+    );
+    for (final r in allVpnRules) {
+      if (!generated.any((g) => mapEquals(g, r))) {
+        generated.add(r);
+      }
+    }
     generated.add({
       ...generated.first,
       'outboundTag': BusinessDnsPolicy.outboundTag,
@@ -1274,6 +1288,25 @@ class VpnConfig {
         ResolverServerPolicy.proxyFallbackTag
       ],
     });
+    // Recognize legacy generated rule shapes (pre-split system+apple domains,
+    // legacy combined direct domains, and intermediate global traffic tag)
+    generated.add(<String, dynamic>{
+      'type': 'field',
+      'domain': DnsConfig.legacyDirectDomains,
+      'outboundTag': 'direct',
+    });
+    generated.add(<String, dynamic>{
+      'type': 'field',
+      'domain': DnsConfig.directDomainSet,
+      'outboundTag': 'direct',
+    });
+    generated.add(<String, dynamic>{
+      'type': 'field',
+      'inboundTag': <String>[_tunInboundTag],
+      'network': 'tcp,udp',
+      'outboundTag': 'proxy',
+      'ruleTag': RoutePolicy.globalTrafficRuleTag,
+    });
     return rules.every((rule) =>
         rule is Map &&
         generated.any((candidate) =>
@@ -1285,6 +1318,40 @@ class VpnConfig {
                   ? actual is List && listEquals(expected, actual)
                   : expected == actual;
             })));
+  }
+
+  /// Checks whether a routing configuration is currently routing all tunnel
+  /// traffic (i.e. Global Proxy, where Chinese mainland direct rules are omitted).
+  static bool isRoutingAllTunnelTraffic(Map<String, dynamic> routing) {
+    final rules = routing['rules'];
+    if (rules is! List) return false;
+    return !rules.any((rule) =>
+        rule is Map &&
+        rule['outboundTag'] == 'direct' &&
+        rule['domain'] is List &&
+        ((rule['domain'] as List).contains('domain:cn') ||
+            (rule['domain'] as List).contains(r'regexp:^.*\.cn$') ||
+            (rule['domain'] as List).contains('geosite:cn') ||
+            (rule['domain'] as List).contains('domain:baidu.com')));
+  }
+
+  /// Extracts the tunnel DNS outbound tag from the port 53 UDP/TCP TUN rule.
+  static String? findTunnelDnsOutboundTag(Map<String, dynamic> routing) {
+    final rules = routing['rules'];
+    if (rules is! List) return null;
+    for (final rule in rules) {
+      if (rule is Map &&
+          rule['port'] == '53' &&
+          (rule['network'] == 'udp' ||
+              rule['network'] == 'tcp,udp' ||
+              rule['network'] == null) &&
+          rule['inboundTag'] is List &&
+          ((rule['inboundTag'] as List).contains(_tunInboundTag) ||
+              (rule['inboundTag'] as List).contains('tun'))) {
+        return rule['outboundTag'] as String?;
+      }
+    }
+    return null;
   }
 
   /// Control-plane tuning may replace the DoH upstream timeout
@@ -1479,7 +1546,10 @@ class VpnConfig {
           outboundTag == 'direct' &&
           rule['ip'] != null &&
           rule['ip'] is List &&
-          (rule['ip'] as List).contains('fc00::/7')) {
+          ((rule['ip'] as List).contains('fc00::/7') ||
+              (rule['ip'] as List).contains('10.0.0.0/8') ||
+              (rule['ip'] as List).contains('192.168.0.0/16') ||
+              (rule['ip'] as List).contains('geoip:private'))) {
         return false;
       }
       if (type == 'field' &&
@@ -1494,7 +1564,8 @@ class VpnConfig {
               (rule['domain'] as List).contains('domain:apple.com'))) {
         return false;
       }
-      if (routeAllTunnelTraffic &&
+      if (enableTunnelMode &&
+          routeAllTunnelTraffic &&
           type == 'field' &&
           outboundTag == 'direct' &&
           rule['domain'] != null) {

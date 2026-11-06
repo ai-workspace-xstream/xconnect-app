@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xconnect/services/dns/cn_domain_rules.dart';
+import 'package:xconnect/services/dns/dns_control_plane.dart';
 import 'package:xconnect/services/traffic_routing.dart';
 import 'package:xconnect/services/vpn_config_service.dart';
+import 'package:xconnect/utils/global_config.dart';
+import 'package:xconnect/utils/native_bridge.dart';
 
 Map<String, dynamic> standardConfig() => {
       'outbounds': [
@@ -206,8 +209,7 @@ void main() {
   });
 
   test('offline CN domain ruleset metadata and matching verification', () {
-    expect(CnDomainRules.version, isNotEmpty);
-    expect(CnDomainRules.license, contains('CC-BY-SA'));
+    expect(CnDomainRules.license, equals('MIT'));
     expect(CnDomainRules.source, contains('domain-list-community'));
     expect(CnDomainRules.defaultRules.length, greaterThan(50));
 
@@ -224,6 +226,197 @@ void main() {
     expect(CnDomainRules.matches('github.com'), isFalse);
     expect(CnDomainRules.matches('youtube.com'), isFalse);
     expect(CnDomainRules.matches('netflix.com'), isFalse);
+  });
+
+  test(
+      'legacy config upgrade recognizes legacy generated rule shapes without unsupported error',
+      () {
+    // Legacy XConnect configuration where system connectivity and Apple domains
+    // were bundled in a single direct rule before the split.
+    final legacyConfig = standardConfig();
+    final legacyRules = <Map<String, dynamic>>[
+      {
+        'type': 'field',
+        'inboundTag': ['tun-in'],
+        'network': 'tcp,udp',
+        'port': '53',
+        'outboundTag': 'proxy',
+      },
+      {
+        'type': 'field',
+        'inboundTag': ['tun-in'],
+        'network': 'udp',
+        'port': '443',
+        'outboundTag': 'block',
+      },
+      {
+        'type': 'field',
+        'inboundTag': ['tun-in'],
+        'protocol': ['quic'],
+        'outboundTag': 'block',
+      },
+      {
+        'type': 'field',
+        'inboundTag': ['dns-proxy-primary', 'dns-proxy-secondary'],
+        'outboundTag': 'proxy',
+      },
+      {
+        'type': 'field',
+        'inboundTag': ['dns-direct-primary', 'dns-direct-secondary'],
+        'outboundTag': 'direct',
+      },
+      {
+        'type': 'field',
+        'domain': DnsConfig.legacyDirectDomains,
+        'outboundTag': 'direct',
+      },
+      {
+        'type': 'field',
+        'ip': DnsConfig.directIpCidrs,
+        'outboundTag': 'direct',
+      },
+    ];
+    legacyConfig['routing']['rules'] = legacyRules;
+
+    // Must be recognized as a valid generated configuration
+    expect(VpnConfig.supportsTrafficRouting(legacyConfig), isTrue);
+
+    // Compiling with Global Proxy must succeed and migrate the legacy rule
+    VpnConfig.applySecureDnsConfig(
+      legacyConfig,
+      enableTunnelMode: true,
+      forceBlockQuic: true,
+      routeAllTunnelTraffic: true,
+    );
+    expect(VpnConfig.supportsTrafficRouting(legacyConfig), isTrue);
+
+    final migratedRules =
+        (legacyConfig['routing']['rules'] as List).cast<Map>();
+    // Legacy combined rule is stripped
+    expect(
+      migratedRules.any((r) =>
+          r['domain'] != null &&
+          (r['domain'] as List).contains('domain:apple.com')),
+      isFalse,
+    );
+    // Shared private CIDRs and system connectivity are present
+    expect(
+      migratedRules.any((r) =>
+          r['ip'] != null && (r['ip'] as List).contains('192.168.0.0/16')),
+      isTrue,
+    );
+    expect(
+      migratedRules.any((r) =>
+          r['domain'] != null &&
+          (r['domain'] as List).contains('full:localhost')),
+      isTrue,
+    );
+
+    // Custom user rules outside standard/legacy templates are still rejected
+    final customConfig = standardConfig();
+    customConfig['routing']['rules'] = [
+      ...migratedRules,
+      {
+        'type': 'field',
+        'domain': ['custom.corporate.network'],
+        'outboundTag': 'direct',
+      }
+    ];
+    expect(VpnConfig.supportsTrafficRouting(customConfig), isFalse);
+  });
+
+  test(
+      'Apple system reconnect: tuning refresh preserves saved routing mode and DNS outbound',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    await TrafficRouting.init();
+
+    // 1. Prepare a persisted config saved in Smart mode
+    final config = standardConfig();
+    VpnConfig.applySecureDnsConfig(
+      config,
+      enableTunnelMode: true,
+      routeAllTunnelTraffic: false,
+    );
+    final rawConfig = const JsonEncoder.withIndent('  ').convert(config);
+
+    // 2. User changes preference to Global proxy in UI, but has NOT reconnected
+    await TrafficRouting.select(TrafficMode.allVpn);
+    expect(TrafficRouting.connectionMode, TrafficMode.allVpn);
+
+    // 3. Background tuning refresh occurs
+    final rewritten = NativeBridge.rewritePersistedTunnelConfig(rawConfig);
+    // If routing mode was preserved as Smart mode, routing rules remain identical
+    if (rewritten != null) {
+      final rewrittenMap = jsonDecode(rewritten) as Map<String, dynamic>;
+      final isAllVpn = VpnConfig.isRoutingAllTunnelTraffic(
+          rewrittenMap['routing'] as Map<String, dynamic>);
+      // MUST NOT be allVpn! Must preserve the saved Smart mode!
+      expect(isAllVpn, isFalse);
+    }
+
+    // 4. Preserve Business DNS outbound tag if configured
+    final bizConfig = standardConfig();
+    bizConfig['routing']['rules'] = [
+      {
+        'type': 'field',
+        'inboundTag': ['tun-in'],
+        'network': 'tcp,udp',
+        'port': '53',
+        'outboundTag': BusinessDnsPolicy.outboundTag,
+      },
+      {
+        'type': 'field',
+        'domain': DnsConfig.legacyDirectDomains,
+        'outboundTag': 'direct',
+      },
+      {
+        'type': 'field',
+        'ip': DnsConfig.directIpCidrs,
+        'outboundTag': 'direct',
+      },
+    ];
+    final rawBiz = const JsonEncoder.withIndent('  ').convert(bizConfig);
+    final rewrittenBiz = NativeBridge.rewritePersistedTunnelConfig(rawBiz);
+    final rewrittenBizMap =
+        jsonDecode(rewrittenBiz ?? rawBiz) as Map<String, dynamic>;
+    final dnsTag = VpnConfig.findTunnelDnsOutboundTag(
+        rewrittenBizMap['routing'] as Map<String, dynamic>);
+    expect(dnsTag, BusinessDnsPolicy.outboundTag);
+  });
+
+  test(
+      'local HTTP/SOCKS proxy isolation: global VPN preference never strips proxy direct rules',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    await TrafficRouting.init();
+    await TrafficRouting.select(TrafficMode.allVpn);
+    expect(TrafficRouting.connectionMode, TrafficMode.allVpn);
+
+    // A node config with custom domain direct rule for local proxy
+    final proxyConfig = standardConfig();
+    (proxyConfig['routing']['rules'] as List).add({
+      'type': 'field',
+      'domain': ['internal.corp.com'],
+      'outboundTag': 'direct',
+    });
+
+    // When preparing for local proxy mode (isTunMode: false)
+    VpnConfig.applySecureDnsConfig(
+      proxyConfig,
+      enableTunnelMode: false,
+      routeAllTunnelTraffic: false,
+    );
+
+    final rules = (proxyConfig['routing']['rules'] as List).cast<Map>();
+    // The custom direct domain rule MUST NOT be deleted
+    expect(
+      rules.any((r) =>
+          r['outboundTag'] == 'direct' &&
+          r['domain'] is List &&
+          (r['domain'] as List).contains('internal.corp.com')),
+      isTrue,
+    );
   });
 
   test('active mode tracking and pending restart status', () async {

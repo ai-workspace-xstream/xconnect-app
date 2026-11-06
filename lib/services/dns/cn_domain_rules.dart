@@ -1,18 +1,18 @@
 /// Fixed-version Chinese mainland (CN) domain ruleset for Smart Routing.
 ///
-/// Source: Curated offline ruleset aligned with v2fly/domain-list-community (@cn).
-/// License: CC-BY-SA 4.0
-/// Version: 2026.04-stable
+/// Source: Curated offline ruleset aligned with v2fly/domain-list-community (@cn data subset).
+/// License: MIT (https://github.com/v2fly/domain-list-community/blob/master/LICENSE)
+/// Upstream reference: v2fly/domain-list-community (master snapshot)
 ///
-/// Designed to guarantee deterministic routing across macOS, iOS, Android,
-/// Windows, and Linux without requiring external binary .dat assets at runtime.
-/// This prevents iOS Network Extension jetsam memory exhaustion (15 MiB limit)
-/// and eliminates missing-asset startup failures.
+/// Embedded offline rules eliminate the need to load external binary geosite.dat
+/// assets at runtime, reducing memory footprint and avoiding missing-asset
+/// startup failures in memory-sensitive packet tunnel extensions.
 class CnDomainRules {
   static const String source =
       'v2fly/domain-list-community (curated CN ruleset)';
-  static const String license = 'CC-BY-SA 4.0';
-  static const String version = '2026.04-stable';
+  static const String license = 'MIT';
+  static const String upstreamReference =
+      'v2fly/domain-list-community (master snapshot data/cn subset)';
   static const String geositeCompatTag = 'geosite:cn';
 
   /// Immutable list of Chinese mainland domain routing rules.

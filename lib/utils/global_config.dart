@@ -243,6 +243,21 @@ class DnsConfig {
     'full:msftncsi.com',
   ];
 
+  /// Legacy generated direct domains (from pre-split versions that bundled
+  /// system connectivity and Apple domains together into a single direct rule).
+  static const legacyDirectDomains = <String>[
+    'full:localhost',
+    r'regexp:^.*\.local$',
+    'dotless:',
+    'domain:apple.com',
+    'domain:icloud.com',
+    'domain:apple-dns.net',
+    'full:captive.apple.com',
+    'full:connectivitycheck.gstatic.com',
+    'full:msftconnecttest.com',
+    'full:msftncsi.com',
+  ];
+
   /// Backward-compatible combined set of default direct domains for Smart mode.
   static List<String> get directDomainSet => <String>[
         ..._defaultSystemConnectivityDomains,

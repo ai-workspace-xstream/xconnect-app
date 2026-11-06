@@ -38,6 +38,7 @@ class NativeBridge {
   static Future<void> Function(String action, Map<String, dynamic> payload)?
       _nativeMenuActionHandler;
   static String? _mobileActiveNodeName;
+  static TrafficMode? _lastCompiledTunnelMode;
   static String? _darwinAppGroupPathCache;
   static Future<void> _connectionLifecycleQueue = Future<void>.value();
 
@@ -335,6 +336,12 @@ class NativeBridge {
     final String runtimeConfigPath;
     try {
       routingConfig = await _compileTrafficRouting(sourceConfigPath, node);
+      final effectiveRouteAll = routingConfig != null
+          ? VpnConfig.isRoutingAllTunnelTraffic(
+              routingConfig['routing'] as Map<String, dynamic>? ?? const {})
+          : (TrafficRouting.connectionMode == TrafficMode.allVpn);
+      _lastCompiledTunnelMode =
+          effectiveRouteAll ? TrafficMode.allVpn : TrafficMode.smart;
       runtimeConfigPath = routingConfig == null
           ? await _prepareCanonicalTunnelConfigPath(sourceConfigPath,
               isTunMode: true, nodeId: node.managedNodeId)
@@ -371,8 +378,6 @@ class NativeBridge {
         );
         if (isTunnelStartAcceptedMessage(result)) {
           _mobileActiveNodeName = nodeName;
-          TrafficRouting.markActiveMode(
-              TrafficRouting.connectionMode ?? TrafficMode.smart);
         }
         return result ?? 'Packet Tunnel 启动请求已提交';
       } on PlatformException catch (e) {
@@ -414,7 +419,7 @@ class NativeBridge {
         );
         if (connectedResult.contains('成功')) {
           TrafficRouting.markActiveMode(
-              TrafficRouting.connectionMode ?? TrafficMode.smart);
+              _lastCompiledTunnelMode ?? TrafficMode.smart);
         }
         return connectedResult;
       } on PlatformException catch (e) {
@@ -1125,8 +1130,10 @@ class NativeBridge {
         sourceJson,
         isTunMode: isTunMode,
         nodeId: nodeId,
-        routeAllTunnelTraffic: routeAllTunnelTraffic ??
-            (TrafficRouting.connectionMode == TrafficMode.allVpn),
+        routeAllTunnelTraffic: isTunMode
+            ? (routeAllTunnelTraffic ??
+                (TrafficRouting.connectionMode == TrafficMode.allVpn))
+            : false,
       );
 
       final updatedJsonStr = const JsonEncoder.withIndent(
@@ -1148,8 +1155,9 @@ class NativeBridge {
     String? nodeId,
     bool? routeAllTunnelTraffic,
   }) {
-    final effectiveRouteAll = routeAllTunnelTraffic ??
-        (TrafficRouting.connectionMode == TrafficMode.allVpn);
+    final effectiveRouteAll = isTunMode &&
+        (routeAllTunnelTraffic ??
+            (TrafficRouting.connectionMode == TrafficMode.allVpn));
     final disableLocalProxyInPacketTunnel = Platform.isIOS && isTunMode;
     final newInboundsStr = VpnConfig.generateInboundsConfig(
       enableSocksProxy: !disableLocalProxyInPacketTunnel,
@@ -1230,8 +1238,6 @@ class NativeBridge {
         await _channel.invokeMethod<String>('startPacketTunnel', profile);
     if (isTunnelStartAcceptedMessage(result)) {
       _mobileActiveNodeName = nodeName;
-      TrafficRouting.markActiveMode(
-          TrafficRouting.connectionMode ?? TrafficMode.smart);
     }
     return result ?? '启动失败: traffic_routing_start_failed';
   }
@@ -1271,7 +1277,7 @@ class NativeBridge {
           saveResult == 'profile_saved' || saveResult == 'profile_unchanged';
       if (committed) {
         TrafficRouting.markActiveMode(
-            TrafficRouting.connectionMode ?? TrafficMode.smart);
+            _lastCompiledTunnelMode ?? TrafficMode.smart);
       }
       return committed ? result : '启动失败: traffic_routing_profile_save_failed';
     } finally {
@@ -1751,19 +1757,30 @@ class NativeBridge {
     }
   }
 
-  /// Get Packet Tunnel status on Darwin platforms.
+  /// Get Packet Tunnel status across platforms.
   static Future<PacketTunnelStatus> getPacketTunnelStatus() async {
     if (Platform.isAndroid) {
       try {
         final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
           'getPacketTunnelStatus',
         );
-        if (raw == null) return _tunStatusFallback;
+        if (raw == null) {
+          TrafficRouting.markActiveMode(null);
+          return _tunStatusFallback;
+        }
         final map = <Object?, Object?>{};
         raw.forEach((key, value) {
           map[key] = value;
         });
-        return PacketTunnelStatus.fromMap(map);
+        final status = PacketTunnelStatus.fromMap(map);
+        if (status.status == 'connected') {
+          TrafficRouting.markActiveMode(
+              _lastCompiledTunnelMode ?? TrafficMode.smart);
+        } else if (status.status == 'disconnected' ||
+            status.status == 'invalid') {
+          TrafficRouting.markActiveMode(null);
+        }
+        return status;
       } on MissingPluginException {
         return _tunStatusFallback;
       } catch (_) {
@@ -1773,10 +1790,19 @@ class NativeBridge {
 
     if (Platform.isWindows || Platform.isLinux) {
       final snapshot = await getDesktopRuntimeSnapshot();
+      final isConnected = snapshot.running && snapshot.isTunnelReady;
+      if (isConnected) {
+        if (TrafficRouting.activeMode.value == null) {
+          TrafficRouting.markActiveMode(
+              _lastCompiledTunnelMode ?? TrafficMode.smart);
+        }
+      } else if (!snapshot.running) {
+        TrafficRouting.markActiveMode(null);
+      }
       return PacketTunnelStatus(
-        status: snapshot.running
-            ? (snapshot.isTunnelReady ? 'connected' : 'connecting')
-            : 'disconnected',
+        status: isConnected
+            ? 'connected'
+            : (snapshot.running ? 'connecting' : 'disconnected'),
         utunInterfaces: const [],
         lastError: snapshot.lastError,
       );
@@ -1786,6 +1812,14 @@ class NativeBridge {
     _ensureDarwinFlutterApiReady();
     try {
       final status = await _darwinHostApi.getPacketTunnelStatus();
+      if (status.state == 'connected') {
+        if (TrafficRouting.activeMode.value == null) {
+          TrafficRouting.markActiveMode(
+              _lastCompiledTunnelMode ?? TrafficMode.smart);
+        }
+      } else if (status.state == 'disconnected' || status.state == 'invalid') {
+        TrafficRouting.markActiveMode(null);
+      }
       return PacketTunnelStatus(
         status: status.state,
         utunInterfaces: status.utunInterfaces,
@@ -1898,15 +1932,24 @@ class NativeBridge {
       config['dns'] = VpnConfig.buildSecureDnsConfig();
     }
     if (config['routing'] is Map) {
-      final mode = TrafficRouting.connectionMode;
+      final savedRouting = config['routing'] as Map<String, dynamic>;
+      final isAllVpn = VpnConfig.isRoutingAllTunnelTraffic(savedRouting);
+      final dnsOutboundTag =
+          VpnConfig.findTunnelDnsOutboundTag(savedRouting) ?? 'proxy';
       config['routing'] = VpnConfig.buildSecureDnsRoutingConfig(
-        config['routing'],
+        savedRouting,
         enableTunnelMode: true,
-        routeAllTunnelTraffic: mode == TrafficMode.allVpn,
+        tunnelDnsOutboundTag: dnsOutboundTag,
+        routeAllTunnelTraffic: isAllVpn,
       );
     }
     final updated = const JsonEncoder.withIndent('  ').convert(config);
     return updated == raw ? null : updated;
+  }
+
+  @visibleForTesting
+  static void setLastCompiledTunnelModeForTesting(TrafficMode? mode) {
+    _lastCompiledTunnelMode = mode;
   }
 
   @visibleForTesting
@@ -2051,6 +2094,8 @@ class NativeBridge {
     while (DateTime.now().isBefore(deadline)) {
       lastStatus = await getPacketTunnelStatus();
       if (lastStatus.status == 'connected') {
+        TrafficRouting.markActiveMode(
+            _lastCompiledTunnelMode ?? TrafficMode.smart);
         return successMessage;
       }
       await Future<void>.delayed(const Duration(milliseconds: 250));
