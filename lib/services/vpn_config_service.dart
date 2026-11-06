@@ -1486,7 +1486,18 @@ class VpnConfig {
           outboundTag == 'direct' &&
           rule['domain'] != null &&
           rule['domain'] is List &&
-          (rule['domain'] as List).contains('full:localhost')) {
+          ((rule['domain'] as List).contains('full:localhost') ||
+              (rule['domain'] as List).contains('domain:cn') ||
+              (rule['domain'] as List).contains(r'regexp:^.*\.cn$') ||
+              (rule['domain'] as List).contains('geosite:cn') ||
+              (rule['domain'] as List).contains('domain:baidu.com') ||
+              (rule['domain'] as List).contains('domain:apple.com'))) {
+        return false;
+      }
+      if (routeAllTunnelTraffic &&
+          type == 'field' &&
+          outboundTag == 'direct' &&
+          rule['domain'] != null) {
         return false;
       }
       return true;

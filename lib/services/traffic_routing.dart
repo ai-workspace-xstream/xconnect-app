@@ -6,10 +6,20 @@ enum TrafficMode { smart, allVpn }
 class TrafficRouting {
   static const _key = 'trafficRoutingMode';
   static final _selected = ValueNotifier(TrafficMode.smart);
+  static final _activeMode = ValueNotifier<TrafficMode?>(null);
   static bool _hasSelection = false;
+
   static TrafficMode? get connectionMode =>
       _hasSelection ? _selected.value : null;
   static ValueListenable<TrafficMode> get selected => _selected;
+  static ValueListenable<TrafficMode?> get activeMode => _activeMode;
+
+  static bool get isPendingRestart =>
+      _activeMode.value != null && _activeMode.value != _selected.value;
+
+  static void markActiveMode(TrafficMode? mode) {
+    _activeMode.value = mode;
+  }
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();

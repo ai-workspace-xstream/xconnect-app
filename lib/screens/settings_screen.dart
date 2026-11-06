@@ -1,4 +1,5 @@
 import '../widgets/quota_notification_button.dart';
+import '../widgets/traffic_mode_group.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -13,7 +14,6 @@ import '../../services/app_version_service.dart';
 import '../../services/desktop/desktop_platform_capabilities.dart';
 import '../l10n/app_localizations.dart';
 import '../../services/vpn_config_service.dart';
-import '../services/traffic_routing.dart';
 import '../../services/telemetry/telemetry_service.dart';
 import '../../services/session/session_manager.dart';
 import '../../services/sync/desktop_sync_service.dart';
@@ -68,7 +68,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _loadedXhttpXmuxMaxConcurrency =
       XhttpAdvancedConfig.xmuxMaxConcurrency.value;
   bool _xhttpAdvancedDirty = false;
-  bool _savingTrafficMode = false;
 
   DesktopPlatformCapabilities get _desktopCapabilities =>
       DesktopPlatformCapabilities.current;
@@ -825,7 +824,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Platform.isAndroid ||
               Platform.isWindows ||
               Platform.isLinux)
-            _trafficModeGroup(context),
+            const TrafficModeGroup(),
           _routingGroup(context, isMobile: isMobile),
         ],
       ),
@@ -974,64 +973,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
-  }
-
-  Widget _trafficModeGroup(BuildContext context) {
-    final strings = context.l10n;
-    return ValueListenableBuilder<TrafficMode>(
-      valueListenable: TrafficRouting.selected,
-      builder: (context, selected, _) {
-        SettingsRow choice(TrafficMode mode, IconData icon, String key) {
-          return SettingsRow(
-            icon: icon,
-            kind: SettingsRowKind.action,
-            title: strings.get(key),
-            description: strings.get('${key}Hint'),
-            trailing: selected == mode
-                ? Semantics(
-                    selected: true,
-                    child: const Icon(Icons.check_circle_outline))
-                : null,
-            onTap: _savingTrafficMode || selected == mode
-                ? null
-                : () => unawaited(_selectTrafficMode(mode)),
-          );
-        }
-
-        return SettingsGroup(
-          title: strings.get('trafficModeTitle'),
-          children: [
-            choice(TrafficMode.smart, Icons.alt_route, 'trafficModeSmart'),
-            choice(TrafficMode.allVpn, Icons.vpn_lock_outlined,
-                'trafficModeGlobal'),
-            SettingsRow(
-              icon: Icons.info_outline,
-              kind: SettingsRowKind.action,
-              title: strings.get('trafficModeNextConnection'),
-              description: strings.get('trafficModeScope'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _selectTrafficMode(TrafficMode mode) async {
-    setState(() => _savingTrafficMode = true);
-    var saved = false;
-    try {
-      saved = await TrafficRouting.select(mode);
-    } catch (_) {
-      addAppLog('Traffic routing preference save failed',
-          level: LogLevel.warning);
-    }
-    if (!mounted) return;
-    setState(() => _savingTrafficMode = false);
-    if (!saved) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.get('trafficModeSaveFailed'))),
-      );
-    }
   }
 
   /// Routing toggles. Mobile only today — desktop exposes these through the

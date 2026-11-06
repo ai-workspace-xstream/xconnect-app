@@ -1,7 +1,10 @@
 # Unreleased
 
-- Add Smart routing and Global proxy for standard System VPN profiles on macOS,
-  iOS, Android, Windows, and Linux. The preference applies on the next app connection.
+- Add Smart routing and Global proxy modes for standard System VPN profiles on macOS,
+  iOS, Android, Windows, and Linux. Smart routing directs LAN and Chinese mainland
+  domain traffic directly while routing other public traffic through the node;
+  Global proxy routes public traffic through the node while preserving LAN direct access.
+  The preference applies on the next app connection.
 
 - Show server-reported month-to-date usage and allowance on the connector page.
 

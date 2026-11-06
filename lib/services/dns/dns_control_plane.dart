@@ -80,13 +80,30 @@ class ResolverServerPolicy {
 }
 
 class DomainSets {
-  final List<String> direct;
+  /// Minimal system connectivity and captive portal detection domains.
+  /// Direct in both Smart routing and Global proxy modes.
+  final List<String> systemConnectivity;
+
+  /// Chinese mainland domains for Smart routing.
+  /// Direct in Smart routing; routed via VPN proxy in Global proxy mode.
+  final List<String> cnDomains;
+
+  /// Shared private / loopback / LAN IP CIDRs.
+  /// Direct in both Smart routing and Global proxy modes.
   final List<String> directIpCidrs;
 
   const DomainSets({
-    required this.direct,
+    List<String>? direct,
+    List<String>? systemConnectivity,
+    this.cnDomains = const <String>[],
     required this.directIpCidrs,
-  });
+  }) : systemConnectivity = systemConnectivity ?? direct ?? const <String>[];
+
+  /// All direct domains for Smart Routing (system connectivity + CN domains).
+  List<String> get direct => <String>[
+        ...systemConnectivity,
+        ...cnDomains,
+      ];
 }
 
 class DnsPolicy {
@@ -170,36 +187,32 @@ class RoutePolicy {
         'inboundTag': proxyResolverInboundTags,
         'outboundTag': 'proxy',
       },
-      if (routeAllTunnelTraffic) ...<Map<String, dynamic>>[
-        <String, dynamic>{
-          'type': 'field',
-          'inboundTag': directResolverInboundTags,
-          'outboundTag': 'direct',
-        },
-        <String, dynamic>{
-          'type': 'field',
-          'inboundTag': <String>[tunInboundTag],
-          'network': 'tcp,udp',
-          'outboundTag': 'proxy',
-          'ruleTag': globalTrafficRuleTag,
-        },
-      ],
-      if (domainSets.direct.isNotEmpty)
-        <String, dynamic>{
-          'type': 'field',
-          'domain': domainSets.direct,
-          'outboundTag': 'direct',
-        },
+      <String, dynamic>{
+        'type': 'field',
+        'inboundTag': directResolverInboundTags,
+        'outboundTag': 'direct',
+      },
+      // Shared LAN / Private CIDRs: direct in both Smart routing and Global proxy.
+      // Must precede any public routing or proxy fallback.
       if (domainSets.directIpCidrs.isNotEmpty)
         <String, dynamic>{
           'type': 'field',
           'ip': domainSets.directIpCidrs,
           'outboundTag': 'direct',
         },
-      if (!routeAllTunnelTraffic)
+      // Shared system connectivity & captive portal detection: direct in both modes.
+      if (domainSets.systemConnectivity.isNotEmpty)
         <String, dynamic>{
           'type': 'field',
-          'inboundTag': directResolverInboundTags,
+          'domain': domainSets.systemConnectivity,
+          'outboundTag': 'direct',
+        },
+      // Smart routing only: Chinese mainland domain rules go direct.
+      // In Global proxy mode, this is omitted so public web traffic routes to the VPN node.
+      if (!routeAllTunnelTraffic && domainSets.cnDomains.isNotEmpty)
+        <String, dynamic>{
+          'type': 'field',
+          'domain': domainSets.cnDomains,
           'outboundTag': 'direct',
         },
     ];
