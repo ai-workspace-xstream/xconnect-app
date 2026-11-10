@@ -304,6 +304,10 @@ class DesktopSyncService {
         nodeCount: nodes.length,
         nodeIds: nodes.map((n) => n.id).join(','),
       );
+      await session.setReauthenticationRequired(
+        false,
+        expectedGeneration: generation,
+      );
       addAppLog('区域 VLESS 配置已同步 (${nodes.length} 个节点)');
       return DesktopSyncResult(
         success: true,
@@ -338,8 +342,18 @@ class DesktopSyncService {
     }
     const message = 'connectorAuthenticationRequired';
     addAppLog('连接器同步认证失败: HTTP 401 $endpoint', level: LogLevel.warning);
-    await SyncStateStore.instance.recordError(message);
     await clearManagedConnections();
+    if (generation != session.generation) {
+      return const DesktopSyncResult(
+          success: false, message: 'Session changed');
+    }
+    await session.setReauthenticationRequired(
+      true,
+      expectedGeneration: generation,
+    );
+    if (generation == session.generation) {
+      await SyncStateStore.instance.recordError(message);
+    }
     return const DesktopSyncResult(success: false, message: message);
   }
 

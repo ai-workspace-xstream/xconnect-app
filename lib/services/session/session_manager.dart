@@ -31,9 +31,13 @@ class SessionManager {
   static const _prefsTokenKey = 'session.token';
   static const _prefsRefreshKey = 'session.refreshToken';
   static const _prefsUserKey = 'session.username';
+  static const _prefsReauthenticationKey = 'session.reauthenticationRequired';
 
   final ValueNotifier<SessionStatus> status =
       ValueNotifier<SessionStatus>(SessionStatus.unknown);
+  // A saved login can identify the connector even after its credentials have
+  // been rejected. Keep that identity available for reauthentication.
+  final reauthenticationRequired = ValueNotifier<bool>(false);
   final ValueNotifier<String?> currentUser = ValueNotifier<String?>(null);
   final ValueNotifier<String?> lastError = ValueNotifier<String?>(null);
   final ValueNotifier<bool> loading = ValueNotifier<bool>(false);
@@ -70,13 +74,35 @@ class SessionManager {
 
     if ((_sessionToken ?? '').isNotEmpty || (_cookie ?? '').isNotEmpty) {
       NetworkAccessPolicy.instance.invalidate(signedIn: true);
-      await NetworkAccessPolicy.instance.restoreCachedAccess(
-        '${baseUrl.value}|${currentUser.value}',
-      );
+      reauthenticationRequired.value =
+          prefs.getBool(_prefsReauthenticationKey) ?? false;
+      if (!reauthenticationRequired.value) {
+        await NetworkAccessPolicy.instance.restoreCachedAccess(
+          '${baseUrl.value}|${currentUser.value}',
+        );
+      }
       status.value = SessionStatus.loggedIn;
     } else {
       NetworkAccessPolicy.instance.invalidate(signedIn: false);
+      reauthenticationRequired.value = false;
       status.value = SessionStatus.loggedOut;
+    }
+  }
+
+  Future<void> setReauthenticationRequired(
+    bool required, {
+    required int expectedGeneration,
+  }) async {
+    if (reauthenticationRequired.value == required) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (expectedGeneration != generation) return;
+    if (required) {
+      await prefs.setBool(_prefsReauthenticationKey, true);
+    } else {
+      await prefs.remove(_prefsReauthenticationKey);
+    }
+    if (expectedGeneration == generation) {
+      reauthenticationRequired.value = required;
     }
   }
 
@@ -210,6 +236,9 @@ class SessionManager {
           lastError.value = 'MFA 票据缺失';
           return LoginResult(success: false, message: lastError.value!);
         }
+        // The new identity is still unverified. Retire the previous session
+        // before exposing the challenge so its in-flight sync cannot apply.
+        if (isLoggedIn) await logout();
         _mfaTicket = ticket;
         currentUser.value = identifier;
         status.value = SessionStatus.mfaRequired;
@@ -341,6 +370,7 @@ class SessionManager {
     _mfaTicket = null;
     currentUser.value = null;
     status.value = SessionStatus.loggedOut;
+    reauthenticationRequired.value = false;
     lastError.value = null;
     try {
       await onSessionReset?.call();
@@ -355,6 +385,7 @@ class SessionManager {
     await prefs.remove(_prefsTokenKey);
     await prefs.remove(_prefsRefreshKey);
     await prefs.remove(_prefsUserKey);
+    await prefs.remove(_prefsReauthenticationKey);
     await NetworkAccessPolicy.instance.clearCachedAccess();
   }
 
