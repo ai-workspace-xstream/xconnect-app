@@ -1757,6 +1757,40 @@ class NativeBridge {
     }
   }
 
+  /// Restore the effective mode only from a generated system tunnel config.
+  @visibleForTesting
+  static TrafficMode? detectTunnelTrafficMode(Map<String, dynamic> config) {
+    final routing = config['routing'];
+    if (routing is! Map<String, dynamic> ||
+        VpnConfig.findTunnelDnsOutboundTag(routing) == null ||
+        !VpnConfig.supportsTrafficRouting(config)) {
+      return null;
+    }
+    return VpnConfig.isRoutingAllTunnelTraffic(routing)
+        ? TrafficMode.allVpn
+        : TrafficMode.smart;
+  }
+
+  static Future<TrafficMode?> _readSavedTunnelTrafficMode(String? path) async {
+    // Only the alternating runtime snapshots belong to a saved mode. Legacy
+    // profiles may point to a node file that has changed since tunnel startup.
+    if (path == null ||
+        !(path.endsWith('/traffic-routing-a.json') ||
+            path.endsWith('/traffic-routing-b.json'))) {
+      return null;
+    }
+    try {
+      final config = jsonDecode(await File(path).readAsString());
+      return config is Map<String, dynamic>
+          ? detectTunnelTrafficMode(config)
+          : null;
+    } on FormatException {
+      return null;
+    } on FileSystemException {
+      return null;
+    }
+  }
+
   /// Get Packet Tunnel status across platforms.
   static Future<PacketTunnelStatus> getPacketTunnelStatus() async {
     if (Platform.isAndroid) {
@@ -1774,10 +1808,13 @@ class NativeBridge {
         });
         final status = PacketTunnelStatus.fromMap(map);
         if (status.status == 'connected') {
-          TrafficRouting.markActiveMode(
-              _lastCompiledTunnelMode ?? TrafficMode.smart);
-        } else if (status.status == 'disconnected' ||
-            status.status == 'invalid') {
+          if (TrafficRouting.activeMode.value == null) {
+            final mode = _lastCompiledTunnelMode ??
+                await _readSavedTunnelTrafficMode(
+                    map['savedConfigPath'] as String?);
+            TrafficRouting.markActiveMode(mode);
+          }
+        } else {
           TrafficRouting.markActiveMode(null);
         }
         return status;
@@ -1791,13 +1828,10 @@ class NativeBridge {
     if (Platform.isWindows || Platform.isLinux) {
       final snapshot = await getDesktopRuntimeSnapshot();
       final isConnected = snapshot.running && snapshot.isTunnelReady;
-      if (isConnected) {
-        if (TrafficRouting.activeMode.value == null) {
-          TrafficRouting.markActiveMode(
-              _lastCompiledTunnelMode ?? TrafficMode.smart);
-        }
-      } else if (!snapshot.running) {
+      if (!isConnected) {
         TrafficRouting.markActiveMode(null);
+      } else if (TrafficRouting.activeMode.value == null) {
+        TrafficRouting.markActiveMode(_lastCompiledTunnelMode);
       }
       return PacketTunnelStatus(
         status: isConnected
@@ -1814,10 +1848,22 @@ class NativeBridge {
       final status = await _darwinHostApi.getPacketTunnelStatus();
       if (status.state == 'connected') {
         if (TrafficRouting.activeMode.value == null) {
-          TrafficRouting.markActiveMode(
-              _lastCompiledTunnelMode ?? TrafficMode.smart);
+          var mode = _lastCompiledTunnelMode;
+          if (mode == null) {
+            try {
+              final saved = await _darwinHostApi.savedPacketTunnelProfile();
+              mode = await _readSavedTunnelTrafficMode(saved?.configPath);
+            } on PlatformException {
+              // The tunnel is connected even if its saved mode is unavailable.
+            } on MissingPluginException {
+              // A bridge without saved-profile support cannot report its mode.
+            }
+          }
+          TrafficRouting.markActiveMode(mode);
         }
-      } else if (status.state == 'disconnected' || status.state == 'invalid') {
+      } else if (status.state == 'disconnected' ||
+          status.state == 'invalid' ||
+          status.state == 'not_configured') {
         TrafficRouting.markActiveMode(null);
       }
       return PacketTunnelStatus(
