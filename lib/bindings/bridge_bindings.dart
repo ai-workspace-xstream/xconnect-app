@@ -105,7 +105,8 @@ CreateWindowsServiceDart? _lookupCreateWindowsService(
 
 class BridgeBindings {
   BridgeBindings(ffi.DynamicLibrary lib)
-      : startNodeService =
+      : _lib = lib,
+        startNodeService =
             lib.lookupFunction<StartNodeServiceNative, StartNodeServiceDart>(
           'StartNodeService',
         ),
@@ -138,7 +139,6 @@ class BridgeBindings {
         ),
         stopXray = lib.lookupFunction<StopXrayNative, StopXrayDart>('StopXray'),
         desktopIntegrationCommand = _lookupDesktopIntegrationCommand(lib),
-        initTray = lib.lookupFunction<InitTrayNative, InitTrayDart>('InitTray'),
         getDesktopRuntimeSnapshot = _lookupGetDesktopRuntimeSnapshot(lib);
 
   final StartNodeServiceDart startNodeService;
@@ -152,6 +152,8 @@ class BridgeBindings {
   final StartXrayDart startXray;
   final StopXrayDart stopXray;
   final DesktopIntegrationCommandDart? desktopIntegrationCommand;
-  final InitTrayDart initTray;
+  final ffi.DynamicLibrary _lib;
+  late final InitTrayDart initTray =
+      _lib.lookupFunction<InitTrayNative, InitTrayDart>('InitTray');
   final GetDesktopRuntimeSnapshotDart? getDesktopRuntimeSnapshot;
 }

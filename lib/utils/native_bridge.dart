@@ -515,11 +515,13 @@ class NativeBridge {
 
   static Future<String> _stopNodeForTunnelInternal() async {
     // ── Darwin: delegate to official Packet Tunnel control path ────
-    if (_isDarwin) {
-      final result = await _stopPacketTunnelInternal();
+    if (_isDarwin || Platform.isAndroid) {
+      if (!await _ensurePacketTunnelStoppedBeforeStart()) {
+        return '停止失败: Packet Tunnel 未断开';
+      }
       _mobileActiveNodeName = null;
       TrafficRouting.markActiveMode(null);
-      return result;
+      return 'TUN 模式已停止';
     }
 
     // ── Windows / Linux: FFI stopXray ───────────────────────────────
@@ -548,11 +550,7 @@ class NativeBridge {
       }
     }
 
-    // ── Android: delegate to existing stopPacketTunnel ──────────────
-    final result = await _stopPacketTunnelInternal();
-    _mobileActiveNodeName = null;
-    TrafficRouting.markActiveMode(null);
-    return result;
+    return '当前平台暂不支持';
   }
 
   // 启动节点服务（防止重复启动）— 代理模式
@@ -1267,8 +1265,10 @@ class NativeBridge {
     var started = false;
     var committed = false;
     try {
-      await _darwinHostApi.startPacketTunnelCandidate(profile);
       started = true;
+      await _darwinHostApi
+          .startPacketTunnelCandidate(profile)
+          .timeout(const Duration(seconds: 12));
       final result = await _waitForDarwinPacketTunnelConnected(
         successMessage: 'TUN 模式启动成功 (${node.name})',
         allowIosProfileRepair: false,
@@ -1278,7 +1278,9 @@ class NativeBridge {
       if (current == null || !VpnConfig.canUseNode(current)) {
         return 'Connection is not authorized';
       }
-      final saveResult = await _darwinHostApi.savePacketTunnelProfile(profile);
+      final saveResult = await _darwinHostApi
+          .savePacketTunnelProfile(profile)
+          .timeout(const Duration(seconds: 12));
       committed =
           saveResult == 'profile_saved' || saveResult == 'profile_unchanged';
       if (committed) {
@@ -1289,7 +1291,7 @@ class NativeBridge {
     } finally {
       if (started && !committed) {
         try {
-          await _darwinHostApi.stopPacketTunnel();
+          await _stopPacketTunnelInternal();
         } catch (_) {
           addAppLog('Traffic routing candidate stop failed',
               level: LogLevel.warning);
@@ -1784,7 +1786,9 @@ class NativeBridge {
     if (!_isDarwin) return _tunStatusFallback;
     _ensureDarwinFlutterApiReady();
     try {
-      final status = await _darwinHostApi.getPacketTunnelStatus();
+      final status = await _darwinHostApi
+          .getPacketTunnelStatus()
+          .timeout(const Duration(seconds: 3));
       if (status.state == 'connected') {
         if (TrafficRouting.activeMode.value == null) {
           TrafficRouting.markActiveMode(
@@ -1866,7 +1870,9 @@ class NativeBridge {
     if (!_isDarwin) return 'unsupported';
     _ensureDarwinFlutterApiReady();
     try {
-      final saved = await _darwinHostApi.savedPacketTunnelProfile();
+      final saved = await _darwinHostApi
+          .savedPacketTunnelProfile()
+          .timeout(const Duration(seconds: 5));
       if (saved == null) return 'profile_missing';
       final file = File(saved.configPath);
       if (await file.exists()) {
@@ -1882,7 +1888,7 @@ class NativeBridge {
           goMemoryLimitMB: tuning.goMemoryLimitMB,
           goGCPercent: tuning.goGCPercent,
         ),
-      );
+      ).timeout(const Duration(seconds: 5));
     } on MissingPluginException {
       return 'unsupported';
     } catch (e) {

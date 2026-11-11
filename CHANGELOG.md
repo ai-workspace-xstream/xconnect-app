@@ -5,6 +5,9 @@
 - Wait for mobile and macOS VPN teardown before starting another connection.
   Allow iOS to start without an existing profile, and stop Android VPN services
   without leaving stale connection state or restarting them without a profile.
+- Keep the mobile disconnect control available for an existing system VPN
+  even when the app has no selected connection. Load the desktop tray symbol
+  only when desktop tray integration is used.
 
 - Show the source Git commit on the About page for macOS packages, Apple
   archives, and local runs built through the project commands.

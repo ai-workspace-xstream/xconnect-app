@@ -224,9 +224,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _packetTunnelStatus.status == 'invalid' ||
       _packetTunnelStatus.status == 'not_configured';
 
+  bool get _usesMobilePacketTunnel =>
+      Platform.isIOS || (Platform.isAndroid && NativeBridge.isTunMode);
+
+  bool get _canStopMobilePacketTunnel =>
+      _usesMobilePacketTunnel &&
+      const {'connecting', 'connected', 'reasserting', 'disconnecting'}
+          .contains(_packetTunnelStatus.status);
+
   bool get _shouldPollPacketTunnelStatus =>
       _appLifecycleState == AppLifecycleState.resumed &&
-      _activeNode.isNotEmpty &&
+      (_usesMobilePacketTunnel || _activeNode.isNotEmpty) &&
       _requiresPacketTunnelStatus;
 
   bool get _shouldPollMetrics =>
@@ -552,6 +560,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _toggleFromFloatingButton() async {
     if (_isSwitchingNode) return;
+    if (_canStopMobilePacketTunnel) {
+      setState(() => _isSwitchingNode = true);
+      try {
+        final message = await NativeBridge.stopNodeForTunnel();
+        if (!mounted) return;
+        if (message == 'TUN 模式已停止') {
+          GlobalState.activeNodeName.value = '';
+        } else {
+          _showMessage(message);
+        }
+        await _refreshPacketTunnelStatus();
+      } finally {
+        if (mounted) setState(() => _isSwitchingNode = false);
+      }
+      return;
+    }
     final node = _resolveActionNode();
     if (node == null) {
       _showMessage(context.l10n.get('noNodes'));
@@ -575,7 +599,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         tunnelPending: _tunnelPending,
       )) {
         // Prevent leaks if connection mode was changed during an active session by stopping both
-        await NativeBridge.stopNodeForTunnel();
+        final stopResult = await NativeBridge.stopNodeForTunnel();
+        if (!mounted) return;
+        if (useTunMode && stopResult.startsWith('停止失败')) {
+          _showMessage(stopResult);
+          return;
+        }
         final msg = await NativeBridge.stopNodeService(nodeName);
         if (!mounted) return;
         setState(() {
@@ -590,7 +619,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // ── Stop previous node if switching ───────────────────────────
       if (_activeNode.isNotEmpty) {
-        await NativeBridge.stopNodeForTunnel();
+        final stopResult = await NativeBridge.stopNodeForTunnel();
+        if (!mounted) return;
+        if (useTunMode && stopResult.startsWith('停止失败')) {
+          _showMessage(stopResult);
+          return;
+        }
         await NativeBridge.stopNodeService(_activeNode);
         if (!mounted) return;
         GlobalState.activeNodeName.value = '';
@@ -1414,7 +1448,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 enabled: !_isSwitchingNode,
                 child: FloatingActionButton.extended(
                   heroTag: 'home_connection_control',
-                  backgroundColor: _hasActiveConnection ? xc.success : xc.ink,
+                  backgroundColor: _hasActiveConnection || _canStopMobilePacketTunnel
+                      ? xc.success
+                      : xc.ink,
                   foregroundColor: xc.onInk,
                   onPressed:
                       _isSwitchingNode ? null : _toggleFromFloatingButton,
@@ -1428,14 +1464,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         )
                       : Icon(
-                          _hasActiveConnection
+                          _hasActiveConnection || _canStopMobilePacketTunnel
                               ? Icons.stop_rounded
                               : Icons.play_arrow_rounded,
                         ),
                   label: Text(
                     _isSwitchingNode
                         ? _connectionStateLabel(context)
-                        : (_hasActiveConnection
+                        : (_hasActiveConnection || _canStopMobilePacketTunnel
                             ? context.l10n.get('stopAcceleration')
                             : context.l10n.get('startAcceleration')),
                   ),
