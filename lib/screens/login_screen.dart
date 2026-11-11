@@ -20,7 +20,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usageService = AccountUsageService();
   Future<(AccountUsageSummary, int)>? _usage;
   Timer? _usageTimer;
-  bool _showReauthenticationForm = false;
 
   final SessionManager _sessionManager = SessionManager.instance;
   final DesktopSyncService _syncService = DesktopSyncService.instance;
@@ -35,7 +34,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _baseUrlController.text = _sessionManager.baseUrl.value;
     _usernameController.text = _sessionManager.currentUser.value ?? '';
     _sessionManager.status.addListener(_refreshUsage);
-    _sessionManager.reauthenticationRequired.addListener(_refreshUsage);
     _syncService.syncing.addListener(_onSyncChanged);
     _refreshUsage();
     _usageTimer =
@@ -46,7 +44,6 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _usageTimer?.cancel();
     _sessionManager.status.removeListener(_refreshUsage);
-    _sessionManager.reauthenticationRequired.removeListener(_refreshUsage);
     _syncService.syncing.removeListener(_onSyncChanged);
     _baseUrlController.dispose();
     _usernameController.dispose();
@@ -75,9 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _refreshUsage() {
     if (!mounted) return;
     setState(() {
-      final canLoadUsage = _sessionManager.isLoggedIn &&
-          !_sessionManager.reauthenticationRequired.value;
-      _usage = canLoadUsage ? _loadUsage() : null;
+      _usage = _sessionManager.isLoggedIn ? _loadUsage() : null;
     });
   }
 
@@ -134,36 +129,25 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (_sessionManager.loading.value) return;
-    final LoginResult result;
-    if (_sessionManager.isMfaRequired) {
-      result = await _sessionManager.verifyMfaCode(_mfaCodeController.text);
+    final isMfaRequired = _sessionManager.isMfaRequired;
+    if (isMfaRequired) {
+      final result =
+          await _sessionManager.verifyMfaCode(_mfaCodeController.text);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(result.message)));
+      }
     } else {
-      final identifier = _usernameController.text;
-      final password = _passwordController.text;
       await _sessionManager.setBaseUrl(_baseUrlController.text);
-      if (!mounted) return;
-      result = await _sessionManager.login(
-        identifier: identifier,
-        password: password,
+      final result = await _sessionManager.login(
+        identifier: _usernameController.text,
+        password: _passwordController.text,
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(result.message)));
+      }
     }
-    if (!mounted) return;
-    if (result.success || result.mfaRequired) _passwordController.clear();
-    if (result.success) {
-      _mfaCodeController.clear();
-      setState(() => _showReauthenticationForm = false);
-    }
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(result.message)));
-  }
-
-  void _startReauthentication() {
-    _baseUrlController.text = _sessionManager.baseUrl.value;
-    _usernameController.text = _sessionManager.currentUser.value ?? '';
-    _passwordController.clear();
-    _mfaCodeController.clear();
-    setState(() => _showReauthenticationForm = true);
   }
 
   Future<void> _handleLogout() async {
@@ -199,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final isLoggedIn = status == SessionStatus.loggedIn;
         final isMfaRequired = status == SessionStatus.mfaRequired;
 
-        if (isLoggedIn && !_showReauthenticationForm) {
+        if (isLoggedIn) {
           return _buildLoggedInView(context);
         }
         return _buildLoginForm(context, isMfaRequired);
@@ -238,23 +222,14 @@ class _LoginScreenState extends State<LoginScreen> {
               // Sync status card
               _buildSyncStatusCard(context),
               const SizedBox(height: 16),
-              if (!_sessionManager.reauthenticationRequired.value)
-                _buildUsageCard(context),
+              _buildUsageCard(context),
 
               const SizedBox(height: 24),
 
               // Action buttons
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 16,
-                runSpacing: 8,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (_sessionManager.reauthenticationRequired.value)
-                    ElevatedButton.icon(
-                      onPressed: _startReauthentication,
-                      icon: const Icon(Icons.login),
-                      label: Text(context.l10n.get('connectorSignInAgain')),
-                    ),
                   ValueListenableBuilder<bool>(
                     valueListenable: _syncService.syncing,
                     builder: (context, syncing, _) {
@@ -280,6 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       );
                     },
                   ),
+                  const SizedBox(width: 16),
                   OutlinedButton.icon(
                     onPressed: _handleLogout,
                     icon: const Icon(Icons.logout),
@@ -312,13 +288,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ? _formatDateTime(summary.lastSuccessAt!)
             : context.l10n.get('never');
         final nodeIds = summary.nodeIds;
-        final lastError = summary.lastError;
-        final error =
-            lastError != null && lastError != 'connectorAuthenticationRequired'
-                ? lastError
-                : _sessionManager.reauthenticationRequired.value
-                    ? 'connectorAuthenticationRequired'
-                    : null;
 
         return Container(
           width: double.infinity,
@@ -363,10 +332,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 4),
                 _infoRow(context, context.l10n.get('nodeIds'), nodeIds),
               ],
-              if (error != null) ...[
+              if (summary.lastError != null) ...[
                 const SizedBox(height: 8),
                 Text(
-                  context.l10n.get(error),
+                  context.l10n.get(summary.lastError!),
                   style: Theme.of(
                     context,
                   ).textTheme.labelMedium?.copyWith(color: cs.error),
@@ -542,16 +511,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
                         },
                       ),
-
-                      if (_showReauthenticationForm &&
-                          _sessionManager.isLoggedIn)
-                        TextButton(
-                          onPressed: () {
-                            _passwordController.clear();
-                            setState(() => _showReauthenticationForm = false);
-                          },
-                          child: Text(context.l10n.get('cancel')),
-                        ),
 
                       // Error message
                       ValueListenableBuilder<String?>(

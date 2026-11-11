@@ -56,31 +56,6 @@ void main() {
     expect(VpnConfig.supportsTrafficRouting(config), isFalse);
   });
 
-  test('restores Smart or Global from the running tunnel config', () {
-    for (final mode in TrafficMode.values) {
-      final config = standardConfig();
-      VpnConfig.applySecureDnsConfig(
-        config,
-        enableTunnelMode: true,
-        routeAllTunnelTraffic: mode == TrafficMode.allVpn,
-      );
-      expect(NativeBridge.detectTunnelTrafficMode(config), mode);
-    }
-  });
-
-  test('does not guess a mode for proxy or custom routing', () {
-    final config = standardConfig();
-    VpnConfig.applySecureDnsConfig(config, enableTunnelMode: false);
-    expect(NativeBridge.detectTunnelTrafficMode(config), isNull);
-    VpnConfig.applySecureDnsConfig(config, enableTunnelMode: true);
-    (config['routing']['rules'] as List).add({
-      'type': 'field',
-      'ip': ['203.0.113.1'],
-      'outboundTag': 'direct',
-    });
-    expect(NativeBridge.detectTunnelTrafficMode(config), isNull);
-  });
-
   test('rejects plaintext and certificate verification bypass', () {
     final config = standardConfig();
     final stream = config['outbounds'][0]['streamSettings'] as Map;

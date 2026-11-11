@@ -5,20 +5,16 @@
   domain traffic directly while routing other public traffic through the node;
   Global proxy routes public traffic through the node while preserving LAN direct access.
   The preference applies on the next app connection.
-- Recover the active traffic mode from the saved runtime profile when reopening
-  a connected Apple or Android app. Only show an active mode when known and
-  clear it when the desktop system tunnel route is no longer ready.
 
 - Show server-reported month-to-date usage and allowance on the connector page.
 
 - Connector sync silently retries rejected reads, falls back to a valid saved
   session cookie, and uses a saved refresh token when the server provides one.
-  Login/MFA and native tunnel stop requests have bounded timeouts.
-- After connector authentication recovery fails, the connector page offers
-  sign-in again with the current server and account filled in. The app suspends
-  managed access and retains its configurations. Successful sign-in automatically
-  syncs fresh configurations. Manual or periodic sync can also restore access if
-  the connector starts accepting the saved session again.
+  Recovery stays on the connector page without a login form. Login/MFA and
+  native tunnel stop requests have bounded timeouts.
+- Background synchronization authentication failures no longer sign users out.
+  Saved credentials and profiles persist until explicit logout or connector
+  change; unauthorized managed access remains suspended until reauthorized.
 - Managed connections retain their last successful local snapshot through
   transient sync failures and same-account restarts. Offline authorization is
   limited to 24 hours or team expiry, whichever comes first; logout, explicit

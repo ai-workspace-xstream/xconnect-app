@@ -236,8 +236,9 @@ void main() {
     });
   }
 
-  test('manual retry restores access without asking for login', () async {
-    sync.client = MockClient((_) async => http.Response('{}', 401));
+  test('successful retry restores access without asking for login', () async {
+    sync.client = MockClient((request) async => http.Response(
+        '{}', request.url.path == '/api/auth/session' ? 200 : 401));
     await sync.syncNow();
     expect(policy.active, isFalse);
     sync.client = MockClient((request) async {
@@ -249,39 +250,10 @@ void main() {
       }
       return http.Response('', 404);
     });
-    expect((await sync.syncNow(manual: true)).success, isTrue);
-    expect(session.reauthenticationRequired.value, isFalse);
-    await session.init();
-    expect(session.reauthenticationRequired.value, isFalse);
+    expect((await sync.syncNow()).success, isTrue);
     expect(session.isLoggedIn, isTrue);
     expect(policy.active, isTrue);
     expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
-  });
-
-  test('same cookie and bearer without refresh requires actionable recovery',
-      () async {
-    final saved = VpnConfig.allNodes.single;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('session.cookie', 'xc_session=test-session');
-    await session.init();
-    var requests = 0;
-    sync.client = MockClient((request) async {
-      requests++;
-      expect(request.method, 'GET');
-      expect(request.headers['Authorization'], 'Bearer test-session');
-      return http.Response('{}', 401);
-    });
-    expect((await sync.syncNow(manual: true)).success, isFalse);
-    expect(requests, 2);
-    expect(prefs.getBool('session.reauthenticationRequired'), isTrue);
-    expect(session.isLoggedIn, isTrue);
-    expect(policy.active, isFalse);
-    expect(await File(saved.configPath).exists(), isTrue);
-    await session.init();
-    expect(session.reauthenticationRequired.value, isTrue);
-    expect(policy.active, isFalse);
-    expect((await sync.syncNow(manual: true)).success, isFalse);
-    expect(requests, 4, reason: 'user can retry after a connector recovers');
   });
 
   test('old request cannot invalidate a new login', () async {
@@ -498,19 +470,12 @@ void main() {
     },
   );
 
-  for (final scenario in [
-    'relogin',
-    'switch-mfa',
-    'switch',
-    'switch-offline'
-  ]) {
+  for (final scenario in ['relogin', 'switch', 'switch-offline']) {
     test(
       '$scenario automatically syncs after login without mixing accounts',
       () async {
         final saved = VpnConfig.allNodes.single;
         final switched = scenario != 'relogin';
-        sync.client = MockClient((_) async => http.Response('{}', 401));
-        await sync.syncNow();
         var newRequest = false;
         var retainedBeforeReplacement = false;
         final finished = Completer<void>();
@@ -559,44 +524,23 @@ void main() {
         try {
           await sync.init();
           final login = await http.runWithClient(
-            () async {
-              final login = await session.login(
-                identifier: switched ? 'other@example' : 'member@example',
-                password: 'fixture-only',
-              );
-              if (scenario != 'switch-mfa') return login;
-              expect(login.mfaRequired, isTrue);
-              expect(session.sessionToken, isNull);
-              expect(policy.active, isFalse);
-              expect(await File(saved.configPath).exists(), isTrue);
-              return session.verifyMfaCode('123456');
-            },
-            () => MockClient((request) async {
-              if (scenario == 'switch-mfa' &&
-                  request.url.path.endsWith('/login')) {
-                return http.Response(
-                  '{"mfa_required":true,"mfa_ticket":"test-mfa-ticket"}',
-                  200,
-                );
-              }
-              return http.Response(
+            () => session.login(
+              identifier: switched ? 'other@example' : 'member@example',
+              password: 'fixture-only',
+            ),
+            () => MockClient(
+              (_) async => http.Response(
                 jsonEncode({
                   'token': 'session-b',
-                  'access_token': 'session-b',
-                  'expires_in': 86400,
                   'user': {
                     'email': switched ? 'other@example' : 'member@example',
                   },
                 }),
                 200,
-              );
-            }),
+              ),
+            ),
           );
           expect(login.success, isTrue);
-          expect(
-              (await SharedPreferences.getInstance())
-                  .getBool('session.reauthenticationRequired'),
-              isNot(true));
           await finished.future.timeout(const Duration(seconds: 5));
           expect(retainedBeforeReplacement, isTrue);
           if (scenario == 'switch-offline') {
