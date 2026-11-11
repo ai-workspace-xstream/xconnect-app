@@ -16,4 +16,5 @@ if [[ -z "$DEVICE_ID" ]]; then
 fi
 
 echo ">>> Deploying release build to iOS device: $DEVICE_ID"
-flutter run -d "$DEVICE_ID" --release --no-resident
+flutter run -d "$DEVICE_ID" --release --no-resident \
+  --dart-define=BUILD_ID="$(git rev-parse --short HEAD)"

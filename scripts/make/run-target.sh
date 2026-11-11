@@ -156,7 +156,7 @@ run_macos_build() {
 
   # Sync Generated.xcconfig so Xcode Archive picks up the correct version from pubspec.yaml.
   echo "Syncing Flutter build config (pubspec.yaml → Generated.xcconfig)..."
-  env "${codesign_env[@]}" "$flutter_bin" build macos --config-only
+  env "${codesign_env[@]}" "$flutter_bin" build macos --config-only "${common_dart_defines[@]}"
 
   # Flutter's macOS wrapper can build plugin frameworks for the host architecture
   # while the Xcode project still requests both arm64 and x86_64. Xcode 27 then
@@ -462,9 +462,9 @@ case "$TARGET" in
     # Sync Generated.xcconfig from pubspec.yaml without building.
     # Run this before doing a manual Xcode Archive to ensure the version is correct.
     echo "Syncing Flutter build config (pubspec.yaml → Generated.xcconfig)..."
-    "$flutter_bin" build macos --config-only
-    "$flutter_bin" build ios --config-only --no-codesign
-    echo "✅ Config synced. Xcode Archive will now use the correct version."
+    "$flutter_bin" build macos --config-only "${common_dart_defines[@]}"
+    "$flutter_bin" build ios --config-only --no-codesign "${common_dart_defines[@]}"
+    echo "✅ Config synced. Xcode Archive will now use the correct version and Git revision."
     ;;
   mcp)
     run_mcp

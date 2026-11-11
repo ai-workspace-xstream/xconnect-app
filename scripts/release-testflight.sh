@@ -12,6 +12,7 @@ DEEP_CLEAN=0
 BUILD_NAME=""
 BUILD_NUMBER=""
 IOS_EXPORT_METHOD="app-store"
+BUILD_COMMIT="$(git -C "$ROOT_DIR" rev-parse --short HEAD)"
 
 IOS_IPA_DIR="$ROOT_DIR/build/ios/ipa"
 IOS_ARCHIVE_DIR="$ROOT_DIR/build/ios/archive"
@@ -155,7 +156,7 @@ build_ios_ipa() {
   run_bash "cd '$ROOT_DIR' && ./build_scripts/build_ios_xray.sh"
   run_bash "cd '$ROOT_DIR' && flutter pub get"
 
-  run_bash "cd '$ROOT_DIR' && flutter build ipa --release --export-method '$IOS_EXPORT_METHOD' --build-name '$BUILD_NAME' --build-number '$BUILD_NUMBER'"
+  run_bash "cd '$ROOT_DIR' && flutter build ipa --release --export-method '$IOS_EXPORT_METHOD' --build-name '$BUILD_NAME' --build-number '$BUILD_NUMBER' --dart-define=BUILD_ID='$BUILD_COMMIT'"
 }
 
 upload_ios() {
@@ -188,7 +189,7 @@ PLIST
 
   run_bash "cd '$ROOT_DIR' && flutter pub get"
   run_bash "cd '$ROOT_DIR' && ./build_scripts/build_macos_xray_from_vendor.sh"
-  run_bash "cd '$ROOT_DIR' && flutter build macos --release --build-name '$BUILD_NAME' --build-number '$BUILD_NUMBER'"
+  run_bash "cd '$ROOT_DIR' && flutter build macos --release --build-name '$BUILD_NAME' --build-number '$BUILD_NUMBER' --dart-define=BUILD_ID='$BUILD_COMMIT'"
 
   run xcodebuild \
     -workspace "$ROOT_DIR/macos/Runner.xcworkspace" \

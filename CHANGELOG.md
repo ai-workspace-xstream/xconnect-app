@@ -1,5 +1,8 @@
 # Unreleased
 
+- Show the source Git commit on the About page for macOS packages, Apple
+  archives, and local runs built through the project commands.
+
 - Add Smart routing and Global proxy modes for standard System VPN profiles on macOS,
   iOS, Android, Windows, and Linux. Smart routing directs LAN and Chinese mainland
   domain traffic directly while routing other public traffic through the node;

@@ -106,7 +106,7 @@ sync-macos-config: check-flutter check-macos
 	@echo ">>> Syncing version $(VERSION) to macOS config"
 	$(FLUTTER) pub get
 	@cd macos && \
-		$(FLUTTER) build macos --config-only
+		$(FLUTTER) build macos --config-only $(DART_DEFINES)
 
 clean-macos: check-flutter check-macos
 	@echo ">>> Cleaning Flutter caches..."
@@ -114,7 +114,7 @@ clean-macos: check-flutter check-macos
 	@echo ">>> Fetching dependencies..."
 	$(FLUTTER) pub get
 	@echo ">>> Regenerating macOS config..."
-	$(FLUTTER) build macos --config-only
+	$(FLUTTER) build macos --config-only $(DART_DEFINES)
 	@echo ">>> Installing CocoaPods..."
 	cd macos && LANG=en_US.UTF-8 pod install
 	@echo ">>> Done. Please open macos/Runner.xcworkspace in Xcode to build."
@@ -217,7 +217,7 @@ test:
 	$(FLUTTER) test
 
 run:
-	$(FLUTTER) run
+	$(FLUTTER) run $(DART_DEFINES)
 
 dns-check:
 	@./scripts/dns-check.sh
