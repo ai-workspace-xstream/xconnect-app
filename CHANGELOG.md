@@ -1,5 +1,11 @@
 # Unreleased
 
+- Offer connector sign-in when the saved session is rejected, preserving managed
+  profiles until a fresh sync can restore access.
+- Wait for mobile and macOS VPN teardown before starting another connection.
+  Allow iOS to start without an existing profile, and stop Android VPN services
+  without leaving stale connection state or restarting them without a profile.
+
 - Show the source Git commit on the About page for macOS packages, Apple
   archives, and local runs built through the project commands.
 

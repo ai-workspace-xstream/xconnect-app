@@ -3,6 +3,7 @@ package plus.svc.xconnect
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.os.Build
 import android.provider.Settings
 import org.json.JSONObject
 
@@ -10,7 +11,6 @@ internal object PacketTunnelController {
     private const val LOG_TAG = "XConnectPacketTunnel"
     private const val PREFS = "xconnect_packet_tunnel"
     private const val KEY_PROFILE = "profile_json"
-    private const val KEY_STATE = "state"
     private const val KEY_ERROR = "last_error"
     private const val KEY_STARTED_AT = "started_at"
     private const val KEY_PERMISSION_PENDING = "permission_pending"
@@ -21,6 +21,9 @@ internal object PacketTunnelController {
     private const val STATE_CONNECTING = "connecting"
     private const val STATE_CONNECTED = "connected"
     private const val STATE_INVALID = "invalid"
+    private const val STATE_DISCONNECTING = "disconnecting"
+    // Live state belongs to this process, never to a saved VPN profile.
+    private var state: String? = null
 
     private fun encodeProfile(profileMap: Map<*, *>): String {
         val json = JSONObject()
@@ -37,7 +40,7 @@ internal object PacketTunnelController {
         clearError(context)
         clearPendingPermission(context)
         if (readState(context) == STATE_NOT_CONFIGURED) {
-            writeState(context, STATE_DISCONNECTED)
+            writeState(STATE_DISCONNECTED)
         }
         return "profile_saved"
     }
@@ -66,7 +69,7 @@ internal object PacketTunnelController {
             // refuse to start with "Packet Tunnel 已在运行，请先停止", because
             // that guard treats CONNECTING as a live tunnel. `permissionPending`
             // carries the real story for the UI.
-            writeState(context, STATE_DISCONNECTED)
+            writeState(STATE_DISCONNECTED)
             writeError(context, "vpn_permission_required")
             clearStartedAt(context)
             markPendingPermission(context, candidate)
@@ -74,11 +77,11 @@ internal object PacketTunnelController {
                 requestPermission(prepareIntent)
                 return "vpn_permission_requested"
             }
-            writeState(context, STATE_INVALID)
+            writeState(STATE_INVALID)
             return "vpn_permission_required"
         }
 
-        writeState(context, STATE_CONNECTING)
+        writeState(STATE_CONNECTING)
         clearError(context)
         clearPendingPermission(context)
         return startService(context, stored)
@@ -90,7 +93,7 @@ internal object PacketTunnelController {
             return "vpn_permission_request_expired"
         }
         if (!granted) {
-            writeState(context, STATE_INVALID)
+            writeState(STATE_INVALID)
             writeError(context, "vpn_permission_denied")
             clearStartedAt(context)
             clearPendingPermission(context)
@@ -100,7 +103,7 @@ internal object PacketTunnelController {
         val stored = prefs(context).getString(KEY_PENDING_PROFILE, null)
             ?: prefs(context).getString(KEY_PROFILE, null)
             ?: return "profile_missing"
-        writeState(context, STATE_CONNECTING)
+        writeState(STATE_CONNECTING)
         clearError(context)
         clearPendingPermission(context)
         return startService(context, stored)
@@ -112,7 +115,11 @@ internal object PacketTunnelController {
             putExtra(XConnectPacketTunnelService.EXTRA_PROFILE_JSON, stored)
         }
         return try {
-            context.startService(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
             android.util.Log.i(LOG_TAG, "startService: submitted")
             "start_submitted"
         } catch (t: Throwable) {
@@ -125,15 +132,19 @@ internal object PacketTunnelController {
     }
 
     fun stop(context: Context): String {
-        val intent = Intent(context, XConnectPacketTunnelService::class.java).apply {
-            action = XConnectPacketTunnelService.ACTION_STOP
-        }
-        context.startService(intent)
-        writeState(context, STATE_DISCONNECTED)
-        clearError(context)
-        clearStartedAt(context)
         clearPendingPermission(context)
+        if (state == STATE_DISCONNECTING) return "stop_submitted"
+        val stopped = context.stopService(Intent(context, XConnectPacketTunnelService::class.java))
+        if (stopped) {
+            writeState(STATE_DISCONNECTING)
+        } else {
+            markDisconnected(context)
+        }
         return "stop_submitted"
+    }
+
+    fun onServiceDestroyed(context: Context) {
+        if (state != STATE_INVALID) markDisconnected(context)
     }
 
     fun status(context: Context): Map<String, Any?> {
@@ -144,8 +155,9 @@ internal object PacketTunnelController {
             "savedConfigPath" to savedPath,
             "status" to readState(context),
             "utun" to emptyList<String>(),
-            "lastError" to prefs(context).getString(KEY_ERROR, null),
-            "startedAt" to prefs(context).getLong(KEY_STARTED_AT, 0L).takeIf { it > 0L },
+            "lastError" to prefs(context).getString(KEY_ERROR, null).takeIf { state != null },
+            "startedAt" to prefs(context).getLong(KEY_STARTED_AT, 0L)
+                .takeIf { state == STATE_CONNECTED && it > 0L },
             "permissionPending" to prefs(context).getBoolean(KEY_PERMISSION_PENDING, false),
         )
     }
@@ -179,15 +191,15 @@ internal object PacketTunnelController {
         AndroidPacketTunnelMetrics.reset(context)
         prefs(context).edit()
             .putString(KEY_PROFILE, profileJson)
-            .putString(KEY_STATE, STATE_CONNECTED)
             .remove(KEY_ERROR)
             .putLong(KEY_STARTED_AT, System.currentTimeMillis() / 1000L)
             .apply()
+        writeState(STATE_CONNECTED)
     }
 
     fun markDisconnected(context: Context) {
         AndroidPacketTunnelMetrics.reset(context)
-        writeState(context, STATE_DISCONNECTED)
+        writeState(STATE_DISCONNECTED)
         clearError(context)
         clearStartedAt(context)
         clearPendingPermission(context)
@@ -195,7 +207,7 @@ internal object PacketTunnelController {
 
     fun markFailed(context: Context, message: String) {
         AndroidPacketTunnelMetrics.reset(context)
-        writeState(context, STATE_INVALID)
+        writeState(STATE_INVALID)
         writeError(context, message)
         clearStartedAt(context)
         clearPendingPermission(context)
@@ -211,13 +223,12 @@ internal object PacketTunnelController {
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private fun writeState(context: Context, state: String) {
-        prefs(context).edit().putString(KEY_STATE, state).apply()
+    private fun writeState(next: String) {
+        state = next
     }
 
-    private fun readState(context: Context): String {
-        return prefs(context).getString(KEY_STATE, STATE_NOT_CONFIGURED) ?: STATE_NOT_CONFIGURED
-    }
+    private fun readState(context: Context): String =
+        state ?: if (prefs(context).contains(KEY_PROFILE)) STATE_DISCONNECTED else STATE_NOT_CONFIGURED
 
     private fun writeError(context: Context, message: String) {
         prefs(context).edit().putString(KEY_ERROR, message).apply()

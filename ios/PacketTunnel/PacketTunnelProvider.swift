@@ -118,12 +118,14 @@ public final class PacketTunnelProvider: NEPacketTunnelProvider {
     monitor?.cancel()
     monitor = nil
     engine.stop()
+    activeSettings = nil
     statusStore.markDisconnected(reason: reason)
+    os_log("PacketTunnelProvider: tunnel stopped", log: tunnelLog, type: .info)
     completionHandler()
   }
 
   private func resolveOptions(options: [String: NSObject]?) throws -> [String: NSObject] {
-    if let options {
+    if let options, !options.isEmpty {
       return options
     }
 

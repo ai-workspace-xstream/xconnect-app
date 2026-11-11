@@ -1,5 +1,9 @@
 package plus.svc.xconnect
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.net.IpPrefix
 import android.net.VpnService
@@ -15,19 +19,48 @@ class XConnectPacketTunnelService : VpnService() {
     private var tunnelHandle: Long = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_START -> startTunnel(intent.getStringExtra(EXTRA_PROFILE_JSON))
-            ACTION_STOP -> {
-                stopTunnel()
-                stopSelf()
-            }
+        if (intent?.action != ACTION_START) {
+            stopSelf(startId)
+            return START_NOT_STICKY
         }
-        return START_STICKY
+        try {
+            startForeground(NOTIFICATION_ID, tunnelNotification())
+            startTunnel(intent.getStringExtra(EXTRA_PROFILE_JSON))
+        } catch (error: Exception) {
+            PacketTunnelController.markFailed(this, "foreground_start_failed")
+            android.util.Log.e(LOG_TAG, "foreground start failed: ${error.javaClass.simpleName}")
+            stopSelf(startId)
+        }
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
         stopTunnel()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        PacketTunnelController.onServiceDestroyed(this)
+        android.util.Log.i(LOG_TAG, "packet tunnel stopped")
         super.onDestroy()
+    }
+
+    private fun tunnelNotification(): Notification {
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getSystemService(NotificationManager::class.java).createNotificationChannel(
+                NotificationChannel(NOTIFICATION_CHANNEL, "XConnect VPN", NotificationManager.IMPORTANCE_LOW)
+            )
+            Notification.Builder(this, NOTIFICATION_CHANNEL)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
+        val openApp = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+        )
+        return builder
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setContentTitle("XConnect VPN")
+            .setContentIntent(openApp)
+            .setOngoing(true)
+            .build()
     }
 
     private fun startTunnel(profileJson: String?) {
@@ -136,7 +169,7 @@ class XConnectPacketTunnelService : VpnService() {
 
             if (!NativePacketTunnelBridge.isAvailable()) {
                 PacketTunnelController.markFailed(this, "native_bridge_unavailable")
-                stopTunnel(markDisconnected = false)
+                stopTunnel()
                 stopSelf()
                 return
             }
@@ -144,7 +177,7 @@ class XConnectPacketTunnelService : VpnService() {
             tunnelHandle = NativePacketTunnelBridge.startTunnel(tunnelConfig, tunFd)
             if (tunnelHandle <= 0L) {
                 PacketTunnelController.markFailed(this, "xray_start_failed")
-                stopTunnel(markDisconnected = false)
+                stopTunnel()
                 stopSelf()
                 return
             }
@@ -154,12 +187,12 @@ class XConnectPacketTunnelService : VpnService() {
         } catch (t: Throwable) {
             android.util.Log.e(LOG_TAG, "packet tunnel start failed: ${t.message}")
             PacketTunnelController.markFailed(this, t.message ?: "start_failed")
-            stopTunnel(markDisconnected = false)
+            stopTunnel()
             stopSelf()
         }
     }
 
-    private fun stopTunnel(markDisconnected: Boolean = true) {
+    private fun stopTunnel() {
         if (tunnelHandle > 0L) {
             try {
                 NativePacketTunnelBridge.stopTunnel(tunnelHandle)
@@ -179,9 +212,6 @@ class XConnectPacketTunnelService : VpnService() {
             tunInterface = null
         }
 
-        if (markDisconnected) {
-            PacketTunnelController.markDisconnected(this)
-        }
     }
 
     private fun resolveConfigJson(profile: JSONObject): String? {
@@ -407,7 +437,8 @@ class XConnectPacketTunnelService : VpnService() {
     companion object {
         private const val LOG_TAG = "XConnectPacketTunnel"
         const val ACTION_START = "plus.svc.xconnect.securetunnel.START"
-        const val ACTION_STOP = "plus.svc.xconnect.securetunnel.STOP"
+        private const val NOTIFICATION_CHANNEL = "xconnect_vpn"
+        private const val NOTIFICATION_ID = 8301
         const val EXTRA_PROFILE_JSON = "profile_json"
     }
 }

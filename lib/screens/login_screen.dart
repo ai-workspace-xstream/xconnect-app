@@ -20,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usageService = AccountUsageService();
   Future<(AccountUsageSummary, int)>? _usage;
   Timer? _usageTimer;
+  bool _reauthenticating = false;
 
   final SessionManager _sessionManager = SessionManager.instance;
   final DesktopSyncService _syncService = DesktopSyncService.instance;
@@ -129,25 +130,32 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    final isMfaRequired = _sessionManager.isMfaRequired;
-    if (isMfaRequired) {
-      final result =
-          await _sessionManager.verifyMfaCode(_mfaCodeController.text);
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(result.message)));
-      }
+    final LoginResult result;
+    if (_sessionManager.isMfaRequired) {
+      result = await _sessionManager.verifyMfaCode(_mfaCodeController.text);
     } else {
       await _sessionManager.setBaseUrl(_baseUrlController.text);
-      final result = await _sessionManager.login(
+      result = await _sessionManager.login(
         identifier: _usernameController.text,
         password: _passwordController.text,
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(result.message)));
-      }
     }
+    if (!mounted) return;
+    if (result.success) {
+      _passwordController.clear();
+      _mfaCodeController.clear();
+      setState(() => _reauthenticating = false);
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  void _reauthenticate() {
+    _baseUrlController.text = _sessionManager.baseUrl.value;
+    _usernameController.text = _sessionManager.currentUser.value ?? '';
+    _passwordController.clear();
+    setState(() => _reauthenticating = true);
   }
 
   Future<void> _handleLogout() async {
@@ -183,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final isLoggedIn = status == SessionStatus.loggedIn;
         final isMfaRequired = status == SessionStatus.mfaRequired;
 
-        if (isLoggedIn) {
+        if (isLoggedIn && !_reauthenticating) {
           return _buildLoggedInView(context);
         }
         return _buildLoginForm(context, isMfaRequired);
@@ -340,6 +348,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     context,
                   ).textTheme.labelMedium?.copyWith(color: cs.error),
                 ),
+                if (summary.lastError == 'connectorAuthenticationRequired')
+                  TextButton(
+                    onPressed: _reauthenticate,
+                    child: Text(context.l10n.get('connectorSignInAgain')),
+                  ),
               ],
             ],
           ),

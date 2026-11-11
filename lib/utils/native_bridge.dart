@@ -1230,9 +1230,15 @@ class NativeBridge {
   ) async {
     final status = await _channel
         .invokeMapMethod<String, Object?>('getPacketTunnelStatus');
-    final candidate = await _writeRoutingCandidate(config,
-        savedPath: status?['savedConfigPath'] as String?);
-    final profile = await _buildDefaultTunnelProfileMap(configPath: candidate);
+    final pinning = await TunnelEndpointResolver().pinOutboundEndpoints(config);
+    final candidate = await _writeRoutingCandidate(
+      pinning.config,
+      savedPath: status?['savedConfigPath'] as String?,
+    );
+    final profile = await _buildDefaultTunnelProfileMap(
+      configPath: candidate,
+      excludedIpv4: pinning.pinnedIpv4,
+    );
     profile['saveAfterStart'] = true;
     final result =
         await _channel.invokeMethod<String>('startPacketTunnel', profile);
@@ -1662,74 +1668,41 @@ class NativeBridge {
   }
 
   static Future<bool> _ensurePacketTunnelStoppedBeforeStart() async {
-    if (Platform.isAndroid) {
-      try {
-        await _channel.invokeMethod<String>('stopPacketTunnel');
-      } catch (_) {}
-      return true;
-    }
-
-    if (!_isDarwin) return true;
-    _ensureDarwinFlutterApiReady();
-    if (!Platform.isIOS) {
-      try {
-        final status = await _darwinHostApi.getPacketTunnelStatus();
-        const activeStates = <String>{
-          'connected',
-          'connecting',
-          'reasserting',
-          'disconnecting',
-        };
-        if (activeStates.contains(status.state)) {
-          await _darwinHostApi.stopPacketTunnel();
-          await Future<void>.delayed(const Duration(milliseconds: 300));
-        }
-      } catch (_) {}
-      return true;
-    }
+    if (!_isDarwin && !Platform.isAndroid) return true;
     try {
-      const activeStates = <String>{
-        'connected',
-        'connecting',
-        'reasserting',
-        'disconnecting',
-      };
-      const terminalStates = <String>{'disconnected', 'invalid'};
-      final deadline = DateTime.now().add(const Duration(seconds: 35));
-      var stopRequested = false;
+      const stoppedStates = {'not_configured', 'disconnected', 'invalid'};
+      var status = await getPacketTunnelStatus();
+      if (stoppedStates.contains(status.status)) return true;
+      if (status.status == 'unsupported') return false;
+      if (status.status != 'disconnecting') {
+        final result = await _stopPacketTunnelInternal();
+        if (result.startsWith('停止失败') || result == '插件未实现') {
+          return false;
+        }
+      }
 
+      final deadline = DateTime.now().add(const Duration(seconds: 15));
       while (DateTime.now().isBefore(deadline)) {
-        final status = await _darwinHostApi.getPacketTunnelStatus();
-        if (terminalStates.contains(status.state)) {
-          // NEVPNStatus can report `disconnected` just before the old
-          // Packet Tunnel's DNS settings are removed. Require a second,
-          // settled observation before doing InternetAddress.lookup; a single
-          // optimistic status observation left a ~26ms race on the real 5G
-          // device and still routed the lookup through the stale tunnel.
-          await Future<void>.delayed(const Duration(seconds: 1));
-          final settled = await _darwinHostApi.getPacketTunnelStatus();
-          if (terminalStates.contains(settled.state)) {
-            return true;
-          }
-          continue;
-        }
-
-        if (activeStates.contains(status.state) && !stopRequested) {
-          await _darwinHostApi.stopPacketTunnel();
-          stopRequested = true;
-        }
         await Future<void>.delayed(const Duration(milliseconds: 250));
+        status = await getPacketTunnelStatus();
+        if (!stoppedStates.contains(status.status)) continue;
+        if (Platform.isIOS) {
+          // The old iOS resolver can outlive the disconnected notification.
+          await Future<void>.delayed(const Duration(seconds: 1));
+          final settled = await getPacketTunnelStatus();
+          if (!stoppedStates.contains(settled.status)) continue;
+        }
+        return true;
       }
       addAppLog(
-        '[tunnel] Packet Tunnel did not settle to disconnected within 35s '
-        'before endpoint resolution',
-        level: LogLevel.error,
+        '[tunnel] Previous tunnel did not stop within 15s',
+        level: LogLevel.warning,
       );
       return false;
-    } catch (e) {
+    } catch (error) {
       addAppLog(
-        '[tunnel] 无法确认 Packet Tunnel 已停止，取消节点地址解析: $e',
-        level: LogLevel.error,
+        '[tunnel] Could not confirm tunnel stop: $error',
+        level: LogLevel.warning,
       );
       return false;
     }
@@ -2072,6 +2045,7 @@ class NativeBridge {
       await Future.delayed(const Duration(milliseconds: 250));
     }
 
+    await _stopPacketTunnelInternal();
     final error = lastStatus.lastError?.trim();
     if (error != null && error.isNotEmpty) {
       return '启动失败: $error';

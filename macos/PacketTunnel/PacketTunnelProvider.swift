@@ -18,7 +18,7 @@ let tunnelLog = OSLog(subsystem: "plus.svc.xconnect", category: "PacketTunnel")
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
   private var activeSettings: NEPacketTunnelNetworkSettings?
-  private let monitor = NWPathMonitor(prohibitedInterfaceTypes: [NWInterface.InterfaceType.other])
+  private var monitor: NWPathMonitor?
   private let statusStore = PacketTunnelStatusStore()
   private let metricsSampler = PacketTunnelMetricsSampler()
   private let engine: SecureTunnelEngine = XrayTunnelEngine()
@@ -57,7 +57,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let resolvedTun = self.resolveDarwinTunnelHandle(preferredFd: resolvedFd)
         let fd = resolvedTun.fd
         let egressInterface =
-          self.monitor.currentPath.availableInterfaces.first(where: { !$0.name.contains("utun") })?
+          self.monitor?.currentPath.availableInterfaces.first(where: { !$0.name.contains("utun") })?
           .name ?? ""
 
         do {
@@ -106,14 +106,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
       reason.rawValue
     )
     metricsSampler.stop()
-    monitor.cancel()
+    monitor?.cancel()
+    monitor = nil
     engine.stop()
+    activeSettings = nil
     statusStore.markDisconnected(reason: reason)
+    os_log("PacketTunnelProvider: tunnel stopped", log: tunnelLog, type: .info)
     completionHandler()
   }
 
   private func resolveOptions(options: [String: NSObject]?) throws -> [String: NSObject] {
-    if let options {
+    if let options, !options.isEmpty {
       return options
     }
 
@@ -458,6 +461,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   private func startPathMonitor() {
+    monitor?.cancel()
+    let monitor = NWPathMonitor(prohibitedInterfaceTypes: [.other])
+    self.monitor = monitor
     monitor.pathUpdateHandler = { path in
       guard path.status == .satisfied else {
         return
@@ -686,7 +692,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     completionHandler: @escaping (Error?) -> Void
   ) {
     engine.stop()
-    monitor.cancel()
+    monitor?.cancel()
+    monitor = nil
     activeSettings = nil
     metricsSampler.stop()
     statusStore.markFailed(error.localizedDescription)
