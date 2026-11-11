@@ -37,7 +37,7 @@ class NativeBridge {
   static bool _darwinFlutterApiReady = false;
   static Future<void> Function(String action, Map<String, dynamic> payload)?
       _nativeMenuActionHandler;
-  static String? _mobileActiveNodeName;
+  static String? _localProxyNodeName;
   static TrafficMode? _lastCompiledTunnelMode;
   static String? _darwinAppGroupPathCache;
   static Future<void> _connectionLifecycleQueue = Future<void>.value();
@@ -68,7 +68,9 @@ class NativeBridge {
     required String status,
     String? lastError,
   }) {
-    if (status == 'connected') return true;
+    if (const {'connected', 'reasserting', 'disconnecting'}.contains(status)) {
+      return true;
+    }
     if (status != 'connecting') return false;
     return lastError != 'vpn_permission_required';
   }
@@ -360,11 +362,15 @@ class NativeBridge {
         if (!await _ensurePacketTunnelStoppedBeforeStart()) {
           return '启动失败: 旧 Packet Tunnel 未能及时停止，无法安全解析节点地址';
         }
-        _mobileActiveNodeName = null;
+        final stopResult = stopXray();
+        if (stopResult != 'success' && stopResult != 'error:not running') {
+          return '启动失败: 无法停止本地代理 ($stopResult)';
+        }
+        _localProxyNodeName = null;
         // Pin while the tunnel is down: once it is up, the system resolver is
         // captured and this same lookup is the one that deadlocks.
         if (routingConfig != null) {
-          return await _startAndroidRoutingCandidate(routingConfig, nodeName);
+          return await _startAndroidRoutingCandidate(routingConfig);
         }
         final pinned = await _prepareRuntimeTunnelConfig(runtimeConfigPath);
         final profile = await _buildDefaultTunnelProfileMap(
@@ -376,9 +382,6 @@ class NativeBridge {
           'startPacketTunnel',
           profile,
         );
-        if (isTunnelStartAcceptedMessage(result)) {
-          _mobileActiveNodeName = nodeName;
-        }
         return result ?? 'Packet Tunnel 启动请求已提交';
       } on PlatformException catch (e) {
         return '启动失败: ${_platformErrorSummary(e)}';
@@ -519,7 +522,6 @@ class NativeBridge {
       if (!await _ensurePacketTunnelStoppedBeforeStart()) {
         return '停止失败: Packet Tunnel 未断开';
       }
-      _mobileActiveNodeName = null;
       TrafficRouting.markActiveMode(null);
       return 'TUN 模式已停止';
     }
@@ -603,16 +605,18 @@ class NativeBridge {
       if (await checkNodeStatus(nodeName)) return '服务已在运行';
       try {
         await _stopOtherRunningNodes(nodeName);
-        if (_mobileActiveNodeName != null &&
-            _mobileActiveNodeName != nodeName) {
-          stopXray();
-          _mobileActiveNodeName = null;
+        if (Platform.isAndroid || _localProxyNodeName != null) {
+          final stopped = stopXray();
+          if (stopped != 'success' && stopped != 'error:not running') {
+            return '启动失败: 无法停止旧代理 ($stopped)';
+          }
+          _localProxyNodeName = null;
         }
 
         final configJson = await File(runtimeConfigPath).readAsString();
         final result = startXray(configJson);
         if (result.toLowerCase().startsWith('success')) {
-          _mobileActiveNodeName = nodeName;
+          _localProxyNodeName = nodeName;
         }
         return result;
       } catch (e) {
@@ -665,13 +669,13 @@ class NativeBridge {
     if (node == null) return '未知节点: $nodeName';
 
     if (_isMobile || Platform.isMacOS) {
-      if (_mobileActiveNodeName != nodeName) {
+      if (_localProxyNodeName != nodeName) {
         return 'success';
       }
       try {
         final result = stopXray();
         if (result.toLowerCase().startsWith('success')) {
-          _mobileActiveNodeName = null;
+          _localProxyNodeName = null;
         }
         return result;
       } catch (e) {
@@ -712,7 +716,7 @@ class NativeBridge {
     if (node == null) return false;
 
     if (_isMobile || Platform.isMacOS) {
-      return _mobileActiveNodeName == nodeName;
+      return _localProxyNodeName == nodeName;
     }
 
     if (!_isDesktop) return false;
@@ -1024,8 +1028,8 @@ class NativeBridge {
       await VpnConfig.load();
     } catch (_) {}
 
-    final active = _mobileActiveNodeName;
-    if (active != null && active.trim().isNotEmpty) {
+    final active = _localProxyNodeName ?? GlobalState.activeNodeName.value;
+    if (active.trim().isNotEmpty) {
       final node = VpnConfig.getNodeByName(active);
       if (node != null) {
         final resolved = await _resolveNodeConfigSource(node);
@@ -1224,7 +1228,6 @@ class NativeBridge {
 
   static Future<String> _startAndroidRoutingCandidate(
     Map<String, dynamic> config,
-    String nodeName,
   ) async {
     final status = await _channel
         .invokeMapMethod<String, Object?>('getPacketTunnelStatus');
@@ -1240,9 +1243,6 @@ class NativeBridge {
     profile['saveAfterStart'] = true;
     final result =
         await _channel.invokeMethod<String>('startPacketTunnel', profile);
-    if (isTunnelStartAcceptedMessage(result)) {
-      _mobileActiveNodeName = nodeName;
-    }
     return result ?? '启动失败: traffic_routing_start_failed';
   }
 
@@ -1518,7 +1518,7 @@ class NativeBridge {
       // Ignore cleanup failures here. Packet Tunnel startup will report the
       // real runtime error if anything is still wrong.
     } finally {
-      _mobileActiveNodeName = null;
+      _localProxyNodeName = null;
     }
   }
 
@@ -1628,7 +1628,6 @@ class NativeBridge {
     if (!_isDarwin && !Platform.isAndroid) return '当前平台暂不支持';
     final resolved = await _resolveTunnelNodeConfig();
     if (resolved == null) return '未找到可用的节点配置';
-    if (Platform.isAndroid) stopXray();
     return _startNodeForTunnelInternal(resolved.node.name);
   }
 

@@ -323,14 +323,18 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         // Was in TUN mode → stop packet tunnel
         stopMsg = await NativeBridge.stopNodeForTunnel();
       }
-      GlobalState.activeNodeName.value = '';
       addAppLog('[mode switch] $stopMsg');
+      if (stopMsg.startsWith('停止失败') || stopMsg.startsWith('error:')) {
+        if (mounted) _showComingSoon(stopMsg);
+        return;
+      }
+      GlobalState.activeNodeName.value = '';
 
       final startMsg = tunnelEnabled
           ? await NativeBridge.startNodeForTunnel(activeNode)
           : await NativeBridge.startNodeService(activeNode);
       final running = tunnelEnabled
-          ? !startMsg.contains('失败')
+          ? NativeBridge.isTunnelStartAcceptedMessage(startMsg)
           : await NativeBridge.checkNodeStatus(activeNode);
       addAppLog('[mode switch] $startMsg');
 

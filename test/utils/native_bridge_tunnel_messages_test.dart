@@ -29,11 +29,11 @@ void main() {
   });
 
   group('NativeBridge.packetTunnelOccupiesVpnSlot', () {
-    test('a connected tunnel owns the slot', () {
-      expect(
-        NativeBridge.packetTunnelOccupiesVpnSlot(status: 'connected'),
-        isTrue,
-      );
+    test('a running or stopping tunnel owns the slot', () {
+      for (final status in ['connected', 'reasserting', 'disconnecting']) {
+        expect(
+            NativeBridge.packetTunnelOccupiesVpnSlot(status: status), isTrue);
+      }
     });
 
     test('a tunnel genuinely coming up owns the slot', () {
@@ -59,7 +59,6 @@ void main() {
     test('no idle or failed state ever blocks proxy mode', () {
       for (final status in [
         'disconnected',
-        'disconnecting',
         'invalid',
         'not_configured',
         'unsupported',

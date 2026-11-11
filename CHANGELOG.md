@@ -7,7 +7,8 @@
   without leaving stale connection state or restarting them without a profile.
 - Keep the mobile disconnect control available for an existing system VPN
   even when the app has no selected connection. Load the desktop tray symbol
-  only when desktop tray integration is used.
+  only when desktop tray integration is used. Track Android proxy and system VPN
+  separately so either mode can disconnect and release its own core.
 
 - Show the source Git commit on the About page for macOS packages, Apple
   archives, and local runs built through the project commands.

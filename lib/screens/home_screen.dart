@@ -211,8 +211,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       DesktopPlatformCapabilities.current;
 
   bool get _requiresPacketTunnelStatus =>
-      Platform.isAndroid ||
-      Platform.isIOS ||
+      _usesMobilePacketTunnel ||
       (Platform.isMacOS && NativeBridge.isTunMode) ||
       (_desktopCapabilities.supportsUnifiedTunnelStatus &&
           (Platform.isWindows || Platform.isLinux) &&
@@ -607,13 +606,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
         final msg = await NativeBridge.stopNodeService(nodeName);
         if (!mounted) return;
+        if (!useTunMode &&
+            (msg.startsWith('error:') || msg.startsWith('停止失败'))) {
+          _showMessage(msg);
+          return;
+        }
         setState(() {
           _activeNode = '';
           _selectedNode = nodeName;
         });
         GlobalState.activeNodeName.value = '';
         _syncConnectedMeta();
-        _showMessage(useTunMode ? 'Tunnel disconnected' : msg);
+        _showMessage(useTunMode ? stopResult : msg);
         return;
       }
 
