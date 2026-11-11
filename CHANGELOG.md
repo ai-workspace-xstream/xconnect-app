@@ -5,9 +5,6 @@
   domain traffic directly while routing other public traffic through the node;
   Global proxy routes public traffic through the node while preserving LAN direct access.
   The preference applies on the next app connection.
-- Recover the active traffic mode from the saved runtime profile when reopening
-  a connected Apple or Android app. Only show an active mode when known and
-  clear it when the desktop system tunnel route is no longer ready.
 
 - Show server-reported month-to-date usage and allowance on the connector page.
 
