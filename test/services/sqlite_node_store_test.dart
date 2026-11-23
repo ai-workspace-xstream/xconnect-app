@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -32,7 +33,7 @@ void main() {
     if (Platform.isLinux) {
       open.overrideFor(
         OperatingSystem.linux,
-        () => throw UnsupportedError('Use default linux loader in test'),
+        () => DynamicLibrary.open('libsqlite3.so.0'),
       );
     }
     // Create a legacy DB lacking managed_* and routing_pool/pricing_group columns.
