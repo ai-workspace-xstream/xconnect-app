@@ -27,10 +27,12 @@ if [[ "${GITHUB_REF_TYPE:-}" == "tag" || "$build_ref" == v* ]]; then
     echo "Release ref ${build_ref} does not match Windows MSI version ${msi_version}" >&2
     exit 1
   fi
+  release_channel="stable"
   release_title="XConnect ${release_version}"
   release_notes="Automated stable release for ${GITHUB_REF_NAME}"
 elif [[ "$build_ref" == "main" ]]; then
   release_tag="latest-${build_id}-${short_sha}"
+  release_channel="latest"
   release_title="latest"
   release_notes="Latest main build ${build_id} from ${GITHUB_SHA:-unknown}"
 elif [[ "$build_ref" == release/v* ]]; then
@@ -40,10 +42,12 @@ elif [[ "$build_ref" == release/v* ]]; then
     exit 1
   fi
   release_tag="release-${msi_version}-${build_id}-${short_sha}"
+  release_channel="release-branch"
   release_title="XConnect ${msi_version}"
   release_notes="Production release-branch build ${build_id} from ${build_ref} (${GITHUB_SHA:-unknown})"
 else
   release_tag="build-${build_id}-${short_sha}"
+  release_channel="build"
   release_title="$release_tag"
   release_notes="Feature build ${build_id} from ${build_ref:-unknown} (${GITHUB_SHA:-unknown})"
 fi
@@ -58,4 +62,9 @@ release_notes="${release_notes}; app version ${app_version}+${build_number}, Win
   echo "release_tag=${release_tag}"
   echo "release_title=${release_title}"
   echo "release_notes=${release_notes}"
+  echo "app_version=${app_version}"
+  echo "build_number=${build_number}"
+  echo "msi_version=${msi_version}"
+  echo "release_channel=${release_channel}"
+  echo "commit_sha=${short_sha}"
 } >> "$GITHUB_OUTPUT"

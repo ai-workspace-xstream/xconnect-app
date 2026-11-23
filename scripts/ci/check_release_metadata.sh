@@ -16,22 +16,28 @@ trap 'rm -rf "$test_dir"' EXIT
 run_case() {
   local expected_tag="$1"
   local expected_title="$2"
-  shift 2
+  local expected_channel="$3"
+  shift 3
   local output_file="$test_dir/output"
   : > "$output_file"
   GITHUB_OUTPUT="$output_file" "$@" bash "$metadata_script"
   grep -Fx "release_tag=$expected_tag" "$output_file"
   grep -Fx "release_title=$expected_title" "$output_file"
+  grep -Fx "app_version=$app_version" "$output_file"
+  grep -Fx "build_number=$build_number" "$output_file"
+  grep -Fx "msi_version=$expected_msi_version" "$output_file"
+  grep -Fx "release_channel=$expected_channel" "$output_file"
+  grep -Fx "commit_sha=abcdef1" "$output_file"
   grep -F "Windows MSI version ${expected_msi_version};" "$output_file"
 }
 
-run_case "latest-310-abcdef1" "latest" \
+run_case "latest-310-abcdef1" "latest" "latest" \
   env GITHUB_EVENT_NAME=push GITHUB_REF_NAME=main GITHUB_RUN_ID=310 GITHUB_RUN_NUMBER=310 GITHUB_SHA=abcdef1234567890
-run_case "v${expected_msi_version}" "XConnect ${expected_msi_version}" \
+run_case "v${expected_msi_version}" "XConnect ${expected_msi_version}" "stable" \
   env GITHUB_REF_TYPE=tag GITHUB_REF_NAME="v${expected_msi_version}" GITHUB_RUN_ID=311 GITHUB_SHA=abcdef1234567890
-run_case "release-${expected_msi_version}-312-abcdef1" "XConnect ${expected_msi_version}" \
+run_case "release-${expected_msi_version}-312-abcdef1" "XConnect ${expected_msi_version}" "release-branch" \
   env GITHUB_EVENT_NAME=push GITHUB_REF_NAME="release/v${expected_msi_version}" GITHUB_RUN_ID=312 GITHUB_SHA=abcdef1234567890
-run_case "build-313-abcdef1" "build-313-abcdef1" \
+run_case "build-313-abcdef1" "build-313-abcdef1" "build" \
   env GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF_NAME=feature/test GITHUB_RUN_ID=313 GITHUB_SHA=abcdef1234567890
 
 if GITHUB_OUTPUT="$test_dir/mismatch" GITHUB_REF_TYPE=tag GITHUB_REF_NAME="v${mismatched_msi_version}" GITHUB_SHA=abcdef1234567890 bash "$metadata_script" 2>/dev/null; then

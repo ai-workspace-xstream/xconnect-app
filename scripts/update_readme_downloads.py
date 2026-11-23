@@ -18,10 +18,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", required=True, help="GitHub repo in owner/name form.")
     parser.add_argument("--tag", required=True, help="Release tag used for download links.")
-    parser.add_argument(
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
         "--release-json",
-        required=True,
         help="Path to gh release JSON output with an assets array.",
+    )
+    source.add_argument(
+        "--matrix-json",
+        help="Path to CI-generated matrix.json with platforms/packages.",
     )
     parser.add_argument(
         "--readme",
@@ -39,6 +43,18 @@ def build_asset_map(release: dict[str, Any], repo: str, tag: str) -> dict[str, s
         if not name:
             continue
         assets[name] = f"{base_url}/{quote(name)}"
+    return assets
+
+
+def build_asset_map_from_matrix(matrix: dict[str, Any], repo: str, tag: str) -> dict[str, str]:
+    base_url = f"https://github.com/{repo}/releases/download/{quote(tag)}"
+    assets: dict[str, str] = {}
+    for platform in matrix.get("platforms", []):
+        for pkg in platform.get("packages", []):
+            name = pkg.get("name")
+            if not name:
+                continue
+            assets[name] = pkg.get("githubUrl") or f"{base_url}/{quote(name)}"
     return assets
 
 
@@ -97,8 +113,12 @@ def replace_block(content: str, replacement: str) -> str:
 
 def main() -> None:
     args = parse_args()
-    release = json.loads(Path(args.release_json).read_text(encoding="utf-8"))
-    assets = build_asset_map(release, args.repo, args.tag)
+    if args.matrix_json:
+        matrix = json.loads(Path(args.matrix_json).read_text(encoding="utf-8"))
+        assets = build_asset_map_from_matrix(matrix, args.repo, args.tag)
+    else:
+        release = json.loads(Path(args.release_json).read_text(encoding="utf-8"))
+        assets = build_asset_map(release, args.repo, args.tag)
     readme_path = Path(args.readme)
     readme = readme_path.read_text(encoding="utf-8")
     updated = replace_block(readme, build_table(args.repo, args.tag, assets))

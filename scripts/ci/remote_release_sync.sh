@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# DEPRECATED: Legacy single-VPS SSH/rsync uploader retained temporarily for
+# manual fallback only. Automated CI releases use scripts/ci/sync_release_mirrors.sh
+# with Vault OIDC credentials to sync Aliyun OSS (cn-dl.svc.plus) and Cloudflare R2 (dl.svc.plus).
 set -euo pipefail
 
 platform_name="${1:-}"
