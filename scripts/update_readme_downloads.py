@@ -76,10 +76,12 @@ def format_links(assets: dict[str, str], names: list[tuple[str, str | None]]) ->
 
 def build_table(repo: str, tag: str, assets: dict[str, str]) -> str:
     macos_dmg = find_first(assets, lambda name: name.endswith(".dmg"))
+    linux_tar = find_first(assets, lambda name: name == "xconnect-linux-x64.tar.gz")
     linux_zip = find_first(assets, lambda name: name == "xconnect-linux.zip")
     linux_appimage = find_first(assets, lambda name: name.endswith(".AppImage"))
     linux_deb = find_first(assets, lambda name: name.endswith(".deb"))
     linux_rpm = find_first(assets, lambda name: name.endswith(".rpm"))
+    windows_portable = find_first(assets, lambda name: name == "xconnect-windows-portable.exe")
     windows_zip = find_first(assets, lambda name: name == "xconnect-windows.zip")
     windows_msi = find_first(assets, lambda name: name.endswith(".msi"))
     android_apk = find_first(assets, lambda name: name == "app-release.apk")
@@ -90,9 +92,9 @@ def build_table(repo: str, tag: str, assets: dict[str, str]) -> str:
         "|------|------|----------|------|",
         f"| macOS | arm64 | ✅ 已测试 | {format_links(assets, [('DMG', macos_dmg)])} |",
         "| macOS | x64 | ⚠️ 未测试 | — |",
-        f"| Linux | x64 | ⚠️ 未测试 | {format_links(assets, [('ZIP', linux_zip), ('AppImage', linux_appimage), ('DEB', linux_deb), ('RPM', linux_rpm)])} |",
+        f"| Linux | x64 | ⚠️ 未测试 | {format_links(assets, [('DEB', linux_deb), ('RPM', linux_rpm), ('AppImage', linux_appimage), ('TAR.GZ', linux_tar), ('ZIP', linux_zip)])} |",
         "| Linux | arm64 | ⚠️ 未测试 | — |",
-        f"| Windows | x64 | ✅ 已测试 | {format_links(assets, [('ZIP', windows_zip), ('MSI', windows_msi)])} |",
+        f"| Windows | x64 | ✅ 已测试 | {format_links(assets, [('Portable EXE', windows_portable), ('ZIP', windows_zip), ('MSI', windows_msi)])} |",
         f"| Android | arm64 | ⚠️ 未测试 | {format_links(assets, [('APK', android_apk)])} |",
         f"| iOS | arm64 | ✅ 已测试 | {format_links(assets, [('IPA', ios_ipa)])} |",
         "",

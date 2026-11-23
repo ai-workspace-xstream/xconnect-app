@@ -11,6 +11,7 @@ LIB_DIR="$BUNDLE_DIR/lib"
 APPDIR="$PROJECT_ROOT/build/linux/AppDir"
 APPIMAGE_DIR="$PROJECT_ROOT/build/linux/x64/release/AppImage"
 OUTPUT_ZIP="$BUNDLE_DIR/xconnect-linux.zip"
+OUTPUT_TAR="$BUNDLE_DIR/xconnect-linux-x64.tar.gz"
 APPIMAGE_OUTPUT="$APPIMAGE_DIR/xconnect-linux.AppImage"
 APPIMAGE_TMP_DIR="$PROJECT_ROOT/build/linux/appimage-tmp"
 
@@ -41,10 +42,11 @@ if [[ "$FOUND" != "true" ]]; then
     exit 1
 fi
 
-echo ">>> Packaging bundle (zip legacy mode)..."
+echo ">>> Packaging portable archives (tar.gz + zip)..."
 cd "$BUNDLE_DIR"
-rm -f "$OUTPUT_ZIP"
-zip -r "$(basename "$OUTPUT_ZIP")" . -x "$(basename "$OUTPUT_ZIP")"
+rm -f "$OUTPUT_ZIP" "$OUTPUT_TAR"
+tar -czf "$OUTPUT_TAR" --exclude="$(basename "$OUTPUT_ZIP")" --exclude="$(basename "$OUTPUT_TAR")" .
+zip -r "$(basename "$OUTPUT_ZIP")" . -x "$(basename "$OUTPUT_ZIP")" -x "$(basename "$OUTPUT_TAR")"
 cd -
 
 echo ">>> Preparing AppDir structure..."
@@ -62,9 +64,12 @@ cat << EOF > "$APPDIR/xconnect.desktop"
 [Desktop Entry]
 Type=Application
 Name=XConnect
+Comment=XConnect secure network desktop client
 Exec=xconnect
 Icon=xconnect
-Categories=Utility;
+Categories=Network;Utility;
+StartupWMClass=xconnect
+StartupNotify=true
 EOF
 
 # 生成 AppRun 启动器
@@ -93,6 +98,7 @@ if [ ! -f "$HOME/.local/bin/appimagetool-x86_64.AppImage" ]; then
 fi
 
 echo ">>> Building AppImage..."
+export APPIMAGE_EXTRACT_AND_RUN=1
 (
     cd "$APPIMAGE_TMP_DIR"
     "$HOME/.local/bin/linuxdeploy-x86_64.AppImage" --appdir "$APPDIR" --output appimage

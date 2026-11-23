@@ -8,7 +8,7 @@ $portableDir = Join-Path $PSScriptRoot "..\build\windows\x64\portable"
 $runtimeDir = Join-Path $portableDir "runtime"
 $launcherSrcDir = Join-Path $portableDir "launcher-src"
 $payloadZip = Join-Path $portableDir "payload.zip"
-$portableExe = Join-Path $portableDir "xconnect.exe"
+$portableExe = Join-Path $portableDir "xconnect-windows-portable.exe"
 $innerExeName = "xconnect_runtime.exe"
 
 New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
@@ -43,7 +43,7 @@ $excludeNames = @(
 )
 
 Get-ChildItem $releaseDir -Force | ForEach-Object {
-    if ($excludeNames -contains $_.Name) {
+    if ($excludeNames -contains $_.Name -or $_.Extension -eq ".msi") {
         return
     }
 

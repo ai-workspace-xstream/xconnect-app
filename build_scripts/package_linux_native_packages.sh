@@ -58,7 +58,9 @@ Comment=Secure Tunnel desktop client
 Exec=/usr/bin/xconnect
 Icon=xconnect
 Terminal=false
-Categories=Utility;Network;
+Categories=Network;Utility;
+StartupWMClass=xconnect
+StartupNotify=true
 EOF
 
 cp "$PROJECT_ROOT/assets/logo.png" \
@@ -84,27 +86,27 @@ description: |
 vendor: XConnect Team
 homepage: https://github.com/cloud-neutral-toolkit/xconnect.svc.plus
 license: Apache-2.0
-depends:
-  - libgtk-3-0
-  - libayatana-appindicator3-1
-  - libnotify-bin
-  - "pkexec | policykit-1"
-  - iproute2
-  - libcap2-bin
-  - libx11-6
-  - libstdc++6
-  - libsqlite3-0
 overrides:
+  deb:
+    depends:
+      - "libgtk-3-0t64 | libgtk-3-0"
+      - "pkexec | policykit-1"
+      - iproute2
+      - libcap2-bin
+      - libx11-6
+      - libstdc++6
+    recommends:
+      - libnotify-bin
   rpm:
     depends:
-      - libappindicator-gtk3
-      - libnotify
+      - "(gtk3 or libgtk-3-0)"
       - polkit
-      - iproute
-      - libcap
-      - libX11
-      - libstdc++
-      - sqlite-libs
+      - "(iproute or iproute2)"
+      - "(libcap or libcap-progs)"
+      - "(libX11 or libX11-6)"
+      - "(libstdc++ or libstdc++6)"
+    recommends:
+      - "(libnotify or libnotify-tools)"
 contents:
   - src: ${STAGE_DIR}/opt/xconnect/
     dst: /opt/xconnect
