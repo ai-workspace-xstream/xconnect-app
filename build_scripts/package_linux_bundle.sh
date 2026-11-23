@@ -43,17 +43,17 @@ if [[ "$FOUND" != "true" ]]; then
 fi
 
 echo ">>> Packaging portable archives (tar.gz + zip)..."
-TMP_TAR="$(mktemp "${TMPDIR:-/tmp}/xconnect-linux-x64.tar.gz.XXXXXX")"
-TMP_ZIP="$(mktemp "${TMPDIR:-/tmp}/xconnect-linux.zip.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/xconnect-linux-pkg-XXXXXX")"
 rm -f "$OUTPUT_ZIP" "$OUTPUT_TAR"
 
-tar -czf "$TMP_TAR" -C "$BUNDLE_DIR" .
+tar -czf "$TMP_DIR/xconnect-linux-x64.tar.gz" -C "$BUNDLE_DIR" .
 (
     cd "$BUNDLE_DIR"
-    zip -r "$TMP_ZIP" .
+    zip -r "$TMP_DIR/xconnect-linux.zip" .
 )
-mv "$TMP_TAR" "$OUTPUT_TAR"
-mv "$TMP_ZIP" "$OUTPUT_ZIP"
+mv "$TMP_DIR/xconnect-linux-x64.tar.gz" "$OUTPUT_TAR"
+mv "$TMP_DIR/xconnect-linux.zip" "$OUTPUT_ZIP"
+rm -rf "$TMP_DIR"
 
 echo ">>> Preparing AppDir structure..."
 cp -v "$BUNDLE_DIR/xconnect" "$APPDIR/usr/bin/"
