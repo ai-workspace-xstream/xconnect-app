@@ -40,6 +40,7 @@ case "$platform" in
     ./build_scripts/build_windows.sh
     flutter build windows --release "${flutter_build_metadata[@]}"
     pwsh -File ./build_scripts/package_windows_bundle.ps1
+    pwsh -File ./build_scripts/package_windows_single_file.ps1
     pwsh -File ./build_scripts/package_windows_msi.ps1
     ;;
   macos)

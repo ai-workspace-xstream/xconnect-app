@@ -36,11 +36,13 @@ class PackageClassification:
 
 EXACT_CLASSIFICATIONS: dict[str, PackageClassification] = {
     "xconnect.dmg": PackageClassification("macos", "dmg", "arm64", True, "end_user", 10),
+    "xconnect-windows-portable.exe": PackageClassification("windows", "exe", "x64", True, "end_user", 5),
     "xconnect-windows.msi": PackageClassification("windows", "msi", "x64", True, "end_user", 10),
     "xconnect-windows.zip": PackageClassification("windows", "zip", "x64", False, "end_user", 20),
     "xconnect-linux-amd64.deb": PackageClassification("linux", "deb", "amd64", True, "end_user", 10),
     "xconnect-linux.AppImage": PackageClassification("linux", "appimage", "x64", False, "end_user", 20),
     "xconnect-linux-x86_64.rpm": PackageClassification("linux", "rpm", "x86_64", False, "end_user", 30),
+    "xconnect-linux-x64.tar.gz": PackageClassification("linux", "tar.gz", "x64", False, "end_user", 35),
     "xconnect-linux.zip": PackageClassification("linux", "zip", "x64", False, "end_user", 40),
     "app-release.apk": PackageClassification("android", "apk", "universal", True, "end_user", 10),
     "xconnect.ipa": PackageClassification("ios", "ipa", "arm64", False, "sideload", 10),

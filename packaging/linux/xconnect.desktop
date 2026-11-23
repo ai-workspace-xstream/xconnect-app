@@ -7,4 +7,5 @@ Exec=/opt/xconnect/xconnect
 Icon=xconnect
 Terminal=false
 Categories=Network;Utility;
+StartupWMClass=xconnect
 StartupNotify=true

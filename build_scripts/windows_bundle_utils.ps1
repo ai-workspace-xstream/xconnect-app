@@ -48,18 +48,35 @@ function Get-XConnectVcRedistDir {
         $candidates += (Join-Path $env:VCToolsRedistDir "x64\Microsoft.VC145.CRT")
     }
 
-    $globbed = Get-ChildItem `
-        "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Redist\MSVC" `
-        -Directory -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending
+    $vsRoots = @(
+        "C:\Program Files\Microsoft Visual Studio",
+        "C:\Program Files (x86)\Microsoft Visual Studio"
+    )
+    foreach ($vsRoot in $vsRoots) {
+        if (-not (Test-Path $vsRoot)) {
+            continue
+        }
+        $msvcDirs = Get-ChildItem -Path $vsRoot -Filter "MSVC" -Directory -Recurse -Depth 3 -ErrorAction SilentlyContinue
+        foreach ($msvcDir in $msvcDirs) {
+            if ($msvcDir.FullName -notmatch '\\VC\\Redist\\MSVC$') {
+                continue
+            }
+            $verDirs = Get-ChildItem -Path $msvcDir.FullName -Directory -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending
+            foreach ($entry in $verDirs) {
+                $candidates += (Join-Path $entry.FullName "x64\Microsoft.VC145.CRT")
+                $candidates += (Join-Path $entry.FullName "x64\Microsoft.VC143.CRT")
+                $candidates += (Join-Path $entry.FullName "x64\Microsoft.VC142.CRT")
+            }
+        }
+    }
 
-    foreach ($entry in $globbed) {
-        $candidates += (Join-Path $entry.FullName "x64\Microsoft.VC145.CRT")
-        $candidates += (Join-Path $entry.FullName "x64\Microsoft.VC143.CRT")
+    if ($env:SystemRoot) {
+        $candidates += (Join-Path $env:SystemRoot "System32")
     }
 
     foreach ($dir in $candidates) {
-        if (Test-Path (Join-Path $dir "vcruntime140.dll")) {
+        if ((Test-Path (Join-Path $dir "vcruntime140.dll")) -and (Test-Path (Join-Path $dir "msvcp140.dll"))) {
             return $dir
         }
     }
