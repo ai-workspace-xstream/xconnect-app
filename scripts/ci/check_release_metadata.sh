@@ -20,7 +20,8 @@ run_case() {
   shift 3
   local output_file="$test_dir/output"
   : > "$output_file"
-  GITHUB_OUTPUT="$output_file" "$@" bash "$metadata_script"
+  env -u GITHUB_REF_TYPE -u BUILD_REF_OVERRIDE -u RELEASE_TAG_OVERRIDE \
+    GITHUB_OUTPUT="$output_file" "$@" bash "$metadata_script"
   grep -Fx "release_tag=$expected_tag" "$output_file"
   grep -Fx "release_title=$expected_title" "$output_file"
   grep -Fx "app_version=$app_version" "$output_file"
@@ -40,7 +41,9 @@ run_case "release-${expected_msi_version}-312-abcdef1" "XConnect ${expected_msi_
 run_case "build-313-abcdef1" "build-313-abcdef1" "build" \
   env GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF_NAME=feature/test GITHUB_RUN_ID=313 GITHUB_SHA=abcdef1234567890
 
-if GITHUB_OUTPUT="$test_dir/mismatch" GITHUB_REF_TYPE=tag GITHUB_REF_NAME="v${mismatched_msi_version}" GITHUB_SHA=abcdef1234567890 bash "$metadata_script" 2>/dev/null; then
+if env -u BUILD_REF_OVERRIDE -u RELEASE_TAG_OVERRIDE \
+  GITHUB_OUTPUT="$test_dir/mismatch" GITHUB_REF_TYPE=tag GITHUB_REF_NAME="v${mismatched_msi_version}" GITHUB_SHA=abcdef1234567890 \
+  bash "$metadata_script" 2>/dev/null; then
   echo "Mismatched production version was accepted" >&2
   exit 1
 fi
