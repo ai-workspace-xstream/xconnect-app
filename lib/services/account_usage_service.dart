@@ -103,4 +103,33 @@ class AccountUsageService {
 
     return AccountUsageSummary.fromJson(payload);
   }
+
+  /// Loads account usage summary and resolves monthly used bytes without letting
+  /// heavy `/api/account/usage/buckets` responses fail the entire usage card.
+  Future<(AccountUsageSummary, int)> fetchUsageOverview({
+    required String baseUrl,
+    required String sessionToken,
+    String? cookie,
+    DateTime? now,
+  }) async {
+    final summary = await fetchUsageSummary(
+      baseUrl: baseUrl,
+      sessionToken: sessionToken,
+      cookie: cookie,
+    );
+    if (summary.usedBytes != null) {
+      return (summary, summary.usedBytes!);
+    }
+    try {
+      final monthUsage = await fetchMonthUsage(
+        baseUrl: baseUrl,
+        sessionToken: sessionToken,
+        cookie: cookie,
+        now: now,
+      );
+      return (summary, monthUsage);
+    } catch (_) {
+      return (summary, summary.totalBytes);
+    }
+  }
 }

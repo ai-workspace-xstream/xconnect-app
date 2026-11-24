@@ -69,4 +69,61 @@ void main() {
         ),
         throwsFormatException);
   });
+
+  test('fetchUsageOverview prefers summary.usedBytes without querying buckets',
+      () async {
+    final requestedPaths = <String>[];
+    final client = MockClient((request) async {
+      requestedPaths.add(request.url.path);
+      return http.Response(
+        jsonEncode({
+          'accountUuid': 'acct-1',
+          'totalBytes': 9000,
+          'usedBytes': 4096,
+          'includedQuotaBytes': 10240,
+          'currentBalance': 12.5,
+          'syncDelaySeconds': 30,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final (summary, used) =
+        await AccountUsageService(httpClient: client).fetchUsageOverview(
+      baseUrl: 'https://accounts.example.com',
+      sessionToken: 'session-token',
+    );
+    expect(requestedPaths, ['/api/account/usage/summary']);
+    expect(used, 4096);
+    expect(summary.includedQuotaBytes, 10240);
+  });
+
+  test(
+      'fetchUsageOverview falls back to summary.totalBytes when usage buckets fail',
+      () async {
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/account/usage/summary') {
+        return http.Response(
+          jsonEncode({
+            'accountUuid': 'acct-1',
+            'totalBytes': 2048,
+            'currentBalance': 0,
+            'syncDelaySeconds': 60,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('gateway timeout', 504);
+    });
+
+    final (summary, used) =
+        await AccountUsageService(httpClient: client).fetchUsageOverview(
+      baseUrl: 'https://accounts.example.com',
+      sessionToken: 'session-token',
+    );
+    expect(summary.totalBytes, 2048);
+    expect(used, 2048);
+  });
 }
