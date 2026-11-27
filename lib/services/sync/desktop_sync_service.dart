@@ -175,9 +175,9 @@ class DesktopSyncService {
         // A transient service/network failure must not erase the last local
         // managed snapshot. Deletion needs an explicit enforcement code, not
         // a generic HTTP status, empty list or human-readable error message.
-        throw FormatException(
-          'Network access returned ${accessResponse.statusCode}',
-        );
+        addAppLog('连接器访问策略暂不可用: HTTP ${accessResponse.statusCode}',
+            level: LogLevel.warning);
+        return _syncUnavailable(generation);
       }
       if (accessResponse.statusCode == 200) {
         await _refreshQuota(session, headers, generation);
@@ -224,9 +224,9 @@ class DesktopSyncService {
       if (response.statusCode != 200) {
         // Keep the last successful managed snapshot for offline use. The
         // server can replace it on the next successful manual/automatic sync.
-        final message = '节点同步接口返回 ${response.statusCode}';
-        await SyncStateStore.instance.recordError(message);
-        return DesktopSyncResult(success: false, message: message);
+        addAppLog('连接器节点同步暂不可用: HTTP ${response.statusCode}',
+            level: LogLevel.warning);
+        return _syncUnavailable(generation);
       }
       final decoded = jsonDecode(response.body);
       if (decoded is! List) {
@@ -248,22 +248,9 @@ class DesktopSyncService {
         return const DesktopSyncResult(success: false, message: message);
       }
 
-      // Custom imports remain independent of managed authorization.
-      policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
-      if (policy.dedicated) await _stopUnauthorizedActiveNode();
-      final retained = <String>{};
-      final activeNodeName = GlobalState.activeNodeName.value.trim();
-      var anyConfigModified = false;
-      var activeConfigUpdated = false;
-      String? activeUpdatedNodeName;
+      // Render the whole snapshot before changing any cached files.
+      final configs = <(SyncedNodeMetadata, String)>[];
       for (final node in nodes) {
-        if (generation != session.generation) {
-          await clearManagedConnections();
-          return const DesktopSyncResult(
-            success: false,
-            message: 'Session changed',
-          );
-        }
         final config = await VpnConfig.generateSyncedXrayJsonConfig(
           node.vlessUri,
           routingRules: node.routingRules,
@@ -275,8 +262,24 @@ class DesktopSyncService {
         if (!_isRenderable(config)) {
           throw FormatException('区域节点 ${node.name} 的 VLESS 配置不可用');
         }
+        configs.add((node, config!));
+      }
+
+      final retained = <String>{};
+      final activeNodeName = GlobalState.activeNodeName.value.trim();
+      var anyConfigModified = false;
+      var activeConfigUpdated = false;
+      String? activeUpdatedNodeName;
+      for (final (node, config) in configs) {
+        if (generation != session.generation) {
+          await clearManagedConnections();
+          return const DesktopSyncResult(
+            success: false,
+            message: 'Session changed',
+          );
+        }
         final writeResult = await XrayConfigWriter.writeConfigForNodeWithResult(
-          json: config!,
+          json: config,
           nodeName: node.name,
           countryCode: node.region,
           nodeId: node.id,
@@ -312,8 +315,17 @@ class DesktopSyncService {
           message: 'Session changed',
         );
       }
-      await XrayConfigWriter.pruneSyncedNodes(retained);
       policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
+      if (policy.dedicated) {
+        await _stopUnauthorizedActiveNode();
+        if (generation != session.generation) {
+          return const DesktopSyncResult(
+            success: false,
+            message: 'Session changed',
+          );
+        }
+      }
+      await XrayConfigWriter.pruneSyncedNodes(retained);
       policy.pending = false;
       await _refreshClientTuning(
         session,
