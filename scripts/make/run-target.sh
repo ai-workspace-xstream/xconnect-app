@@ -60,8 +60,8 @@ run_macos_build() {
   fi
 
   if [[ "$uname_s" != "Darwin" || "$uname_m" != "$expected_machine" ]]; then
-    echo "$skip_msg"
-    return 0
+    echo "$skip_msg" >&2
+    return 1
   fi
 
   echo "Building for macOS (${human_arch})..."
@@ -203,6 +203,24 @@ run_macos_build() {
 
   ./scripts/install-runtime-mcp.sh "$macos_app_bundle" "$runtime_arch"
 
+  if [[ "$target_arch" == "x86_64" ]]; then
+    local binary min_version
+    while IFS= read -r -d '' binary; do
+      if [[ "$(file -b "$binary")" != Mach-O* ]]; then
+        continue
+      fi
+      xcrun lipo -verify_arch x86_64 "$binary"
+      min_version="$(xcrun otool -arch x86_64 -l "$binary" | awk '
+        $1 == "cmd" { build = ($2 == "LC_BUILD_VERSION"); minimum = ($2 == "LC_VERSION_MIN_MACOSX") }
+        (build && $1 == "minos") || (minimum && $1 == "version") { print $2 }
+      ')"
+      if [[ -z "$min_version" ]] || ! awk -F. '$1 > 13 { exit 1 }' <<< "$min_version"; then
+        echo "Cannot verify Ventura compatibility for $binary (minimum: ${min_version:-unknown})" >&2
+        return 1
+      fi
+    done < <(find "$macos_app_bundle/Contents" -type f -print0)
+  fi
+
   if ! command -v create-dmg >/dev/null 2>&1; then
     echo "❌ create-dmg not found. Install with: brew install create-dmg"
     return 1
@@ -340,7 +358,7 @@ case "$TARGET" in
     "$flutter_bin" pub get
     ;;
   macos-intel)
-    run_macos_build intel x86_64 Intel amd64 macos-intel "Skipping macOS Intel build (not on Intel architecture)"
+    run_macos_build x86_64 x86_64 Intel amd64 macos-intel "macOS Intel build requires an x86_64 host"
     ;;
   macos-arm64)
     run_macos_build arm64 arm64 ARM64 arm64 macos-arm64 "Skipping macOS ARM64 build (not on ARM architecture)"

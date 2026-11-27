@@ -128,7 +128,7 @@ build-macos-arm64: check-flutter check-macos check-git-submodules prepare-macos
 build-macos-x64: check-flutter check-macos check-git-submodules prepare-macos
 	@UNAME_S="$(UNAME_S)" UNAME_M="$(UNAME_M)" FLUTTER="$(FLUTTER)" \
 		BRANCH="$(BRANCH)" BUILD_ID="$(BUILD_ID)" BUILD_DATE="$(BUILD_DATE)" \
-		DMG_NAME="$(DMG_NAME)" \
+		DMG_NAME="xconnect-macos-x64.dmg" \
 		"$(RUN_TARGET_SCRIPT)" macos-intel
 
 package-mac: check-flutter check-macos check-git-submodules ## Build macOS release + DMG (native arch)
