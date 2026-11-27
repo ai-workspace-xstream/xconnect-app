@@ -248,22 +248,9 @@ class DesktopSyncService {
         return const DesktopSyncResult(success: false, message: message);
       }
 
-      // Custom imports remain independent of managed authorization.
-      policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
-      if (policy.dedicated) await _stopUnauthorizedActiveNode();
-      final retained = <String>{};
-      final activeNodeName = GlobalState.activeNodeName.value.trim();
-      var anyConfigModified = false;
-      var activeConfigUpdated = false;
-      String? activeUpdatedNodeName;
+      // Render the whole snapshot before changing any cached files.
+      final configs = <(SyncedNodeMetadata, String)>[];
       for (final node in nodes) {
-        if (generation != session.generation) {
-          await clearManagedConnections();
-          return const DesktopSyncResult(
-            success: false,
-            message: 'Session changed',
-          );
-        }
         final config = await VpnConfig.generateSyncedXrayJsonConfig(
           node.vlessUri,
           routingRules: node.routingRules,
@@ -275,8 +262,24 @@ class DesktopSyncService {
         if (!_isRenderable(config)) {
           throw FormatException('区域节点 ${node.name} 的 VLESS 配置不可用');
         }
+        configs.add((node, config!));
+      }
+
+      final retained = <String>{};
+      final activeNodeName = GlobalState.activeNodeName.value.trim();
+      var anyConfigModified = false;
+      var activeConfigUpdated = false;
+      String? activeUpdatedNodeName;
+      for (final (node, config) in configs) {
+        if (generation != session.generation) {
+          await clearManagedConnections();
+          return const DesktopSyncResult(
+            success: false,
+            message: 'Session changed',
+          );
+        }
         final writeResult = await XrayConfigWriter.writeConfigForNodeWithResult(
-          json: config!,
+          json: config,
           nodeName: node.name,
           countryCode: node.region,
           nodeId: node.id,
@@ -312,8 +315,17 @@ class DesktopSyncService {
           message: 'Session changed',
         );
       }
-      await XrayConfigWriter.pruneSyncedNodes(retained);
       policy.authorizedNodeIds = nodes.map((n) => n.id).toSet();
+      if (policy.dedicated) {
+        await _stopUnauthorizedActiveNode();
+        if (generation != session.generation) {
+          return const DesktopSyncResult(
+            success: false,
+            message: 'Session changed',
+          );
+        }
+      }
+      await XrayConfigWriter.pruneSyncedNodes(retained);
       policy.pending = false;
       await _refreshClientTuning(
         session,

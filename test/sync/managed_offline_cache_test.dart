@@ -176,6 +176,48 @@ void main() {
     expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
   });
 
+  test('invalid node later in a snapshot preserves the last published cache',
+      () async {
+    final previousNode = VpnConfig.nodes.single;
+    final savedFile = File(previousNode.configPath);
+    final previousConfig = await savedFile.readAsString();
+    final previousSync = SyncStateStore.instance.summary.value.lastSuccessAt;
+
+    sync.client = MockClient((request) async {
+      if (request.url.path.endsWith('/network-access')) {
+        return http.Response(jsonEncode(access), 200);
+      }
+      if (request.url.path.endsWith('/nodes')) {
+        return http.Response(
+          jsonEncode([
+            {
+              ...nodes.single,
+              'vless_uri': nodes.single['vless_uri']!
+                  .replaceFirst('edge.example', 'new-edge.example'),
+            },
+            {
+              ...nodes.single,
+              'id': 'node-b',
+              'vless_uri': 'vless://',
+            },
+          ]),
+          200,
+        );
+      }
+      return http.Response('', 404);
+    });
+
+    expect((await sync.syncNow()).success, isFalse);
+    expect(await savedFile.readAsString(), previousConfig);
+    expect(VpnConfig.allNodes.single.managedNodeId, 'node-a');
+    expect(policy.authorizedNodeIds, {'node-a'});
+    expect(SyncStateStore.instance.summary.value.lastSuccessAt, previousSync);
+    await session.init();
+    await VpnConfig.load();
+    expect(VpnConfig.nodes.single.configPath, previousNode.configPath);
+    expect(await savedFile.readAsString(), previousConfig);
+  });
+
   test('another account cannot restore the cached authorization', () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('session.username', 'other@example');
@@ -250,6 +292,8 @@ void main() {
 
   test('expired login retains credentials and saved managed files', () async {
     final saved = VpnConfig.allNodes.single;
+    final savedFile = File(saved.configPath);
+    final savedConfig = await savedFile.readAsString();
     session.onSessionReset = sync.clearManagedConnections;
     sync.client = MockClient(
       (_) async => http.Response('{"error":"invalid or expired token"}', 401),
@@ -262,7 +306,11 @@ void main() {
     expect(session.sessionToken, 'test-session');
     expect(VpnConfig.nodes, isEmpty);
     expect(VpnConfig.allNodes.single.configPath, saved.configPath);
-    expect(await File(saved.configPath).exists(), isTrue);
+    await session.init();
+    await VpnConfig.load();
+    expect(VpnConfig.nodes, isEmpty);
+    expect(VpnConfig.allNodes.single.configPath, saved.configPath);
+    expect(await savedFile.readAsString(), savedConfig);
   });
 
   for (final endpoint in ['access', 'nodes']) {

@@ -1,5 +1,8 @@
 # Unreleased
 
+- Validate all managed node configurations before updating the local cache.
+  The connector explains that saved configurations are retained on session expiry.
+
 - Ask users to sign in again only after the Accounts session endpoint confirms
   rejection. Temporary workspace sync failures keep valid cached access.
 
