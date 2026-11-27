@@ -59,9 +59,18 @@ run_macos_build() {
     )
   fi
 
-  if [[ "$uname_s" != "Darwin" || "$uname_m" != "$expected_machine" ]]; then
+  if [[ "$uname_s" != "Darwin" ]]; then
     echo "$skip_msg"
     return 0
+  fi
+
+  local resolved_dmg_name="$dmg_name"
+  if [[ -z "${DMG_NAME:-}" && "$target_arch" == "x86_64" ]]; then
+    resolved_dmg_name="${dmg_name%.dmg}-x86_64.dmg"
+  fi
+  local only_active_arch="YES"
+  if [[ "$uname_m" != "$target_arch" ]]; then
+    only_active_arch="NO"
   fi
 
   echo "Building for macOS (${human_arch})..."
@@ -96,7 +105,7 @@ run_macos_build() {
         BRANCH="$branch" \
         BUILD_ID="$build_id" \
         BUILD_DATE="$build_date" \
-        DMG_NAME="$dmg_name" \
+        DMG_NAME="$resolved_dmg_name" \
         MACOS_APP_BUNDLE="$macos_app_bundle" \
         MACOS_BUILD_LOCK_DIR="$macos_build_lock_dir" \
         MACOS_BUILD_LOCK_PID_FILE="$macos_build_lock_pid_file" \
@@ -177,7 +186,7 @@ run_macos_build() {
     CONFIGURATION_BUILD_DIR="${ROOT_DIR}/build/macos/Build/Products/Release" \
     PODS_CONFIGURATION_BUILD_DIR="${ROOT_DIR}/build/macos/Build/Products/Release" \
     ARCHS="${target_arch}" \
-    ONLY_ACTIVE_ARCH=YES \
+    ONLY_ACTIVE_ARCH="${only_active_arch}" \
     APP_INTENTS_METADATA_PATH= \
     APP_INTENTS_DEPLOYMENT_POSTPROCESSING=NO \
     "${codesign_env[@]}" \
@@ -197,7 +206,10 @@ run_macos_build() {
     mkdir -p "$app_frameworks"
     cp -f "$extension_bridge" "${app_frameworks}/libxray_bridge.dylib"
     chmod 755 "${app_frameworks}/libxray_bridge.dylib"
+    lipo "${app_frameworks}/libxray_bridge.dylib" -verify_arch "${target_arch}"
   fi
+
+  lipo "${macos_app_bundle}/Contents/MacOS/xconnect" -verify_arch "${target_arch}"
 
 
 
@@ -218,7 +230,7 @@ run_macos_build() {
   done
 
   mkdir -p build/macos
-  rm -f "build/macos/${dmg_name}" "build/macos"/rw.*."${dmg_name}" || true
+  rm -f "build/macos/${resolved_dmg_name}" "build/macos"/rw.*."${resolved_dmg_name}" || true
   create-dmg \
     --filesystem APFS \
     --no-internet-enable \
@@ -230,27 +242,31 @@ run_macos_build() {
     --window-size 800 400 \
     --icon-size 100 \
     --app-drop-link 600 185 \
-    "build/macos/${dmg_name}" \
+    "build/macos/${resolved_dmg_name}" \
     "$macos_app_bundle" \
     2> >(sed -E "/^hdiutil: WARNING: .* is deprecated\\. Please use 'diskutil /d" >&2)
 
-  local dmg_path="build/macos/${dmg_name}"
+  local dmg_path="build/macos/${resolved_dmg_name}"
   if [[ ! -f "$dmg_path" ]]; then
     echo "❌ DMG build completed but output file not found: ${dmg_path}" >&2
     return 1
   fi
 
+  local symlink_name="xconnect.dmg"
+  if [[ "$target_arch" == "x86_64" ]]; then
+    symlink_name="xconnect-x86_64.dmg"
+  fi
   # Create stable convenience symlinks for developers and tooling
-  ln -sf "${dmg_name}" "build/macos/xconnect.dmg"
-  ln -sf "macos/${dmg_name}" "build/xconnect.dmg"
+  ln -sf "${resolved_dmg_name}" "build/macos/${symlink_name}"
+  ln -sf "macos/${resolved_dmg_name}" "build/${symlink_name}"
 
   local dmg_size
   dmg_size="$(ls -lh "$dmg_path" | awk '{print $5}')"
   echo "========================================================"
   echo "✅ macOS DMG package created successfully!"
   echo "   Artifact:  ${dmg_path} (${dmg_size})"
-  echo "   Symlinks:  build/macos/xconnect.dmg"
-  echo "              build/xconnect.dmg"
+  echo "   Symlinks:  build/macos/${symlink_name}"
+  echo "              build/${symlink_name}"
   echo "========================================================"
 }
 
@@ -340,7 +356,7 @@ case "$TARGET" in
     "$flutter_bin" pub get
     ;;
   macos-intel)
-    run_macos_build intel x86_64 Intel amd64 macos-intel "Skipping macOS Intel build (not on Intel architecture)"
+    run_macos_build x86_64 x86_64 Intel amd64 macos-intel "Skipping macOS Intel build (not on Intel architecture)"
     ;;
   macos-arm64)
     run_macos_build arm64 arm64 ARM64 arm64 macos-arm64 "Skipping macOS ARM64 build (not on ARM architecture)"
