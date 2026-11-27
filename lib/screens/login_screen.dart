@@ -57,17 +57,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_syncService.syncing.value) _refreshUsage();
   }
 
-  Future<(AccountUsageSummary, int)> _loadUsage() async {
-    final baseUrl = _sessionManager.baseUrl.value;
-    final token = _sessionManager.sessionToken ?? '';
-    final cookie = _sessionManager.cookie;
-    final values = await Future.wait<Object>([
-      _usageService.fetchUsageSummary(
-          baseUrl: baseUrl, sessionToken: token, cookie: cookie),
-      _usageService.fetchMonthUsage(
-          baseUrl: baseUrl, sessionToken: token, cookie: cookie),
-    ]);
-    return (values[0] as AccountUsageSummary, values[1] as int);
+  Future<(AccountUsageSummary, int)> _loadUsage() {
+    return _usageService.fetchUsageOverview(
+      baseUrl: _sessionManager.baseUrl.value,
+      sessionToken: _sessionManager.sessionToken ?? '',
+      cookie: _sessionManager.cookie,
+    );
   }
 
   void _refreshUsage() {
