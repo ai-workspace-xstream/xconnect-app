@@ -175,9 +175,9 @@ class DesktopSyncService {
         // A transient service/network failure must not erase the last local
         // managed snapshot. Deletion needs an explicit enforcement code, not
         // a generic HTTP status, empty list or human-readable error message.
-        throw FormatException(
-          'Network access returned ${accessResponse.statusCode}',
-        );
+        addAppLog('连接器访问策略暂不可用: HTTP ${accessResponse.statusCode}',
+            level: LogLevel.warning);
+        return _syncUnavailable(generation);
       }
       if (accessResponse.statusCode == 200) {
         await _refreshQuota(session, headers, generation);
@@ -224,9 +224,9 @@ class DesktopSyncService {
       if (response.statusCode != 200) {
         // Keep the last successful managed snapshot for offline use. The
         // server can replace it on the next successful manual/automatic sync.
-        final message = '节点同步接口返回 ${response.statusCode}';
-        await SyncStateStore.instance.recordError(message);
-        return DesktopSyncResult(success: false, message: message);
+        addAppLog('连接器节点同步暂不可用: HTTP ${response.statusCode}',
+            level: LogLevel.warning);
+        return _syncUnavailable(generation);
       }
       final decoded = jsonDecode(response.body);
       if (decoded is! List) {
