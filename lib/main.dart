@@ -19,6 +19,7 @@ import 'utils/global_config.dart'
     show GlobalState, DnsConfig, XhttpAdvancedConfig;
 import 'services/experimental/experimental_features.dart';
 import 'services/telemetry/telemetry_service.dart';
+import 'services/enterprise_http_overrides.dart';
 import 'services/vpn_config_service.dart';
 import 'services/global_proxy_service.dart';
 import 'services/permission_guide_service.dart';
@@ -55,6 +56,7 @@ String getQrCodeData(img.Image image) {
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await EnterpriseHttpOverrides.install();
   await AppVersionService.init();
   await TelemetryService.init();
   await DnsConfig.init();

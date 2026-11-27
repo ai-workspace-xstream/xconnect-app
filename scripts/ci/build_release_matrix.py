@@ -36,6 +36,7 @@ class PackageClassification:
 
 EXACT_CLASSIFICATIONS: dict[str, PackageClassification] = {
     "xconnect.dmg": PackageClassification("macos", "dmg", "arm64", True, "end_user", 10),
+    "xconnect-x86_64.dmg": PackageClassification("macos", "dmg", "x86_64", True, "end_user", 12),
     "xconnect-windows-portable.exe": PackageClassification("windows", "exe", "x64", True, "end_user", 5),
     "xconnect-windows.msi": PackageClassification("windows", "msi", "x64", True, "end_user", 10),
     "xconnect-windows.zip": PackageClassification("windows", "zip", "x64", False, "end_user", 20),
@@ -48,7 +49,7 @@ EXACT_CLASSIFICATIONS: dict[str, PackageClassification] = {
     "xconnect.ipa": PackageClassification("ios", "ipa", "arm64", False, "sideload", 10),
 }
 
-SNAPSHOT_DMG_RE = re.compile(r"^xconnect-latest-[0-9a-f]+\.dmg$", re.IGNORECASE)
+SNAPSHOT_DMG_RE = re.compile(r"^xconnect-latest-[0-9a-f]+(?:-x86_64)?\.dmg$", re.IGNORECASE)
 
 
 def classify_artifact(name: str) -> PackageClassification | None:
@@ -59,6 +60,8 @@ def classify_artifact(name: str) -> PackageClassification | None:
     if lower.endswith(".aab") or lower == "xconnect.app.zip" or SNAPSHOT_DMG_RE.match(name):
         return None
     if lower.endswith(".dmg"):
+        if "x86_64" in lower or "x64" in lower or "intel" in lower:
+            return PackageClassification("macos", "dmg", "x86_64", True, "end_user", 17)
         return PackageClassification("macos", "dmg", "arm64", True, "end_user", 15)
     if lower.endswith(".msi"):
         return PackageClassification("windows", "msi", "x64", True, "end_user", 15)

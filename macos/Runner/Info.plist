@@ -38,5 +38,7 @@
 	<string>public.app-category.utilities</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>XConnect checks the connection to your router during network self-diagnosis to find where packet loss happens. Results stay on this device.</string>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
 </dict>
 </plist>

@@ -75,7 +75,14 @@ def format_links(assets: dict[str, str], names: list[tuple[str, str | None]]) ->
 
 
 def build_table(repo: str, tag: str, assets: dict[str, str]) -> str:
-    macos_dmg = find_first(assets, lambda name: name.endswith(".dmg"))
+    macos_arm64_dmg = find_first(
+        assets,
+        lambda name: name.endswith(".dmg") and "x86_64" not in name.lower() and "x64" not in name.lower(),
+    )
+    macos_x64_dmg = find_first(
+        assets,
+        lambda name: name.endswith(".dmg") and ("x86_64" in name.lower() or "x64" in name.lower()),
+    )
     linux_tar = find_first(assets, lambda name: name == "xconnect-linux-x64.tar.gz")
     linux_zip = find_first(assets, lambda name: name == "xconnect-linux.zip")
     linux_appimage = find_first(assets, lambda name: name.endswith(".AppImage"))
@@ -90,8 +97,8 @@ def build_table(repo: str, tag: str, assets: dict[str, str]) -> str:
     rows = [
         "| 平台 | 架构 | 测试状态 | 下载 |",
         "|------|------|----------|------|",
-        f"| macOS | arm64 | ✅ 已测试 | {format_links(assets, [('DMG', macos_dmg)])} |",
-        "| macOS | x64 | ⚠️ 未测试 | — |",
+        f"| macOS | arm64 | ✅ 已测试 | {format_links(assets, [('DMG', macos_arm64_dmg)])} |",
+        f"| macOS | x64 | ⚠️ 未测试 | {format_links(assets, [('DMG', macos_x64_dmg)])} |",
         f"| Linux | x64 | ⚠️ 未测试 | {format_links(assets, [('DEB', linux_deb), ('RPM', linux_rpm), ('AppImage', linux_appimage), ('TAR.GZ', linux_tar), ('ZIP', linux_zip)])} |",
         "| Linux | arm64 | ⚠️ 未测试 | — |",
         f"| Windows | x64 | ✅ 已测试 | {format_links(assets, [('Portable EXE', windows_portable), ('ZIP', windows_zip), ('MSI', windows_msi)])} |",

@@ -1,4 +1,5 @@
 // AppDelegate.swift
+import CFNetwork
 import Cocoa
 import FlutterMacOS
 import ServiceManagement
@@ -56,6 +57,8 @@ class AppDelegate: FlutterAppDelegate {
           self.handleServiceControl(call: call, bundleId: bundleId, result: result)
         case "setSystemProxy":
           self.handleSystemProxy(call: call, result: result)
+        case "getSystemProxySettings":
+          result(Self.readSystemProxySettings())
 
         case "performAction":
           self.handlePerformAction(call: call, bundleId: bundleId, result: result)
@@ -375,5 +378,27 @@ class AppDelegate: FlutterAppDelegate {
       logToFlutter("error", "设置开机启动失败: \(error.localizedDescription)")
       return false
     }
+  }
+
+  private static func readSystemProxySettings() -> [String: Any] {
+    guard let raw = CFNetworkCopySystemProxySettings()?.takeRetainedValue() as? [String: Any] else {
+      return [:]
+    }
+    let httpEnable = (raw[kCFNetworkProxiesHTTPEnable as String] as? NSNumber)?.boolValue ?? false
+    let httpProxy = raw[kCFNetworkProxiesHTTPProxy as String] as? String ?? ""
+    let httpPort = (raw[kCFNetworkProxiesHTTPPort as String] as? NSNumber)?.intValue ?? 0
+    let httpsEnable = (raw[kCFNetworkProxiesHTTPSEnable as String] as? NSNumber)?.boolValue ?? false
+    let httpsProxy = raw[kCFNetworkProxiesHTTPSProxy as String] as? String ?? ""
+    let httpsPort = (raw[kCFNetworkProxiesHTTPSPort as String] as? NSNumber)?.intValue ?? 0
+    let exceptionsList = raw[kCFNetworkProxiesExceptionsList as String] as? [String] ?? []
+    return [
+      "httpEnable": httpEnable,
+      "httpProxy": httpProxy,
+      "httpPort": httpPort,
+      "httpsEnable": httpsEnable,
+      "httpsProxy": httpsProxy,
+      "httpsPort": httpsPort,
+      "exceptionsList": exceptionsList,
+    ]
   }
 }
