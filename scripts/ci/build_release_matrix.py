@@ -35,6 +35,7 @@ class PackageClassification:
 
 
 EXACT_CLASSIFICATIONS: dict[str, PackageClassification] = {
+    "xconnect-macos-x64.dmg": PackageClassification("macos", "dmg", "x64", True, "end_user", 11),
     "xconnect.dmg": PackageClassification("macos", "dmg", "arm64", True, "end_user", 10),
     "xconnect-windows-portable.exe": PackageClassification("windows", "exe", "x64", True, "end_user", 5),
     "xconnect-windows.msi": PackageClassification("windows", "msi", "x64", True, "end_user", 10),
@@ -58,8 +59,12 @@ def classify_artifact(name: str) -> PackageClassification | None:
     lower = name.lower()
     if lower.endswith(".aab") or lower == "xconnect.app.zip" or SNAPSHOT_DMG_RE.match(name):
         return None
-    if lower.endswith(".dmg"):
+    if lower.endswith(".dmg") and (
+        lower.startswith("xconnect-latest-") or lower.startswith("xconnect-release-")
+    ):
         return PackageClassification("macos", "dmg", "arm64", True, "end_user", 15)
+    if lower.endswith(".dmg"):
+        return PackageClassification("macos", "dmg", "universal", True, "end_user", 15)
     if lower.endswith(".msi"):
         return PackageClassification("windows", "msi", "x64", True, "end_user", 15)
     if lower.endswith(".deb"):

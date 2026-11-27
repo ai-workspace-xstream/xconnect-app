@@ -21,6 +21,7 @@ import update_readme_downloads  # noqa: E402
 class BuildReleaseMatrixTests(unittest.TestCase):
     SAMPLE_FILES = (
         "xconnect.dmg",
+        "xconnect-macos-x64.dmg",
         "xconnect-latest-33947f3.dmg",
         "xconnect-windows.msi",
         "xconnect-windows.zip",
@@ -95,6 +96,14 @@ class BuildReleaseMatrixTests(unittest.TestCase):
 
             # Verify platform package classifications
             platforms = {p["id"]: p for p in stable_doc["channels"]["stable"]["platforms"]}
+            self.assertEqual(
+                [pkg["name"] for pkg in platforms["macos"]["packages"]],
+                ["xconnect.dmg", "xconnect-macos-x64.dmg"],
+            )
+            self.assertEqual(
+                [pkg["arch"] for pkg in platforms["macos"]["packages"]],
+                ["arm64", "x64"],
+            )
             self.assertEqual([pkg["name"] for pkg in platforms["windows"]["packages"]], ["xconnect-windows.msi", "xconnect-windows.zip"])
             self.assertEqual(len(platforms["linux"]["packages"]), 4)
             self.assertEqual(platforms["ios"]["packages"][0]["audience"], "sideload")
@@ -151,6 +160,8 @@ class BuildReleaseMatrixTests(unittest.TestCase):
             self.assertIn("xconnect-linux-amd64.deb", table)
             self.assertIn("app-release.apk", table)
             self.assertIn("xconnect.ipa", table)
+            self.assertIn("| macOS | x64 |", table)
+            self.assertIn("xconnect-macos-x64.dmg", table)
 
 
 if __name__ == "__main__":

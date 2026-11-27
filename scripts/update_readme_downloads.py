@@ -75,7 +75,11 @@ def format_links(assets: dict[str, str], names: list[tuple[str, str | None]]) ->
 
 
 def build_table(repo: str, tag: str, assets: dict[str, str]) -> str:
-    macos_dmg = find_first(assets, lambda name: name.endswith(".dmg"))
+    macos_intel_name = "xconnect-macos-x64.dmg"
+    macos_intel_dmg = find_first(assets, lambda name: name == macos_intel_name)
+    macos_dmg = find_first(
+        assets, lambda name: name.endswith(".dmg") and name != macos_intel_name
+    )
     linux_tar = find_first(assets, lambda name: name == "xconnect-linux-x64.tar.gz")
     linux_zip = find_first(assets, lambda name: name == "xconnect-linux.zip")
     linux_appimage = find_first(assets, lambda name: name.endswith(".AppImage"))
@@ -91,7 +95,7 @@ def build_table(repo: str, tag: str, assets: dict[str, str]) -> str:
         "| 平台 | 架构 | 测试状态 | 下载 |",
         "|------|------|----------|------|",
         f"| macOS | arm64 | ✅ 已测试 | {format_links(assets, [('DMG', macos_dmg)])} |",
-        "| macOS | x64 | ⚠️ 未测试 | — |",
+        f"| macOS | x64 | ⚠️ 未测试 | {format_links(assets, [('DMG', macos_intel_dmg)])} |",
         f"| Linux | x64 | ⚠️ 未测试 | {format_links(assets, [('DEB', linux_deb), ('RPM', linux_rpm), ('AppImage', linux_appimage), ('TAR.GZ', linux_tar), ('ZIP', linux_zip)])} |",
         "| Linux | arm64 | ⚠️ 未测试 | — |",
         f"| Windows | x64 | ✅ 已测试 | {format_links(assets, [('Portable EXE', windows_portable), ('ZIP', windows_zip), ('MSI', windows_msi)])} |",

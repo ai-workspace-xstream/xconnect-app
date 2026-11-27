@@ -1,5 +1,6 @@
 # Unreleased
 
+- Add Intel macOS x86_64 packaging and enforce macOS Ventura 13 compatibility for packaged Intel binaries.
 - Validate all managed node configurations before updating the local cache.
   The connector explains that saved configurations are retained on session expiry.
 - Keep authorized managed connections available during prolonged account service outages, until the server explicitly stops access.
