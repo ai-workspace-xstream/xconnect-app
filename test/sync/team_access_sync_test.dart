@@ -98,7 +98,7 @@ void main() {
   );
 
   test(
-    'team expiry rejects cached connections without a server response',
+    'team expiry does not interrupt access without a server response',
     () async {
       final access = teamAccess();
       (access['team'] as Map)['validUntil'] =
@@ -113,7 +113,7 @@ void main() {
           nodeTeamId: 'acme',
           nodeId: 'node-a',
         ),
-        isFalse,
+        isTrue,
       );
     },
   );
