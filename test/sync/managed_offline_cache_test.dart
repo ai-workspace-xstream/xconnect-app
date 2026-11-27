@@ -743,7 +743,7 @@ void main() {
   );
 
   test(
-    'cache lifetime is bounded even when the login token remains stored',
+    'offline access survives more than 24 hours when team authorization remains valid',
     () async {
       final prefs = await SharedPreferences.getInstance();
       final cache = jsonDecode(prefs.getString('network.cachedAccess')!) as Map;
@@ -753,13 +753,13 @@ void main() {
       await prefs.setString('network.cachedAccess', jsonEncode(cache));
       await session.init();
       expect(session.isLoggedIn, isTrue);
-      expect(policy.active, isFalse);
-      expect(VpnConfig.nodes, isEmpty);
+      expect(policy.active, isTrue);
+      expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
     },
   );
 
   test(
-    'expired team validity rejects an otherwise fresh offline cache',
+    'offline cache survives locally expired team validity',
     () async {
       final prefs = await SharedPreferences.getInstance();
       final cache = jsonDecode(prefs.getString('network.cachedAccess')!) as Map;
@@ -767,8 +767,8 @@ void main() {
           DateTime.now().subtract(const Duration(seconds: 1)).toIso8601String();
       await prefs.setString('network.cachedAccess', jsonEncode(cache));
       await session.init();
-      expect(policy.active, isFalse);
-      expect(VpnConfig.nodes, isEmpty);
+      expect(policy.active, isTrue);
+      expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
     },
   );
 

@@ -2,6 +2,7 @@
 
 - Validate all managed node configurations before updating the local cache.
   The connector explains that saved configurations are retained on session expiry.
+- Keep authorized managed connections available during prolonged account service outages, until the server explicitly stops access.
 
 - Ask users to sign in again only after the Accounts session endpoint confirms
   rejection. Temporary workspace sync failures keep valid cached access.
@@ -23,8 +24,8 @@
   change; unauthorized managed access remains suspended until reauthorized.
 - Managed connections retain their last successful local snapshot through
   transient sync failures and same-account restarts. Offline authorization is
-  limited to 24 hours or team expiry, whichever comes first; logout, explicit
-  denial, scope changes, and authoritative empty lists still withdraw access.
+  retained during account service outages; logout, explicit denial, scope changes,
+  and authoritative empty lists still withdraw access.
 - Separate managed access suspension from file deletion. Login expiry, logout,
   ordinary authorization failures and empty responses retain saved profiles
   while disabling their use. Successful login automatically refreshes them;

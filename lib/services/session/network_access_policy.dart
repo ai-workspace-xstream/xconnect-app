@@ -9,7 +9,6 @@ class NetworkAccessPolicy {
   static final instance = NetworkAccessPolicy._();
   static const _cacheKey = 'network.cachedAccess';
   static const _snapshotOwnerKey = 'network.snapshotOwner';
-  static const _cacheLifetime = Duration(hours: 24);
 
   bool dedicated = false;
   bool authenticated = false;
@@ -20,7 +19,6 @@ class NetworkAccessPolicy {
   String teamName = '';
   DateTime? validUntil;
   Set<String> authorizedNodeIds = {};
-  DateTime? _cachedAt;
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -37,7 +35,6 @@ class NetworkAccessPolicy {
     pending = signedIn;
     allowed = false;
     authorizedNodeIds = {};
-    _cachedAt = null;
   }
 
   /// Restore only a complete, unexpired snapshot for this authenticated login.
@@ -57,11 +54,9 @@ class NetworkAccessPolicy {
       final ids = (cache['nodeIds'] as List).cast<String>().toSet();
       if (cache['sessionScope'] != sessionScope ||
           age.isNegative ||
-          age >= _cacheLifetime ||
           cache['allowed'] != true ||
           (cache['owner'] as String).isEmpty ||
           ids.isEmpty ||
-          (expiry != null && !DateTime.now().isBefore(expiry)) ||
           (cache['dedicated'] == true && (cache['teamId'] as String).isEmpty)) {
         await clearCachedAccess();
         return;
@@ -72,7 +67,6 @@ class NetworkAccessPolicy {
       teamName = cache['teamName'] as String;
       validUntil = expiry;
       authorizedNodeIds = ids;
-      _cachedAt = savedAt;
       allowed = true;
       pending = false;
     } catch (_) {
@@ -87,12 +81,12 @@ class NetworkAccessPolicy {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     if (!isCurrent() || !active || authorizedNodeIds.isEmpty) return;
-    _cachedAt = DateTime.now();
+    final savedAt = DateTime.now();
     await prefs.setString(
         _cacheKey,
         jsonEncode({
           'sessionScope': sessionScope,
-          'savedAt': _cachedAt!.millisecondsSinceEpoch,
+          'savedAt': savedAt.millisecondsSinceEpoch,
           'allowed': allowed,
           'dedicated': dedicated,
           'owner': owner,
@@ -127,7 +121,6 @@ class NetworkAccessPolicy {
   }
 
   Future<void> clearCachedAccess() async {
-    _cachedAt = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_cacheKey);
   }
@@ -164,21 +157,12 @@ class NetworkAccessPolicy {
     await prefs.setBool('network.dedicated', dedicated);
   }
 
-  DateTime? get expiresAt {
-    final cacheExpiry = _cachedAt?.add(_cacheLifetime);
-    if (validUntil == null) return cacheExpiry;
-    return cacheExpiry == null || validUntil!.isBefore(cacheExpiry)
-        ? validUntil
-        : cacheExpiry;
-  }
+  DateTime? get expiresAt => null;
 
   bool get active =>
       authenticated &&
       !pending &&
       allowed &&
-      (_cachedAt == null ||
-          (!DateTime.now().isBefore(_cachedAt!) &&
-              DateTime.now().difference(_cachedAt!) < _cacheLifetime)) &&
       (expiresAt == null || DateTime.now().isBefore(expiresAt!));
 
   bool canUse({
