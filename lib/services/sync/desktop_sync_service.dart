@@ -157,6 +157,7 @@ class DesktopSyncService {
         return await _stopManagedAccess(accessStop, purgeOwner, generation);
       }
       if (accessResponse.statusCode == 404 && !policy.dedicated) {
+        owner = purgeOwner ?? owner;
         await policy.apply({'mode': 'personal', 'allowed': true}, owner);
       } else if (accessResponse.statusCode == 200) {
         final access = jsonDecode(accessResponse.body);
@@ -423,7 +424,13 @@ class DesktopSyncService {
         return _stopManagedAccess(stop, purgeOwner, generation);
       }
       if (_isRejectedSession(verification)) {
-        await clearManagedConnections();
+        // Dedicated enterprise team mode withdraws node access when the session
+        // expires; personal mode retains the last authorized local snapshot so
+        // an expired login never leaves the user without working VLESS configs.
+        if (NetworkAccessPolicy.instance.dedicated ||
+            !NetworkAccessPolicy.instance.active) {
+          await clearManagedConnections();
+        }
         if (generation != session.generation) {
           return const DesktopSyncResult(
             success: false,

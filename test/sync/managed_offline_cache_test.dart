@@ -782,4 +782,126 @@ void main() {
       expect(raw, isNot(contains('11111111-1111-4111-8111-111111111111')));
     },
   );
+
+  test(
+    'personal mode retains usable local configs across expired session and restart',
+    () async {
+      final personalAccess = {
+        'mode': 'personal',
+        'allowed': true,
+        'accountId': 'account-a',
+      };
+      sync.client = MockClient((request) async {
+        if (request.url.path.endsWith('/network-access')) {
+          return http.Response(jsonEncode(personalAccess), 200);
+        }
+        if (request.url.path.endsWith('/nodes')) {
+          return http.Response(jsonEncode(nodes), 200);
+        }
+        return http.Response('', 404);
+      });
+      expect((await sync.syncNow()).success, isTrue);
+      expect(policy.dedicated, isFalse);
+      expect(policy.active, isTrue);
+      expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+
+      session.onSessionReset = sync.clearManagedConnections;
+      sync.client = MockClient(
+        (_) async => http.Response('{"error":"invalid or expired token"}', 401),
+      );
+      final expired = await sync.syncNow();
+      expect(expired.success, isFalse);
+      expect(expired.message, DesktopSyncService.sessionExpiredMessage);
+      expect(policy.active, isTrue);
+      expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+
+      await session.init();
+      await VpnConfig.load();
+      expect(policy.active, isTrue);
+      expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+    },
+  );
+
+  test(
+    'renewed team validUntil followed by 503 preserves cached access across restart',
+    () async {
+      final renewedAccess = {
+        ...access,
+        'team': {
+          'name': 'Team A',
+          'validUntil':
+              DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
+        },
+      };
+      sync.client = MockClient(
+        (request) async => request.url.path.endsWith('/network-access')
+            ? http.Response(jsonEncode(renewedAccess), 200)
+            : http.Response('', 503),
+      );
+      expect((await sync.syncNow()).success, isFalse);
+      expect(policy.active, isTrue);
+      expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+
+      await session.init();
+      await VpnConfig.load();
+      expect(policy.active, isTrue);
+      expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+    },
+  );
+
+  test(
+    'same-account relogin keeps cached configs usable when post-login sync fails',
+    () async {
+      var newRequest = false;
+      final finished = Completer<void>();
+      sync.client = MockClient((request) async {
+        if (request.headers['Authorization'] == 'Bearer session-relogin') {
+          if (request.url.path.endsWith('/network-access')) {
+            return http.Response(jsonEncode(access), 200);
+          }
+          if (request.url.path.endsWith('/nodes')) {
+            newRequest = true;
+            return http.Response('', 503);
+          }
+        }
+        return http.Response('', 503);
+      });
+      void onSync() {
+        if (!sync.syncing.value && newRequest && !finished.isCompleted) {
+          finished.complete();
+        }
+      }
+
+      sync.syncing.addListener(onSync);
+      try {
+        await sync.init();
+        final login = await http.runWithClient(
+          () => session.login(
+            identifier: 'member@example',
+            password: 'fixture-only',
+          ),
+          () => MockClient(
+            (_) async => http.Response(
+              jsonEncode({
+                'token': 'session-relogin',
+                'user': {'email': 'member@example'},
+              }),
+              200,
+            ),
+          ),
+        );
+        expect(login.success, isTrue);
+        await finished.future.timeout(const Duration(seconds: 5));
+        expect(policy.active, isTrue);
+        expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+
+        await session.init();
+        await VpnConfig.load();
+        expect(policy.active, isTrue);
+        expect(VpnConfig.nodes.single.managedNodeId, 'node-a');
+      } finally {
+        sync.syncing.removeListener(onSync);
+      }
+    },
+  );
 }
