@@ -24,6 +24,12 @@ class SessionRefreshUnavailableException implements Exception {
   const SessionRefreshUnavailableException();
 }
 
+class SessionStatusNotifier extends ValueNotifier<SessionStatus> {
+  SessionStatusNotifier(super.value);
+
+  void notify() => notifyListeners();
+}
+
 /// Handles xc_session cookie and bearer token persistence.
 class SessionManager {
   SessionManager._();
@@ -36,8 +42,8 @@ class SessionManager {
   static const _prefsRefreshKey = 'session.refreshToken';
   static const _prefsUserKey = 'session.username';
 
-  final ValueNotifier<SessionStatus> status =
-      ValueNotifier<SessionStatus>(SessionStatus.unknown);
+  final SessionStatusNotifier status =
+      SessionStatusNotifier(SessionStatus.unknown);
   final ValueNotifier<String?> currentUser = ValueNotifier<String?>(null);
   final ValueNotifier<String?> lastError = ValueNotifier<String?>(null);
   final ValueNotifier<bool> loading = ValueNotifier<bool>(false);
@@ -308,20 +314,43 @@ class SessionManager {
       return LoginResult(success: false, message: lastError.value!);
     }
 
-    await logout();
+    var prefs = await SharedPreferences.getInstance();
+    final previousPersistedUser = prefs.getString(_prefsUserKey);
+    final savedUser = _extractLoginIdentity(payload, fallbackUsername);
+    final sameAccount = previousPersistedUser != null &&
+        previousPersistedUser.trim().isNotEmpty &&
+        previousPersistedUser.trim().toLowerCase() ==
+            savedUser.trim().toLowerCase();
+    if (!sameAccount) {
+      await logout();
+      prefs = await SharedPreferences.getInstance();
+    }
+
     _sessionToken = token;
     _refreshToken = payload['refresh_token'] is String
         ? payload['refresh_token'] as String
         : null;
     _cookie = cookie;
     _mfaTicket = null;
-    final savedUser = _extractLoginIdentity(payload, fallbackUsername);
     currentUser.value = savedUser;
+    lastError.value = null;
     generation++;
-    NetworkAccessPolicy.instance.invalidate(signedIn: true);
-    status.value = SessionStatus.loggedIn;
+    if (sameAccount) {
+      NetworkAccessPolicy.instance.authenticated = true;
+      if (!NetworkAccessPolicy.instance.active) {
+        await NetworkAccessPolicy.instance.restoreCachedAccess(
+          '${baseUrl.value}|$savedUser',
+        );
+      }
+    } else {
+      NetworkAccessPolicy.instance.invalidate(signedIn: true);
+    }
+    if (status.value == SessionStatus.loggedIn) {
+      status.notify();
+    } else {
+      status.value = SessionStatus.loggedIn;
+    }
 
-    final prefs = await SharedPreferences.getInstance();
     if (_cookie != null && _cookie!.isNotEmpty) {
       await prefs.setString(_prefsCookieKey, _cookie!);
     } else {
@@ -334,6 +363,8 @@ class SessionManager {
     }
     if ((_refreshToken ?? '').isNotEmpty) {
       await prefs.setString(_prefsRefreshKey, _refreshToken!);
+    } else {
+      await prefs.remove(_prefsRefreshKey);
     }
     await prefs.setString(_prefsUserKey, savedUser);
 

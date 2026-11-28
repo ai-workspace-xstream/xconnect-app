@@ -135,15 +135,11 @@ class NetworkAccessPolicy {
     final nextExpiry = team is Map
         ? DateTime.tryParse(team['validUntil'] as String? ?? '')
         : null;
-    final authorizationChanged = owner != accountOwner ||
+    final scopeChanged = owner != accountOwner ||
         dedicated != nextDedicated ||
         teamId != nextTeam ||
-        validUntil != nextExpiry ||
         access['allowed'] != true;
-    final sameScope = owner == accountOwner &&
-        dedicated == nextDedicated &&
-        teamId == nextTeam &&
-        active;
+    final sameScope = !scopeChanged && active;
     dedicated = nextDedicated;
     owner = accountOwner;
     teamId = access['teamId'] as String? ?? '';
@@ -152,7 +148,7 @@ class NetworkAccessPolicy {
     allowed = access['allowed'] == true;
     pending = !sameScope; // publish a new scope only after its snapshot applies
     if (!sameScope) authorizedNodeIds = {};
-    if (authorizationChanged) await clearCachedAccess();
+    if (scopeChanged) await clearCachedAccess();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('network.dedicated', dedicated);
   }
